@@ -79,7 +79,9 @@ export default function Booking() {
 
     setErrors(newErrors)
     if (!valid) return
-
+console.log('slots:', slots.map(s => s.slot_time))
+console.log('hasLightChild:', passengers.some(p => parseInt(p.weight_kg) < WEIGHT_LIMITS.LIGHT_KG))
+console.log('poids:', passengers.map(p => p.weight_kg))
     const hasPerformance = passengers.some(p => p.flight_type === 'performance')
     const hasHeavy       = passengers.some(p => parseInt(p.weight_kg) >= WEIGHT_LIMITS.HEAVY_KG)
     const hasLightChild  = passengers.some(p => parseInt(p.weight_kg) < WEIGHT_LIMITS.LIGHT_KG)
