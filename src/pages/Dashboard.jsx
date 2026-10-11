@@ -10,6 +10,24 @@ export default function Dashboard({ pilot }) {
   const [bookings, setBookings]         = useState([])
   const [loading, setLoading]           = useState(true)
 
+  // On mount: jump to the next date with a pending booking, or stay on today
+  useEffect(() => {
+    async function findNextPendingDate() {
+      const { data } = await supabase
+        .from('bookings')
+        .select('pilot_slot_id, pilot_slots!inner(slot_date, pilot_id)')
+        .eq('status', 'pending')
+        .eq('pilot_slots.pilot_id', pilot.id)
+        .gte('pilot_slots.slot_date', TODAY)
+        .order('pilot_slots.slot_date', { ascending: true })
+        .limit(1)
+      if (data && data.length > 0) {
+        setSelectedDate(data[0].pilot_slots.slot_date)
+      }
+    }
+    findNextPendingDate()
+  }, [pilot.id])
+
   useEffect(() => { loadDay(selectedDate) }, [selectedDate, pilot.id])
 
   async function loadDay(date) {
