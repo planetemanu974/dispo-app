@@ -62,17 +62,19 @@ export function calculatePrice(age, flightType, durationMin = 20) {
   return PRICES.DISCOVERY_ADULT / 100
 }
 
-// Suggests up to 2 slots — optionB is the recommended one
+// Suggests the best slot — heavy passengers go to 2nd slot (thermals at 08h00)
 export function suggestSlots(slots, passenger) {
   const { weight_kg } = passenger
   const isHeavy = weight_kg >= WEIGHT_LIMITS.HEAVY_KG && weight_kg <= WEIGHT_LIMITS.MAX_KG
 
+  const available = slots.filter(s => s.has_capacity)
+
   if (isHeavy) {
-    const firstSlot = slots.find(s => s.slot_time?.startsWith('08'))
-    return { optionA: firstSlot || null, optionB: firstSlot || null }
+    // Heavy passengers: skip 08h00, recommend 2nd available slot
+    const secondSlot = available.find(s => !s.slot_time?.startsWith('08'))
+    return { optionA: secondSlot || available[0] || null, optionB: secondSlot || available[0] || null }
   }
 
-  const available = slots.filter(s => s.has_capacity)
   const optionA = available[0] || null
   const optionB = available[1] || available[0] || null
   return { optionA, optionB }
