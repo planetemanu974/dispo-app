@@ -9,23 +9,25 @@ export default function Dashboard({ pilot }) {
   const [slots, setSlots]               = useState([])
   const [bookings, setBookings]         = useState([])
   const [loading, setLoading]           = useState(true)
+  const [pendingAll, setPendingAll]     = useState([])
+  const [selectedBooking, setSelectedBooking] = useState(null)
 
-  // On mount: jump to the next date with a pending booking, or stay on today
+  // On mount: load all pending bookings for alert banner
   useEffect(() => {
-    async function findNextPendingDate() {
+    async function loadAllPending() {
       const { data } = await supabase
         .from('bookings')
-        .select('pilot_slot_id, pilot_slots!inner(slot_date, pilot_id)')
+        .select('*, passengers(*), pilot_slots!inner(slot_date, slot_time, pilot_id)')
         .eq('status', 'pending')
         .eq('pilot_slots.pilot_id', pilot.id)
         .gte('pilot_slots.slot_date', TODAY)
         .order('pilot_slots.slot_date', { ascending: true })
-        .limit(1)
       if (data && data.length > 0) {
+        setPendingAll(data)
         setSelectedDate(data[0].pilot_slots.slot_date)
       }
     }
-    findNextPendingDate()
+    loadAllPending()
   }, [pilot.id])
 
   useEffect(() => { loadDay(selectedDate) }, [selectedDate, pilot.id])
@@ -67,7 +69,17 @@ export default function Dashboard({ pilot }) {
 
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
+    setSelectedBooking(null)
     loadDay(selectedDate)
+    // Refresh pending list
+    const { data } = await supabase
+      .from('bookings')
+      .select('*, passengers(*), pilot_slots!inner(slot_date, slot_time, pilot_id)')
+      .eq('status', 'pending')
+      .eq('pilot_slots.pilot_id', pilot.id)
+      .gte('pilot_slots.slot_date', TODAY)
+      .order('pilot_slots.slot_date', { ascending: true })
+    setPendingAll(data || [])
   }
 
   const bookingsBySlot = bookings.reduce((acc, b) => {
@@ -75,6 +87,17 @@ export default function Dashboard({ pilot }) {
     acc[b.pilot_slot_id].push(b)
     return acc
   }, {})
+
+  // Group pending by date for the alert banner
+  const pendingByDate = pendingAll.reduce((acc, b) => {
+    const date = b.pilot_slots.slot_date
+    acc[date] = acc[date] || []
+    acc[date].push(b)
+    return acc
+  }, {})
+
+  const flightTypeLabel = (type) =>
+    type === 'performance' ? 'Performance' : 'Découverte'
 
   return (
     <div className="dashboard">
@@ -85,6 +108,26 @@ export default function Dashboard({ pilot }) {
         </div>
         <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
       </header>
+
+      {/* Pending bookings alert — all dates */}
+      {pendingAll.length > 0 && (
+        <div className="pending-alert">
+          <div className="pending-alert-title">
+            🔔 {pendingAll.length} demande{pendingAll.length > 1 ? 's' : ''} en attente
+          </div>
+          {Object.entries(pendingByDate).map(([date, bks]) => (
+            <div key={date} className="pending-alert-date"
+              onClick={() => setSelectedDate(date)}>
+              <span className="pending-date-label">
+                {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
+              <span className="pending-date-count">
+                {bks.length} demande{bks.length > 1 ? 's' : ''} →
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="date-bar">
         <button className="btn-ghost" onClick={() => {
@@ -98,12 +141,6 @@ export default function Dashboard({ pilot }) {
           setSelectedDate(d.toISOString().split('T')[0])
         }}>›</button>
       </div>
-
-      {bookings.length > 0 && (
-        <div className="pending-banner">
-          {bookings.length} demande{bookings.length > 1 ? 's' : ''} en attente
-        </div>
-      )}
 
       {loading ? <p className="loading">Chargement...</p> : (
         <div className="slot-grid">
@@ -119,22 +156,51 @@ export default function Dashboard({ pilot }) {
                   {slot.is_available ? 'DISPO' : 'PAS DISPO'}
                 </button>
                 {pending.map(b => (
-                  <div key={b.id} className="booking-card">
+                  <div key={b.id} className="booking-card"
+                    onClick={() => setSelectedBooking(b)}
+                    style={{ cursor: 'pointer' }}>
                     <div className="booking-contact">{b.contact_name} — {b.contact_phone}</div>
                     <div className="booking-pax">
-                      {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''}
-                    </div>
-                    <div className="booking-actions">
-                      <button className="btn-confirm"
-                        onClick={() => handleBooking(b.id, 'confirmed')}>✓ Confirmer</button>
-                      <button className="btn-refuse"
-                        onClick={() => handleBooking(b.id, 'refused')}>✗ Refuser</button>
+                      {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''} — voir fiche →
                     </div>
                   </div>
                 ))}
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Booking detail modal */}
+      {selectedBooking && (
+        <div className="modal-overlay" onClick={() => setSelectedBooking(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Fiche de réservation</h2>
+              <button className="btn-ghost" onClick={() => setSelectedBooking(null)}>✕</button>
+            </div>
+            <div className="modal-contact">
+              <strong>{selectedBooking.contact_name}</strong><br/>
+              📞 {selectedBooking.contact_phone}
+            </div>
+            <div className="modal-passengers">
+              {selectedBooking.passengers?.map((p, i) => (
+                <div key={p.id} className="modal-pax-card">
+                  <div className="modal-pax-name">Passager {i + 1} — {p.first_name} {p.last_name}</div>
+                  <div className="modal-pax-details">
+                    ⚖️ {p.weight_kg} kg &nbsp;|&nbsp; 🎂 {p.age} ans &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-ref">Réf. {selectedBooking.booking_ref}</div>
+            <div className="booking-actions">
+              <button className="btn-confirm"
+                onClick={() => handleBooking(selectedBooking.id, 'confirmed')}>✓ Confirmer</button>
+              <button className="btn-refuse"
+                onClick={() => handleBooking(selectedBooking.id, 'refused')}>✗ Refuser</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
