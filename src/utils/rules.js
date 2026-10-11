@@ -3,8 +3,9 @@
 // ============================================================
 
 export const WEIGHT_LIMITS = {
-  MAX_KG:   100,   // hard block (insurance)
-  HEAVY_KG:  76,   // 76-100 kg → not allowed on first slot (8h00)
+  MAX_KG:   100,
+  HEAVY_KG:  76,
+  LIGHT_KG:  20,   // < 20 kg → créneau 8h00 uniquement
 }
 
 export const AGE_LIMITS = {
@@ -30,6 +31,7 @@ export function getSlotsForDate(/* date */) {
 // Weight validation — only hard-blocks passengers > 100 kg (insurance).
 // The 8h00 exclusion for heavy passengers is handled upstream in Booking.jsx.
 export function validateWeight(weightKg) {
+  export function validateWeight(weightKg) {
   if (weightKg > WEIGHT_LIMITS.MAX_KG) {
     return {
       ok: false,
@@ -37,7 +39,15 @@ export function validateWeight(weightKg) {
       warning: `Poids maximum : 100 kg (assurance). Votre réservation ne peut pas être prise en compte.`,
     }
   }
+  if (weightKg >= WEIGHT_LIMITS.HEAVY_KG) {
+    return {
+      ok: true,
+      blocked: false,
+      warning: `Les passagers de plus de 75 kg descendent plus vite et profitent moins du vol — le créneau suivant leur convient mieux.`,
+    }
+  }
   return { ok: true, blocked: false, warning: null }
+}
 }
 
 // Age & weight validation — returns { ok, error, requiresParentalAuth }

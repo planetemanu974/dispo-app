@@ -22,6 +22,7 @@ export default function Booking() {
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [contact, setContact]           = useState({ name: '', phone: '' })
   const [errors, setErrors]             = useState({})
+  const [slotInfo, setSlotInfo]         = useState(null)
   const [submitting, setSubmitting]     = useState(false)
   const [bookingRef, setBookingRef]     = useState(null)
 
@@ -34,6 +35,7 @@ export default function Booking() {
     setSlots(data || [])
     setSuggestedSlot(null)
     setSelectedSlot(null)
+    setSlotInfo(null)
   }
 
   function updatePassenger(i, field, value) {
@@ -78,29 +80,50 @@ export default function Booking() {
     setErrors(newErrors)
     if (!valid) return
 
-    // ── Filter out the first slot (8h00) when any passenger wants a performance flight
     const hasPerformance = passengers.some(p => p.flight_type === 'performance')
+    const hasHeavy       = passengers.some(p => parseInt(p.weight_kg) >= WEIGHT_LIMITS.HEAVY_KG)
+    const hasLightChild  = passengers.some(p => parseInt(p.weight_kg) < WEIGHT_LIMITS.LIGHT_KG)
 
-    const eligibleSlots = hasPerformance
-      ? slots.filter(s => !isFirstSlot(s.slot_time))
-      : slots
+    // Conflit impossible : enfant < 20 kg impose 8h00, performance interdit à 8h00
+    if (hasLightChild && hasPerformance) {
+      setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
+      setErrors({ general: 'Un passager fait moins de 20 kg (créneau 8h00 uniquement, vol découverte). Un vol performance est incompatible. Réservez deux vols séparés.' })
+      setStep(3); return
+    }
+
+    // Enfant < 20 kg → 8h00 impératif
+    // Performance (sans enfant léger) → exclut 8h00
+    // Sinon → tous les créneaux disponibles
+    let eligibleSlots
+    if (hasLightChild) {
+      eligibleSlots = slots.filter(s => isFirstSlot(s.slot_time))
+    } else if (hasPerformance) {
+      eligibleSlots = slots.filter(s => !isFirstSlot(s.slot_time))
+    } else {
+      eligibleSlots = slots
+    }
 
     if (eligibleSlots.length === 0) {
-      setSuggestedSlot(null)
-      setSelectedSlot(null)
+      setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
       setErrors({
         general: hasPerformance
           ? 'Aucun créneau disponible pour un vol performance ce jour-là. Essayez une autre date.'
           : 'Aucun créneau disponible pour vos passagers ce jour-là. Essayez une autre date.',
       })
-      setStep(3)
-      return
+      setStep(3); return
     }
 
-    // Always take the earliest eligible slot
     const { optionB } = suggestSlots(eligibleSlots)
     setSuggestedSlot(optionB)
     setSelectedSlot(optionB)
+
+    // Avertissement : adulte lourd + enfant léger → 8h00 découverte, vol plus court
+    setSlotInfo(
+      hasLightChild && hasHeavy
+        ? '⚠️ Créneau 8h00 imposé (passager < 20 kg). Le passager de plus de 75 kg volera en vol découverte (20 min) — le vol sera plus court. Vous pouvez aussi réserver deux vols séparés.'
+        : null
+    )
+
     setStep(3)
   }
 
@@ -180,126 +203,4 @@ export default function Booking() {
         </section>
       )}
 
-      {/* ── Step 2 : passengers ── */}
-      {step >= 2 && (
-        <section className="booking-section">
-          <h2>2. Passagers</h2>
-
-          {passengers.map((p, i) => {
-            const age      = parseInt(p.age, 10)
-            const isChild  = !isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE
-            // Only first slot available today → performance impossible
-            const onlyFirst = slots.every(s => isFirstSlot(s.slot_time))
-
-            return (
-              <div key={i} className="passenger-card">
-                <div className="passenger-header">
-                  <span>Passager {i + 1}</span>
-                  {i > 0 && (
-                    <button className="btn-ghost-small"
-                      onClick={() => setPassengers(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
-                  )}
-                </div>
-
-                <div className="field-row">
-                  <div className="field"><label>Prénom</label>
-                    <input value={p.first_name} onChange={e => updatePassenger(i, 'first_name', e.target.value)} />
-                    {errors[`${i}_first_name`] && <span className="error-msg">{errors[`${i}_first_name`]}</span>}
-                  </div>
-                  <div className="field"><label>Nom</label>
-                    <input value={p.last_name} onChange={e => updatePassenger(i, 'last_name', e.target.value)} />
-                    {errors[`${i}_last_name`] && <span className="error-msg">{errors[`${i}_last_name`]}</span>}
-                  </div>
-                </div>
-
-                <div className="field-row">
-                  <div className="field"><label>Poids (kg)</label>
-                    <input type="number" min="10" max="100" value={p.weight_kg}
-                      onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
-                    {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
-                    {errors[`${i}_weight_warn`] && <span className="info-msg">⚠️ {errors[`${i}_weight_warn`]}</span>}
-                  </div>
-                  <div className="field"><label>Âge</label>
-                    <input type="number" min="6" max="99" value={p.age}
-                      onChange={e => updatePassenger(i, 'age', e.target.value)} />
-                    {errors[`${i}_age`] && <span className="error-msg">{errors[`${i}_age`]}</span>}
-                  </div>
-                </div>
-
-                <div className="field">
-                  <label>Type de vol</label>
-                  <select value={p.flight_type}
-                    onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
-                    disabled={isChild || onlyFirst}>
-                    <option value="discovery">Découverte — 20 min (90 €)</option>
-                    <option value="performance">Performance — 30/40 min (110–120 €)</option>
-                  </select>
-                  {isChild   && <span className="info-msg">Vol découverte uniquement pour les moins de 13 ans.</span>}
-                  {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
-                </div>
-
-                {parseInt(p.age) < 18 && p.age !== '' && (
-                  <div className="field checkbox-field">
-                    <label>
-                      <input type="checkbox" checked={p.parental_auth}
-                        onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)} />
-                      {' '}Autorisation parentale confirmée
-                    </label>
-                    {errors[`${i}_parental`] && <span className="error-msg">{errors[`${i}_parental`]}</span>}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {passengers.length < 4 && (
-            <button className="btn-secondary"
-              onClick={() => setPassengers(prev => [...prev, emptyPassenger()])}>
-              + Ajouter un passager
-            </button>
-          )}
-
-          {/* Contact */}
-          <div className="passenger-card">
-            <div className="passenger-header">Contact</div>
-            <div className="field-row">
-              <div className="field"><label>Nom</label>
-                <input value={contact.name} onChange={e => setContact(c => ({ ...c, name: e.target.value }))} />
-              </div>
-              <div className="field"><label>Téléphone</label>
-                <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
-              </div>
-            </div>
-          </div>
-
-          <button className="btn-primary" onClick={validateAndSuggest}>Voir les créneaux →</button>
-        </section>
-      )}
-
-      {/* ── Step 3 : slot ── */}
-      {step >= 3 && (
-        <section className="booking-section">
-          <h2>3. Créneau proposé</h2>
-
-          {errors.general && <p className="error-msg">{errors.general}</p>}
-
-          {suggestedSlot ? (
-            <div className="slot-option recommended selected">
-              <span className="slot-time-big">{suggestedSlot.slot_time?.slice(0, 5)}</span>
-            </div>
-          ) : (
-            !errors.general && <p className="info-msg">Aucun créneau disponible pour vos contraintes ce jour-là.</p>
-          )}
-
-          {errors.submit && <p className="error-msg">{errors.submit}</p>}
-
-          {selectedSlot && (
-            <button className="btn-primary" onClick={submitBooking} disabled={submitting}>
-              {submitting ? 'Envoi...' : 'Confirmer la demande'}
-            </button>
-          )}
-        </section>
-      )}
-    </div>
-  )
-}
+      {/* ── Step 2 :
