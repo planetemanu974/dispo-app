@@ -5,57 +5,81 @@ import { getSlotsForDate } from '../utils/rules'
 const TODAY = new Date().toISOString().split('T')[0]
 
 export default function Dashboard({ pilot }) {
-  const [selectedDate, setSelectedDate] = useState(TODAY)
+  // selectedDate starts null — init() sets it after finding pending bookings
+  const [selectedDate, setSelectedDate] = useState(null)
   const [slots, setSlots]               = useState([])
   const [bookings, setBookings]         = useState([])
-  const [loading, setLoading]           = useState(true)
   const [pendingAll, setPendingAll]     = useState([])
+  const [loading, setLoading]           = useState(true)
   const [selectedBooking, setSelectedBooking] = useState(null)
 
-// On mount: load all pending bookings and jump to first pending date
-useEffect(() => {
-  async function loadAllPending() {
-    // First get all slot IDs for this pilot
-    const { data: slotData } = await supabase
-      .from('pilot_slots')
-      .select('id, slot_date, slot_time')
-      .eq('pilot_id', pilot.id)
-      .gte('slot_date', TODAY)
+  // ── INIT: runs once on mount ───────────────────────────────────────────────
+  // Finds the earliest pending booking date, sets selectedDate,
+  // THEN calls loadDay — avoids the race condition where loadDay(TODAY)
+  // ran before findNextPendingDate() came back.
+  useEffect(() => {
+    async function init() {
+      // Step 1: all future slots for this pilot
+      const { data: slotData } = await supabase
+        .from('pilot_slots')
+        .select('id, slot_date, slot_time')
+        .eq('pilot_id', pilot.id)
+        .gte('slot_date', TODAY)
 
-    if (!slotData || slotData.length === 0) { loadDay(TODAY); return }
+      let startDate = TODAY
 
-    const slotIds = slotData.map(s => s.id)
-    const slotMap = Object.fromEntries(slotData.map(s => [s.id, s]))
+      if (slotData && slotData.length > 0) {
+        const slotIds = slotData.map(s => s.id)
+        const slotMap = Object.fromEntries(slotData.map(s => [s.id, s]))
 
-    const { data } = await supabase
-      .from('bookings')
-      .select('*, passengers(*)')
-      .in('pilot_slot_id', slotIds)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
+        // Step 2: all pending bookings for those slots
+        const { data: pending } = await supabase
+          .from('bookings')
+          .select('*, passengers(*)')
+          .in('pilot_slot_id', slotIds)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
 
-    if (data && data.length > 0) {
-      const enriched = data.map(b => ({
-        ...b,
-        pilot_slots: slotMap[b.pilot_slot_id]
-      }))
-      setPendingAll(enriched)
-      setSelectedDate(enriched[0].pilot_slots.slot_date)
-    } else {
-      loadDay(TODAY)
+        if (pending && pending.length > 0) {
+          const enriched = pending.map(b => ({
+            ...b,
+            pilot_slots: slotMap[b.pilot_slot_id],
+          }))
+          setPendingAll(enriched)
+
+          // Find earliest pending date
+          const earliest = enriched
+            .map(b => b.pilot_slots?.slot_date)
+            .filter(Boolean)
+            .sort()[0]
+          if (earliest) startDate = earliest
+        }
+      }
+
+      // Load the chosen day, then unlock the UI
+      await loadDay(startDate)
+      setSelectedDate(startDate)
     }
-  }
-  loadAllPending()
-}, [pilot.id])
 
-  useEffect(() => { loadDay(selectedDate) }, [selectedDate, pilot.id])
+    init()
+  }, [pilot.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Reload when user navigates to another date ─────────────────────────────
+  // Skips the first render (selectedDate is null until init finishes)
+  useEffect(() => {
+    if (selectedDate === null) return
+    loadDay(selectedDate)
+  }, [selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── loadDay ────────────────────────────────────────────────────────────────
   async function loadDay(date) {
     setLoading(true)
     await ensureSlots(date)
+
     const { data: slotsData } = await supabase
       .from('pilot_slots').select('*')
       .eq('pilot_id', pilot.id).eq('slot_date', date).order('slot_time')
+
     const slotIds = (slotsData || []).map(s => s.id)
     let bookingsData = []
     if (slotIds.length > 0) {
@@ -64,11 +88,13 @@ useEffect(() => {
         .in('pilot_slot_id', slotIds).eq('status', 'pending').order('created_at')
       bookingsData = data || []
     }
+
     setSlots(slotsData || [])
     setBookings(bookingsData)
     setLoading(false)
   }
 
+  // ── ensureSlots ────────────────────────────────────────────────────────────
   async function ensureSlots(date) {
     const times = getSlotsForDate(new Date(date))
     const inserts = times.map(t => ({
@@ -79,43 +105,64 @@ useEffect(() => {
       .upsert(inserts, { onConflict: 'pilot_id,slot_date,slot_time', ignoreDuplicates: true })
   }
 
+  // ── toggleAvailability ─────────────────────────────────────────────────────
   async function toggleAvailability(slot) {
     await supabase.from('pilot_slots')
       .update({ is_available: !slot.is_available }).eq('id', slot.id)
     loadDay(selectedDate)
   }
 
+  // ── handleBooking ──────────────────────────────────────────────────────────
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
     setSelectedBooking(null)
+
+    // Refresh the global pending list
+    const { data: slotData } = await supabase
+      .from('pilot_slots').select('id, slot_date, slot_time')
+      .eq('pilot_id', pilot.id).gte('slot_date', TODAY)
+
+    if (slotData && slotData.length > 0) {
+      const slotIds = slotData.map(s => s.id)
+      const slotMap = Object.fromEntries(slotData.map(s => [s.id, s]))
+      const { data: pending } = await supabase
+        .from('bookings').select('*, passengers(*)')
+        .in('pilot_slot_id', slotIds).eq('status', 'pending')
+        .order('created_at', { ascending: true })
+      const enriched = (pending || []).map(b => ({ ...b, pilot_slots: slotMap[b.pilot_slot_id] }))
+      setPendingAll(enriched)
+    } else {
+      setPendingAll([])
+    }
+
     loadDay(selectedDate)
-    // Refresh pending list
-    const { data } = await supabase
-      .from('bookings')
-      .select('*, passengers(*), pilot_slots!inner(slot_date, slot_time, pilot_id)')
-      .eq('status', 'pending')
-      .eq('pilot_slots.pilot_id', pilot.id)
-      .gte('pilot_slots.slot_date', TODAY)
-      .order('pilot_slots.slot_date', { ascending: true })
-    setPendingAll(data || [])
   }
 
+  // ── derived ────────────────────────────────────────────────────────────────
   const bookingsBySlot = bookings.reduce((acc, b) => {
     acc[b.pilot_slot_id] = acc[b.pilot_slot_id] || []
     acc[b.pilot_slot_id].push(b)
     return acc
   }, {})
 
-  // Group pending by date for the alert banner
   const pendingByDate = pendingAll.reduce((acc, b) => {
-    const date = b.pilot_slots.slot_date
-    acc[date] = acc[date] || []
-    acc[date].push(b)
+    const d = b.pilot_slots?.slot_date
+    if (!d) return acc
+    acc[d] = acc[d] || []
+    acc[d].push(b)
     return acc
   }, {})
 
-  const flightTypeLabel = (type) =>
-    type === 'performance' ? 'Performance' : 'Découverte'
+  const flightTypeLabel = t => t === 'performance' ? 'Performance' : 'Découverte'
+
+  function changeDate(delta) {
+    const d = new Date((selectedDate || TODAY) + 'T00:00:00')
+    d.setDate(d.getDate() + delta)
+    setSelectedDate(d.toISOString().split('T')[0])
+  }
+
+  // Show nothing until init has set a date
+  if (selectedDate === null) return <p className="loading">Chargement...</p>
 
   return (
     <div className="dashboard">
@@ -127,7 +174,7 @@ useEffect(() => {
         <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
       </header>
 
-      {/* Pending bookings alert — all dates */}
+      {/* ── Pending alert ── */}
       {pendingAll.length > 0 && (
         <div className="pending-alert">
           <div className="pending-alert-title">
@@ -137,7 +184,9 @@ useEffect(() => {
             <div key={date} className="pending-alert-date"
               onClick={() => setSelectedDate(date)}>
               <span className="pending-date-label">
-                {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {
+                  weekday: 'short', day: 'numeric', month: 'short'
+                })}
               </span>
               <span className="pending-date-count">
                 {bks.length} demande{bks.length > 1 ? 's' : ''} →
@@ -147,19 +196,15 @@ useEffect(() => {
         </div>
       )}
 
+      {/* ── Date navigator ── */}
       <div className="date-bar">
-        <button className="btn-ghost" onClick={() => {
-          const d = new Date(selectedDate); d.setDate(d.getDate() - 1)
-          setSelectedDate(d.toISOString().split('T')[0])
-        }}>‹</button>
+        <button className="btn-ghost" onClick={() => changeDate(-1)}>‹</button>
         <input type="date" value={selectedDate}
           onChange={e => setSelectedDate(e.target.value)} className="date-input" />
-        <button className="btn-ghost" onClick={() => {
-          const d = new Date(selectedDate); d.setDate(d.getDate() + 1)
-          setSelectedDate(d.toISOString().split('T')[0])
-        }}>›</button>
+        <button className="btn-ghost" onClick={() => changeDate(1)}>›</button>
       </div>
 
+      {/* ── Slot grid ── */}
       {loading ? <p className="loading">Chargement...</p> : (
         <div className="slot-grid">
           {slots.map(slot => {
@@ -189,7 +234,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Booking detail modal */}
+      {/* ── Booking detail modal ── */}
       {selectedBooking && (
         <div className="modal-overlay" onClick={() => setSelectedBooking(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -198,7 +243,7 @@ useEffect(() => {
               <button className="btn-ghost" onClick={() => setSelectedBooking(null)}>✕</button>
             </div>
             <div className="modal-contact">
-              <strong>{selectedBooking.contact_name}</strong><br/>
+              <strong>{selectedBooking.contact_name}</strong><br />
               📞 {selectedBooking.contact_phone}
             </div>
             <div className="modal-passengers">
