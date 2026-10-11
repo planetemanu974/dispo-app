@@ -12,23 +12,25 @@ export default function Dashboard({ pilot }) {
   const [pendingAll, setPendingAll]     = useState([])
   const [selectedBooking, setSelectedBooking] = useState(null)
 
-  // On mount: load all pending bookings for alert banner
-  useEffect(() => {
-    async function loadAllPending() {
-      const { data } = await supabase
-        .from('bookings')
-        .select('*, passengers(*), pilot_slots!inner(slot_date, slot_time, pilot_id)')
-        .eq('status', 'pending')
-        .eq('pilot_slots.pilot_id', pilot.id)
-        .gte('pilot_slots.slot_date', TODAY)
-        .order('pilot_slots.slot_date', { ascending: true })
-      if (data && data.length > 0) {
-        setPendingAll(data)
-        setSelectedDate(data[0].pilot_slots.slot_date)
-      }
+// On mount: load all pending bookings and jump to first pending date
+useEffect(() => {
+  async function loadAllPending() {
+    const { data } = await supabase
+      .from('bookings')
+      .select('*, passengers(*), pilot_slots!inner(slot_date, slot_time, pilot_id)')
+      .eq('status', 'pending')
+      .eq('pilot_slots.pilot_id', pilot.id)
+      .gte('pilot_slots.slot_date', TODAY)
+      .order('pilot_slots.slot_date', { ascending: true })
+    if (data && data.length > 0) {
+      setPendingAll(data)
+      setSelectedDate(data[0].pilot_slots.slot_date)
+    } else {
+      loadDay(TODAY)
     }
-    loadAllPending()
-  }, [pilot.id])
+  }
+  loadAllPending()
+}, [pilot.id])
 
   useEffect(() => { loadDay(selectedDate) }, [selectedDate, pilot.id])
 
