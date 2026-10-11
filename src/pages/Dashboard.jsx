@@ -15,16 +15,32 @@ export default function Dashboard({ pilot }) {
 // On mount: load all pending bookings and jump to first pending date
 useEffect(() => {
   async function loadAllPending() {
+    // First get all slot IDs for this pilot
+    const { data: slotData } = await supabase
+      .from('pilot_slots')
+      .select('id, slot_date, slot_time')
+      .eq('pilot_id', pilot.id)
+      .gte('slot_date', TODAY)
+
+    if (!slotData || slotData.length === 0) { loadDay(TODAY); return }
+
+    const slotIds = slotData.map(s => s.id)
+    const slotMap = Object.fromEntries(slotData.map(s => [s.id, s]))
+
     const { data } = await supabase
       .from('bookings')
-      .select('*, passengers(*), pilot_slots!inner(slot_date, slot_time, pilot_id)')
+      .select('*, passengers(*)')
+      .in('pilot_slot_id', slotIds)
       .eq('status', 'pending')
-      .eq('pilot_slots.pilot_id', pilot.id)
-      .gte('pilot_slots.slot_date', TODAY)
-      .order('pilot_slots.slot_date', { ascending: true })
+      .order('created_at', { ascending: true })
+
     if (data && data.length > 0) {
-      setPendingAll(data)
-      setSelectedDate(data[0].pilot_slots.slot_date)
+      const enriched = data.map(b => ({
+        ...b,
+        pilot_slots: slotMap[b.pilot_slot_id]
+      }))
+      setPendingAll(enriched)
+      setSelectedDate(enriched[0].pilot_slots.slot_date)
     } else {
       loadDay(TODAY)
     }
