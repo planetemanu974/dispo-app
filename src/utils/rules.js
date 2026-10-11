@@ -9,7 +9,8 @@ export const WEIGHT_LIMITS = {
 
 export const AGE_LIMITS = {
   MIN_AGE: 6,
-  CHILD_MAX_AGE: 12,   // 6-12 → discovery only
+  MIN_WEIGHT_KG: 18,
+  CHILD_MAX_AGE: 12,
 }
 
 export const PRICES = {
@@ -48,6 +49,9 @@ export function validateAge(age, weightKg, flightType) {
   if (age < AGE_LIMITS.MIN_AGE) {
     return { ok: false, error: `Âge minimum : ${AGE_LIMITS.MIN_AGE} ans`, requiresParentalAuth: false }
   }
+  if (weightKg < AGE_LIMITS.MIN_WEIGHT_KG) {
+    return { ok: false, error: `Poids minimum : ${AGE_LIMITS.MIN_WEIGHT_KG} kg`, requiresParentalAuth: false }
+  }
   if (age <= AGE_LIMITS.CHILD_MAX_AGE && flightType !== 'discovery') {
     return { ok: false, error: `Enfants (6-12 ans) : vol découverte uniquement`, requiresParentalAuth: true }
   }
@@ -62,22 +66,22 @@ export function calculatePrice(age, flightType, durationMin = 20) {
   return PRICES.DISCOVERY_ADULT / 100
 }
 
-// Suggests the best slot — heavy passengers go to 2nd slot (thermals at 08h00)
+// Suggests the best slot — light passengers get 08h00, heavy get 10h00 as alternative
 export function suggestSlots(slots, passenger) {
   const { weight_kg } = passenger
   const isHeavy = weight_kg >= WEIGHT_LIMITS.HEAVY_KG && weight_kg <= WEIGHT_LIMITS.MAX_KG
 
   const available = slots.filter(s => s.has_capacity)
+  const firstSlot = available[0] || null
+  const secondSlot = available[1] || null
 
   if (isHeavy) {
-    // Heavy passengers: skip 08h00, recommend 2nd available slot
-    const secondSlot = available.find(s => !s.slot_time?.startsWith('08'))
-    return { optionA: secondSlot || available[0] || null, optionB: secondSlot || available[0] || null }
+    // Heavy: recommend 08h00, offer 10h00 as alternative
+    return { optionA: secondSlot, optionB: firstSlot }
   }
 
-  const optionA = available[0] || null
-  const optionB = available[1] || available[0] || null
-  return { optionA, optionB }
+  // Light: recommend 08h00 only
+  return { optionA: null, optionB: firstSlot }
 }
 
 // Returns true if passenger must book first slot only
