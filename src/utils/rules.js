@@ -15,23 +15,19 @@ export const AGE_LIMITS = {
 }
 
 export const PRICES = {
-  DISCOVERY_ADULT:  9000,   // cents
+  DISCOVERY_ADULT:  9000,
   DISCOVERY_CHILD:  8000,
   PERFORMANCE_BASE: 11000,
   PERFORMANCE_LONG: 12000,
 }
 
-// Slot times — 5 slots per day
 // 8h00 = discovery only, ≤ 75 kg; 9h15 and after = all passengers
 export function getSlotsForDate(/* date */) {
   return ['08:00', '09:15', '10:30', '11:45', '13:00', '14:30']
 }
-}
 
-// Weight validation — only hard-blocks passengers > 100 kg (insurance).
-// The 8h00 exclusion for heavy passengers is handled upstream in Booking.jsx.
+// Weight validation
 export function validateWeight(weightKg) {
-  export function validateWeight(weightKg) {
   if (weightKg > WEIGHT_LIMITS.MAX_KG) {
     return {
       ok: false,
@@ -48,9 +44,8 @@ export function validateWeight(weightKg) {
   }
   return { ok: true, blocked: false, warning: null }
 }
-}
 
-// Age & weight validation — returns { ok, error, requiresParentalAuth }
+// Age & weight validation
 export function validateAge(age, weightKg, flightType) {
   if (age < AGE_LIMITS.MIN_AGE) {
     return { ok: false, error: `Âge minimum : ${AGE_LIMITS.MIN_AGE} ans`, requiresParentalAuth: false }
@@ -73,8 +68,7 @@ export function calculatePrice(age, flightType, durationMin = 20) {
   return PRICES.DISCOVERY_ADULT / 100
 }
 
-// Slot suggestion — always returns the first slot in the list.
-// The caller filters out ineligible slots (8h00 for heavy/performance) beforehand.
+// Slot suggestion
 export function suggestSlots(slots) {
   return { optionA: null, optionB: slots[0] || null }
 }
