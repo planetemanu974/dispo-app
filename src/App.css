@@ -182,3 +182,75 @@
     border-right-color: var(--border);
   }
 }
+/* Pending alert banner */
+.pending-alert {
+  background: #fff3cd;
+  border-left: 4px solid #f59e0b;
+  margin: 12px 16px;
+  border-radius: 8px;
+  padding: 12px;
+}
+.pending-alert-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #92400e;
+}
+.pending-alert-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  margin-top: 4px;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid #fcd34d;
+}
+.pending-alert-date:hover { background: #fef9c3; }
+.pending-date-label { font-weight: 600; color: #1e293b; }
+.pending-date-count { color: #f59e0b; font-size: 0.9rem; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.modal-header h2 { font-size: 1.1rem; font-weight: 700; }
+.modal-contact {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+.modal-passengers { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.modal-pax-card {
+  background: #f0f9ff;
+  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid #bae6fd;
+}
+.modal-pax-name { font-weight: 600; margin-bottom: 4px; }
+.modal-pax-details { font-size: 0.9rem; color: #475569; }
+.modal-ref { font-size: 0.8rem; color: #94a3b8; margin-bottom: 16px; }
