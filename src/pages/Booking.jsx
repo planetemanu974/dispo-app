@@ -64,6 +64,7 @@ export default function Booking() {
       if (weight && age) {
         const wResult = validateWeight(weight)
         if (wResult.blocked) { newErrors[`${i}_weight`] = wResult.warning; valid = false }
+        else if (wResult.warning) { newErrors[`${i}_weight_warn`] = wResult.warning }
 
         const aResult = validateAge(age, weight, p.flight_type)
         if (!aResult.ok) { newErrors[`${i}_age`] = aResult.error; valid = false }
@@ -77,13 +78,10 @@ export default function Booking() {
     setErrors(newErrors)
     if (!valid) return
 
-    // ── Filter out the first slot (8h00) when:
-    //    • any passenger wants a performance flight, OR
-    //    • any passenger weighs ≥ 76 kg (descends too fast for early calm conditions)
+    // ── Filter out the first slot (8h00) when any passenger wants a performance flight
     const hasPerformance = passengers.some(p => p.flight_type === 'performance')
-    const hasHeavy       = passengers.some(p => parseInt(p.weight_kg) >= WEIGHT_LIMITS.HEAVY_KG)
 
-    const eligibleSlots = (hasPerformance || hasHeavy)
+    const eligibleSlots = hasPerformance
       ? slots.filter(s => !isFirstSlot(s.slot_time))
       : slots
 
@@ -219,6 +217,7 @@ export default function Booking() {
                     <input type="number" min="10" max="100" value={p.weight_kg}
                       onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
                     {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
+                    {errors[`${i}_weight_warn`] && <span className="info-msg">⚠️ {errors[`${i}_weight_warn`]}</span>}
                   </div>
                   <div className="field"><label>Âge</label>
                     <input type="number" min="6" max="99" value={p.age}
