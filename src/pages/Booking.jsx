@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { validateWeight, validateAge, calculatePrice, suggestSlots, AGE_LIMITS } from '../utils/rules'
+import { validateWeight, validateAge, calculatePrice, suggestSlots, AGE_LIMITS, WEIGHT_LIMITS } from '../utils/rules'
 
 const TODAY = new Date().toISOString().split('T')[0]
 const emptyPassenger = () => ({
@@ -8,7 +8,7 @@ const emptyPassenger = () => ({
   flight_type: 'discovery', parental_auth: false,
 })
 
-// First slot of the day (8h00 or 8h30) = discovery only, no performance
+// First slot of the day = discovery only, ≤ 75 kg
 function isFirstSlot(slot_time) {
   return slot_time?.startsWith('08:')
 }
@@ -18,7 +18,7 @@ export default function Booking() {
   const [selectedDate, setSelectedDate] = useState(TODAY)
   const [slots, setSlots]               = useState([])
   const [passengers, setPassengers]     = useState([emptyPassenger()])
-  const [suggestion, setSuggestion]     = useState({ optionA: null, optionB: null })
+  const [suggestedSlot, setSuggestedSlot] = useState(null)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [contact, setContact]           = useState({ name: '', phone: '' })
   const [errors, setErrors]             = useState({})
@@ -32,7 +32,7 @@ export default function Booking() {
       .select('*').eq('slot_date', date).eq('is_available', true)
       .eq('has_capacity', true).order('slot_time')
     setSlots(data || [])
-    setSuggestion({ optionA: null, optionB: null })
+    setSuggestedSlot(null)
     setSelectedSlot(null)
   }
 
@@ -40,7 +40,7 @@ export default function Booking() {
     setPassengers(prev => prev.map((p, idx) => {
       if (idx !== i) return p
       const updated = { ...p, [field]: value }
-      // If age changes to ≤ 12, force discovery
+      // Force discovery for children ≤ 12
       if (field === 'age') {
         const age = parseInt(value, 10)
         if (!isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE) updated.flight_type = 'discovery'
@@ -57,14 +57,12 @@ export default function Booking() {
       const weight = parseInt(p.weight_kg, 10)
 
       if (!p.first_name.trim()) { newErrors[`${i}_first_name`] = 'Prénom requis'; valid = false }
-      if (!p.last_name.trim())  { newErrors[`${i}_last_name`]  = 'Nom requis'; valid = false }
-      if (!weight || weight <= 0) { newErrors[`${i}_weight`] = 'Poids requis'; valid = false }
-      if (!age || age < 0)        { newErrors[`${i}_age`]    = 'Âge requis'; valid = false }
+      if (!p.last_name.trim())  { newErrors[`${i}_last_name`]  = 'Nom requis';    valid = false }
+      if (!weight || weight <= 0) { newErrors[`${i}_weight`] = 'Poids requis';   valid = false }
+      if (!age    || age    < 0)  { newErrors[`${i}_age`]    = 'Âge requis';     valid = false }
 
       if (weight && age) {
-        // Only block > 100 kg here (hard limit); the 8h00 weight warning is
-        // handled at slot-suggestion time, not before.
-        const wResult = validateWeight(weight, '10:00') // use non-first-slot time to avoid false warning
+        const wResult = validateWeight(weight)
         if (wResult.blocked) { newErrors[`${i}_weight`] = wResult.warning; valid = false }
 
         const aResult = validateAge(age, weight, p.flight_type)
@@ -79,57 +77,67 @@ export default function Booking() {
     setErrors(newErrors)
     if (!valid) return
 
-    // ── KEY RULE: first slot (8h00 / 8h30) = discovery only ──────────────────
-    // If ANY passenger wants a performance flight, exclude first slots entirely.
+    // ── Filter out the first slot (8h00) when:
+    //    • any passenger wants a performance flight, OR
+    //    • any passenger weighs ≥ 76 kg (descends too fast for early calm conditions)
     const hasPerformance = passengers.some(p => p.flight_type === 'performance')
-    const eligibleSlots  = hasPerformance
+    const hasHeavy       = passengers.some(p => parseInt(p.weight_kg) >= WEIGHT_LIMITS.HEAVY_KG)
+
+    const eligibleSlots = (hasPerformance || hasHeavy)
       ? slots.filter(s => !isFirstSlot(s.slot_time))
       : slots
 
     if (eligibleSlots.length === 0) {
-      setSuggestion({ optionA: null, optionB: null })
+      setSuggestedSlot(null)
       setSelectedSlot(null)
-      // Show a clear message explaining why
-      if (hasPerformance) {
-        setErrors({ general: 'Le vol performance n\'est pas disponible sur le premier créneau (8h). Choisissez « Découverte » ou revenez le lendemain.' })
-      }
+      setErrors({
+        general: hasPerformance
+          ? 'Aucun créneau disponible pour un vol performance ce jour-là. Essayez une autre date.'
+          : 'Aucun créneau disponible pour vos passagers ce jour-là. Essayez une autre date.',
+      })
       setStep(3)
       return
     }
 
-    const firstPax = {
-      weight_kg: parseInt(passengers[0].weight_kg),
-      age:       parseInt(passengers[0].age),
-    }
-    const s = suggestSlots(eligibleSlots, firstPax)
-    setSuggestion(s)
-    setSelectedSlot(s.optionB || s.optionA)
+    // Always take the earliest eligible slot
+    const { optionB } = suggestSlots(eligibleSlots)
+    setSuggestedSlot(optionB)
+    setSelectedSlot(optionB)
     setStep(3)
   }
 
   async function submitBooking() {
     if (!selectedSlot) return
     setSubmitting(true)
+
     const { data: bookingData, error: bookingError } = await supabase.from('bookings')
       .insert({
         pilot_slot_id: selectedSlot.id, status: 'pending', source: 'public',
-        contact_name: contact.name, contact_phone: contact.phone,
+        contact_name:  contact.name,    contact_phone: contact.phone,
       })
       .select().single()
-    if (bookingError) { setErrors({ submit: 'Erreur lors de la réservation. Réessayez.' }); setSubmitting(false); return }
+
+    if (bookingError) {
+      setErrors({ submit: 'Erreur lors de la réservation. Réessayez.' })
+      setSubmitting(false); return
+    }
 
     const paxInserts = passengers.map(p => ({
-      booking_id:   bookingData.id,
-      first_name:   p.first_name,
-      last_name:    p.last_name,
-      weight_kg:    parseInt(p.weight_kg),
-      age:          parseInt(p.age),
-      flight_type:  p.flight_type,
+      booking_id:    bookingData.id,
+      first_name:    p.first_name,
+      last_name:     p.last_name,
+      weight_kg:     parseInt(p.weight_kg),
+      age:           parseInt(p.age),
+      flight_type:   p.flight_type,
       parental_auth: p.parental_auth,
-      price_eur:    calculatePrice(parseInt(p.age), p.flight_type) * 100,
+      price_eur:     calculatePrice(parseInt(p.age), p.flight_type) * 100,
     }))
+
     const { error: paxError } = await supabase.from('passengers').insert(paxInserts)
-    if (paxError) { setErrors({ submit: 'Erreur passagers.' }); setSubmitting(false); return }
+    if (paxError) {
+      setErrors({ submit: 'Erreur passagers.' })
+      setSubmitting(false); return
+    }
 
     setBookingRef(bookingData.id.slice(0, 8).toUpperCase())
     setStep(4); setSubmitting(false)
@@ -178,12 +186,12 @@ export default function Booking() {
       {step >= 2 && (
         <section className="booking-section">
           <h2>2. Passagers</h2>
+
           {passengers.map((p, i) => {
-            const age         = parseInt(p.age, 10)
-            const isChild     = !isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE
-            // Discovery-only note: shown when only first slot(s) exist
-            const onlyFirst   = slots.every(s => isFirstSlot(s.slot_time))
-            const perfBlocked = isChild || onlyFirst
+            const age      = parseInt(p.age, 10)
+            const isChild  = !isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE
+            // Only first slot available today → performance impossible
+            const onlyFirst = slots.every(s => isFirstSlot(s.slot_time))
 
             return (
               <div key={i} className="passenger-card">
@@ -223,17 +231,12 @@ export default function Booking() {
                   <label>Type de vol</label>
                   <select value={p.flight_type}
                     onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
-                    disabled={perfBlocked}>
+                    disabled={isChild || onlyFirst}>
                     <option value="discovery">Découverte — 20 min (90 €)</option>
                     <option value="performance">Performance — 30/40 min (110–120 €)</option>
                   </select>
-                  {/* Explain why performance is disabled */}
-                  {isChild && (
-                    <span className="info-msg">Vol découverte uniquement pour les moins de 13 ans.</span>
-                  )}
-                  {!isChild && onlyFirst && (
-                    <span className="info-msg">Vol découverte uniquement sur le premier créneau (8h).</span>
-                  )}
+                  {isChild   && <span className="info-msg">Vol découverte uniquement pour les moins de 13 ans.</span>}
+                  {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
                 </div>
 
                 {parseInt(p.age) < 18 && p.age !== '' && (
@@ -274,29 +277,19 @@ export default function Booking() {
         </section>
       )}
 
-      {/* ── Step 3 : slot suggestion ── */}
+      {/* ── Step 3 : slot ── */}
       {step >= 3 && (
         <section className="booking-section">
-          <h2>3. Créneau suggéré</h2>
+          <h2>3. Créneau proposé</h2>
 
-          {/* Explain if no slot available */}
           {errors.general && <p className="error-msg">{errors.general}</p>}
 
-          {suggestion.optionB && (
-            <div className={`slot-option recommended ${selectedSlot?.id === suggestion.optionB.id ? 'selected' : ''}`}
-              onClick={() => setSelectedSlot(suggestion.optionB)}>
-              <span className="badge">✦ Recommandé</span>
-              <span className="slot-time-big">{suggestion.optionB.slot_time?.slice(0, 5)}</span>
+          {suggestedSlot ? (
+            <div className="slot-option recommended selected">
+              <span className="slot-time-big">{suggestedSlot.slot_time?.slice(0, 5)}</span>
             </div>
-          )}
-          {suggestion.optionA && suggestion.optionA.id !== suggestion.optionB?.id && (
-            <div className={`slot-option ${selectedSlot?.id === suggestion.optionA.id ? 'selected' : ''}`}
-              onClick={() => setSelectedSlot(suggestion.optionA)}>
-              <span className="slot-time-big">{suggestion.optionA.slot_time?.slice(0, 5)}</span>
-            </div>
-          )}
-          {!suggestion.optionA && !suggestion.optionB && !errors.general && (
-            <p className="info-msg">Aucun créneau disponible pour vos contraintes ce jour-là.</p>
+          ) : (
+            !errors.general && <p className="info-msg">Aucun créneau disponible pour vos contraintes ce jour-là.</p>
           )}
 
           {errors.submit && <p className="error-msg">{errors.submit}</p>}
