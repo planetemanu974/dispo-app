@@ -150,9 +150,7 @@ if (hasLightChild) {
     let slotInfoMsg = null
     if (hasLightChild && hasHeavy) {
       slotInfoMsg = '⚠️ Créneau 8h00 imposé (passager < 20 kg). Le passager de plus de 75 kg volera en vol découverte (20 min) — le vol sera plus court. Vous pouvez aussi réserver deux vols séparés.'
-    } else if (hasHeavy) {
-      slotInfoMsg = 'ℹ️ Passager de plus de 75 kg : le vol sera légèrement plus court qu\'en conditions légères.'
-    }
+
     setSlotInfo(slotInfoMsg)
     setStep(3)
   }
