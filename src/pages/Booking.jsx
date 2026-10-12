@@ -109,8 +109,9 @@ if (hasChild && hasPerformance) {
     let eligibleSlots
 if (hasLightChild) {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => isFirstSlot(s.slot_time))
-} else if (hasPerformance) {
-  eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => !isFirstSlot(s.slot_time))
+} else if (hasPerformance || hasHeavy) {
+  const laterSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => !isFirstSlot(s.slot_time))
+  eligibleSlots = laterSlots.length > 0 ? laterSlots : [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 } else {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 }
