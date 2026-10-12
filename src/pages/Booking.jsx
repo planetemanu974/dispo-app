@@ -20,6 +20,7 @@ export default function Booking() {
   const [suggestedSlot, setSuggestedSlot] = useState(null)
   const [selectedSlot, setSelectedSlot]   = useState(null)
   const [contact, setContact]             = useState({ name: '', phone: '' })
+  const [notes, setNotes]                 = useState('')
   const [errors, setErrors]               = useState({})
   const [slotInfo, setSlotInfo]           = useState(null)
   const [conflictMode, setConflictMode]   = useState(null)   // 'child_perf' | 'heavy' | 'split_message' | null
@@ -192,6 +193,7 @@ if (hasLightChild) {
       .insert({
         pilot_slot_id: selectedSlot.id, status: 'pending', source: 'public',
         contact_name:  contact.name,    contact_phone: contact.phone,
+        notes:         notes || null,
       })
       .select().single()
 
@@ -230,7 +232,7 @@ if (hasLightChild) {
         <p>Référence : <strong>{bookingRef}</strong></p>
         <p>Le moniteur va confirmer votre vol. Vous serez contacté au numéro indiqué.</p>
         <button className="btn-primary" onClick={() => {
-          setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' })
+          setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' }); setNotes('')
         }}>Nouvelle réservation</button>
       </div>
     </div>
@@ -344,6 +346,16 @@ if (hasLightChild) {
               <div className="field"><label>Téléphone</label>
                 <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
               </div>
+            </div>
+            <div className="field">
+              <label>Demande spéciale ou information complémentaire</label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Allergie, mobilité réduite, occasion spéciale, message pour le moniteur…"
+                rows={3}
+                style={{ width: '100%', resize: 'vertical' }}
+              />
             </div>
           </div>
 
