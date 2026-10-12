@@ -30,11 +30,12 @@ export default function Booking() {
 
   useEffect(() => { if (selectedDate) loadSlots(selectedDate) }, [selectedDate])
 
-  async function loadSlots(date) {
+async function loadSlots(date) {
     const { data } = await supabase.from('public_slot_availability')
       .select('*').eq('slot_date', date).eq('is_available', true)
-      .eq('has_capacity', true).order('slot_time')
-    setSlots(data || [])
+      .eq('has_capacity', true)
+    const sorted = (data || []).sort((a, b) => a.slot_time.localeCompare(b.slot_time))
+    setSlots(sorted)
     setSuggestedSlot(null); setSelectedSlot(null)
     setSlotInfo(null); setConflictMode(null)
     setSlotTogether(null); setSlotAdultOnly(null)
@@ -107,13 +108,13 @@ if (hasChild && hasPerformance) {
 
     // ── Sélection du créneau éligible ────────────────────────────────────────
     let eligibleSlots
-    if (hasLightChild) {
-      eligibleSlots = slots.filter(s => isFirstSlot(s.slot_time))
-    } else if (hasPerformance) {
-      eligibleSlots = slots.filter(s => !isFirstSlot(s.slot_time))
-    } else {
-      eligibleSlots = slots
-    }
+if (hasLightChild) {
+  eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => isFirstSlot(s.slot_time))
+} else if (hasPerformance) {
+  eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => !isFirstSlot(s.slot_time))
+} else {
+  eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
+}
 
     if (eligibleSlots.length === 0) {
       setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
