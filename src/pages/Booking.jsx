@@ -68,7 +68,6 @@ async function loadSlots(date) {
       if (weight && age) {
         const wResult = validateWeight(weight)
         if (wResult.blocked) { newErrors[`${i}_weight`] = wResult.warning; valid = false }
-        else if (wResult.warning) { newErrors[`${i}_weight_warn`] = wResult.warning }
 
         const aResult = validateAge(age, weight, p.flight_type)
         if (!aResult.ok) { newErrors[`${i}_age`] = aResult.error; valid = false }
@@ -116,7 +115,7 @@ if (hasLightChild) {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 }
 
-if (eligibleSlots.length === 0) {
+    if (eligibleSlots.length === 0) {
       setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
       setErrors({
         general: hasPerformance
@@ -128,11 +127,13 @@ if (eligibleSlots.length === 0) {
 
     const { optionB } = suggestSlots(eligibleSlots)
     setSuggestedSlot(optionB); setSelectedSlot(optionB); setConflictMode(null)
-    setSlotInfo(
-      hasLightChild && hasHeavy
-        ? '⚠️ Créneau 8h00 imposé (passager < 20 kg). Le passager de plus de 75 kg volera en vol découverte (20 min) — le vol sera plus court. Vous pouvez aussi réserver deux vols séparés.'
-        : null
-    )
+    let slotInfoMsg = null
+    if (hasLightChild && hasHeavy) {
+      slotInfoMsg = '⚠️ Créneau 8h00 imposé (passager < 20 kg). Le passager de plus de 75 kg volera en vol découverte (20 min) — le vol sera plus court. Vous pouvez aussi réserver deux vols séparés.'
+    } else if (hasHeavy) {
+      slotInfoMsg = 'ℹ️ Passager de plus de 75 kg : le vol sera légèrement plus court qu\'en conditions légères.'
+    }
+    setSlotInfo(slotInfoMsg)
     setStep(3)
   }
 
@@ -260,7 +261,6 @@ if (eligibleSlots.length === 0) {
                     <input type="number" min="10" max="100" value={p.weight_kg}
                       onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
                     {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
-                    {errors[`${i}_weight_warn`] && <span className="info-msg">⚠️ {errors[`${i}_weight_warn`]}</span>}
                   </div>
                   <div className="field"><label>Âge</label>
                     <input type="number" min="6" max="99" value={p.age}
