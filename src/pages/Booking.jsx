@@ -36,7 +36,6 @@ async function loadSlots(date) {
       .eq('has_capacity', true)
     const sorted = (data || []).sort((a, b) => a.slot_time.localeCompare(b.slot_time))
     setSlots(sorted)
-    console.log('slots chargés:', sorted.map(s => s.slot_time))
     setSuggestedSlot(null); setSelectedSlot(null)
     setSlotInfo(null); setConflictMode(null)
     setSlotTogether(null); setSlotAdultOnly(null)
@@ -116,7 +115,6 @@ if (hasLightChild) {
 } else {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 }
-console.log('eligibleSlots:', eligibleSlots.map(s => s.slot_time))
 
 if (eligibleSlots.length === 0) {
       setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
