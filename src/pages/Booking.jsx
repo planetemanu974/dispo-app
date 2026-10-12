@@ -86,16 +86,17 @@ export default function Booking() {
     const hasLightChild  = passengers.some(p => parseInt(p.weight_kg) < WEIGHT_LIMITS.LIGHT_KG)
     const hasChild       = passengers.some(p => parseInt(p.age) <= AGE_LIMITS.CHILD_MAX_AGE)
 
-    // ── Conflit enfant + performance → deux options proposées ────────────────
-    if (hasChild && hasPerformance) {
-      const s8h    = slots.find(s => isFirstSlot(s.slot_time)) || null
-      const sLater = slots.find(s => !isFirstSlot(s.slot_time)) || null
-      setSlotTogether(s8h)
-      setSlotAdultOnly(sLater)
-      setConflictMode('child_perf')
-      setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
-      setStep(3); return
-    }
+    // Conflict: child + performance → two options
+if (hasChild && hasPerformance) {
+  const sortedSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
+  const s8h    = sortedSlots.find(s => isFirstSlot(s.slot_time)) || null
+  const sLater = sortedSlots.find(s => !isFirstSlot(s.slot_time)) || null
+  setSlotTogether(s8h)
+  setSlotAdultOnly(sLater)
+  setConflictMode('child_perf')
+  setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
+  setStep(3); return
+}
 
     // ── Conflit enfant léger + performance → impossible ──────────────────────
     if (hasLightChild && hasPerformance) {
