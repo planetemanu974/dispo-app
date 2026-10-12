@@ -115,8 +115,9 @@ if (hasLightChild) {
 } else {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 }
+console.log('eligibleSlots:', eligibleSlots.map(s => s.slot_time))
 
-    if (eligibleSlots.length === 0) {
+if (eligibleSlots.length === 0) {
       setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
       setErrors({
         general: hasPerformance
