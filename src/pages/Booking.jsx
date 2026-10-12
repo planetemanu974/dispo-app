@@ -8,23 +8,25 @@ const emptyPassenger = () => ({
   flight_type: 'discovery', parental_auth: false,
 })
 
-// First slot of the day = discovery only, ≤ 75 kg
 function isFirstSlot(slot_time) {
   return slot_time?.startsWith('08:')
 }
 
 export default function Booking() {
-  const [step, setStep]                 = useState(1)
-  const [selectedDate, setSelectedDate] = useState(TODAY)
-  const [slots, setSlots]               = useState([])
-  const [passengers, setPassengers]     = useState([emptyPassenger()])
+  const [step, setStep]                   = useState(1)
+  const [selectedDate, setSelectedDate]   = useState(TODAY)
+  const [slots, setSlots]                 = useState([])
+  const [passengers, setPassengers]       = useState([emptyPassenger()])
   const [suggestedSlot, setSuggestedSlot] = useState(null)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [contact, setContact]           = useState({ name: '', phone: '' })
-  const [errors, setErrors]             = useState({})
-  const [slotInfo, setSlotInfo]         = useState(null)
-  const [submitting, setSubmitting]     = useState(false)
-  const [bookingRef, setBookingRef]     = useState(null)
+  const [selectedSlot, setSelectedSlot]   = useState(null)
+  const [contact, setContact]             = useState({ name: '', phone: '' })
+  const [errors, setErrors]               = useState({})
+  const [slotInfo, setSlotInfo]           = useState(null)
+  const [conflictMode, setConflictMode]   = useState(null)   // 'child_perf' | null
+  const [slotTogether, setSlotTogether]   = useState(null)   // 8h00 slot
+  const [slotAdultOnly, setSlotAdultOnly] = useState(null)   // first non-8h00 slot
+  const [submitting, setSubmitting]       = useState(false)
+  const [bookingRef, setBookingRef]       = useState(null)
 
   useEffect(() => { if (selectedDate) loadSlots(selectedDate) }, [selectedDate])
 
@@ -33,16 +35,15 @@ export default function Booking() {
       .select('*').eq('slot_date', date).eq('is_available', true)
       .eq('has_capacity', true).order('slot_time')
     setSlots(data || [])
-    setSuggestedSlot(null)
-    setSelectedSlot(null)
-    setSlotInfo(null)
+    setSuggestedSlot(null); setSelectedSlot(null)
+    setSlotInfo(null); setConflictMode(null)
+    setSlotTogether(null); setSlotAdultOnly(null)
   }
 
   function updatePassenger(i, field, value) {
     setPassengers(prev => prev.map((p, idx) => {
       if (idx !== i) return p
       const updated = { ...p, [field]: value }
-      // Force discovery for children ≤ 12
       if (field === 'age') {
         const age = parseInt(value, 10)
         if (!isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE) updated.flight_type = 'discovery'
@@ -79,23 +80,31 @@ export default function Booking() {
 
     setErrors(newErrors)
     if (!valid) return
-console.log('slots:', slots.map(s => s.slot_time))
-console.log('hasLightChild:', passengers.some(p => parseInt(p.weight_kg) < WEIGHT_LIMITS.LIGHT_KG))
-console.log('poids:', passengers.map(p => p.weight_kg))
+
     const hasPerformance = passengers.some(p => p.flight_type === 'performance')
     const hasHeavy       = passengers.some(p => parseInt(p.weight_kg) >= WEIGHT_LIMITS.HEAVY_KG)
     const hasLightChild  = passengers.some(p => parseInt(p.weight_kg) < WEIGHT_LIMITS.LIGHT_KG)
+    const hasChild       = passengers.some(p => parseInt(p.age) <= AGE_LIMITS.CHILD_MAX_AGE)
 
-    // Conflit impossible : enfant < 20 kg impose 8h00, performance interdit à 8h00
-    if (hasLightChild && hasPerformance) {
+    // ── Conflit enfant + performance → deux options proposées ────────────────
+    if (hasChild && hasPerformance) {
+      const s8h    = slots.find(s => isFirstSlot(s.slot_time)) || null
+      const sLater = slots.find(s => !isFirstSlot(s.slot_time)) || null
+      setSlotTogether(s8h)
+      setSlotAdultOnly(sLater)
+      setConflictMode('child_perf')
       setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
+      setStep(3); return
+    }
+
+    // ── Conflit enfant léger + performance → impossible ──────────────────────
+    if (hasLightChild && hasPerformance) {
+      setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
       setErrors({ general: 'Un passager fait moins de 20 kg (créneau 8h00 uniquement, vol découverte). Un vol performance est incompatible. Réservez deux vols séparés.' })
       setStep(3); return
     }
 
-    // Enfant < 20 kg → 8h00 impératif
-    // Performance (sans enfant léger) → exclut 8h00
-    // Sinon → tous les créneaux disponibles
+    // ── Sélection du créneau éligible ────────────────────────────────────────
     let eligibleSlots
     if (hasLightChild) {
       eligibleSlots = slots.filter(s => isFirstSlot(s.slot_time))
@@ -106,7 +115,7 @@ console.log('poids:', passengers.map(p => p.weight_kg))
     }
 
     if (eligibleSlots.length === 0) {
-      setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
+      setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
       setErrors({
         general: hasPerformance
           ? 'Aucun créneau disponible pour un vol performance ce jour-là. Essayez une autre date.'
@@ -116,17 +125,27 @@ console.log('poids:', passengers.map(p => p.weight_kg))
     }
 
     const { optionB } = suggestSlots(eligibleSlots)
-    setSuggestedSlot(optionB)
-    setSelectedSlot(optionB)
-
-    // Avertissement : adulte lourd + enfant léger → 8h00 découverte, vol plus court
+    setSuggestedSlot(optionB); setSelectedSlot(optionB); setConflictMode(null)
     setSlotInfo(
       hasLightChild && hasHeavy
         ? '⚠️ Créneau 8h00 imposé (passager < 20 kg). Le passager de plus de 75 kg volera en vol découverte (20 min) — le vol sera plus court. Vous pouvez aussi réserver deux vols séparés.'
         : null
     )
-
     setStep(3)
+  }
+
+  // Choisir option 1 : ensemble à 8h00, tout le monde en découverte
+  function chooseTogetherAt8() {
+    setPassengers(prev => prev.map(p => ({ ...p, flight_type: 'discovery' })))
+    setSelectedSlot(slotTogether)
+    setSlotInfo('⚠️ Vol découverte uniquement à 8h00. Le passager lourd descendra plus vite que sur un créneau tardif.')
+    setConflictMode(null)
+  }
+
+  // Choisir option 2 : deux réservations séparées
+  function chooseSplit() {
+    setConflictMode('split_message')
+    setSelectedSlot(null)
   }
 
   async function submitBooking() {
@@ -166,7 +185,7 @@ console.log('poids:', passengers.map(p => p.weight_kg))
     setStep(4); setSubmitting(false)
   }
 
-  // ── Step 4 — confirmation ─────────────────────────────────────────────────
+  // ── Step 4 ────────────────────────────────────────────────────────────────
   if (step === 4) return (
     <div className="booking-page">
       <div className="booking-done">
@@ -176,9 +195,7 @@ console.log('poids:', passengers.map(p => p.weight_kg))
         <p>Le moniteur va confirmer votre vol. Vous serez contacté au numéro indiqué.</p>
         <button className="btn-primary" onClick={() => {
           setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' })
-        }}>
-          Nouvelle réservation
-        </button>
+        }}>Nouvelle réservation</button>
       </div>
     </div>
   )
@@ -192,7 +209,7 @@ console.log('poids:', passengers.map(p => p.weight_kg))
         <p>Planète Parapente Réunion — Saint-Leu</p>
       </header>
 
-      {/* ── Step 1 : date ── */}
+      {/* Step 1 */}
       {step >= 1 && (
         <section className="booking-section">
           <h2>1. Choisir une date</h2>
@@ -205,4 +222,176 @@ console.log('poids:', passengers.map(p => p.weight_kg))
         </section>
       )}
 
-      {/* ── Step 2 :
+      {/* Step 2 */}
+      {step >= 2 && (
+        <section className="booking-section">
+          <h2>2. Passagers</h2>
+
+          {passengers.map((p, i) => {
+            const age       = parseInt(p.age, 10)
+            const isChild   = !isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE
+            const onlyFirst = slots.every(s => isFirstSlot(s.slot_time))
+
+            return (
+              <div key={i} className="passenger-card">
+                <div className="passenger-header">
+                  <span>Passager {i + 1}</span>
+                  {i > 0 && (
+                    <button className="btn-ghost-small"
+                      onClick={() => setPassengers(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
+                  )}
+                </div>
+
+                <div className="field-row">
+                  <div className="field"><label>Prénom</label>
+                    <input value={p.first_name} onChange={e => updatePassenger(i, 'first_name', e.target.value)} />
+                    {errors[`${i}_first_name`] && <span className="error-msg">{errors[`${i}_first_name`]}</span>}
+                  </div>
+                  <div className="field"><label>Nom</label>
+                    <input value={p.last_name} onChange={e => updatePassenger(i, 'last_name', e.target.value)} />
+                    {errors[`${i}_last_name`] && <span className="error-msg">{errors[`${i}_last_name`]}</span>}
+                  </div>
+                </div>
+
+                <div className="field-row">
+                  <div className="field"><label>Poids (kg)</label>
+                    <input type="number" min="10" max="100" value={p.weight_kg}
+                      onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
+                    {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
+                    {errors[`${i}_weight_warn`] && <span className="info-msg">⚠️ {errors[`${i}_weight_warn`]}</span>}
+                  </div>
+                  <div className="field"><label>Âge</label>
+                    <input type="number" min="6" max="99" value={p.age}
+                      onChange={e => updatePassenger(i, 'age', e.target.value)} />
+                    {errors[`${i}_age`] && <span className="error-msg">{errors[`${i}_age`]}</span>}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Type de vol</label>
+                  <select value={p.flight_type}
+                    onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
+                    disabled={isChild || onlyFirst}>
+                    <option value="discovery">Découverte — 20 min (90 €)</option>
+                    <option value="performance">Performance — 30/40 min (110–120 €)</option>
+                  </select>
+                  {isChild && <span className="info-msg">Vol découverte uniquement pour les moins de 13 ans.</span>}
+                  {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
+                </div>
+
+                {parseInt(p.age) < 18 && p.age !== '' && (
+                  <div className="field checkbox-field">
+                    <label>
+                      <input type="checkbox" checked={p.parental_auth}
+                        onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)} />
+                      {' '}Autorisation parentale confirmée
+                    </label>
+                    {errors[`${i}_parental`] && <span className="error-msg">{errors[`${i}_parental`]}</span>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {passengers.length < 4 && (
+            <button className="btn-secondary"
+              onClick={() => setPassengers(prev => [...prev, emptyPassenger()])}>
+              + Ajouter un passager
+            </button>
+          )}
+
+          <div className="passenger-card">
+            <div className="passenger-header">Contact</div>
+            <div className="field-row">
+              <div className="field"><label>Nom</label>
+                <input value={contact.name} onChange={e => setContact(c => ({ ...c, name: e.target.value }))} />
+              </div>
+              <div className="field"><label>Téléphone</label>
+                <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+
+          <button className="btn-primary" onClick={validateAndSuggest}>Voir les créneaux →</button>
+        </section>
+      )}
+
+      {/* Step 3 */}
+      {step >= 3 && (
+        <section className="booking-section">
+          <h2>3. Créneau proposé</h2>
+
+          {/* ── Conflit enfant + performance ── */}
+          {conflictMode === 'child_perf' && (
+            <div className="conflict-block">
+              <p className="info-msg">⚠️ Votre groupe mélange un enfant (vol découverte) et un adulte (vol performance). Choisissez :</p>
+
+              <div className="conflict-options">
+                <div className={`conflict-card ${!slotTogether ? 'disabled' : ''}`}>
+                  <h3>Option 1 — Ensemble à 8h00</h3>
+                  <p>Tous en vol découverte (20 min). L'adulte ne pourra pas faire un vol performance et descendra plus vite qu'en créneau tardif.</p>
+                  {slotTogether
+                    ? <button className="btn-primary" onClick={chooseTogetherAt8}>Choisir 08:00 ensemble</button>
+                    : <p className="error-msg">Créneau 8h00 non disponible ce jour-là.</p>}
+                </div>
+
+                <div className={`conflict-card ${!slotAdultOnly ? 'disabled' : ''}`}>
+                  <h3>Option 2 — Deux vols séparés</h3>
+                  <p>
+                    Enfant à 8h00 (découverte).<br />
+                    Adulte à {slotAdultOnly?.slot_time?.slice(0, 5) || '—'} (performance).
+                  </p>
+                  {slotAdultOnly
+                    ? <button className="btn-secondary" onClick={chooseSplit}>Réserver en deux fois</button>
+                    : <p className="error-msg">Aucun créneau disponible pour l'adulte ce jour-là.</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Message après choix option 2 ── */}
+          {conflictMode === 'split_message' && (
+            <div className="info-msg">
+              <p>Réservez d'abord le vol de l'enfant (8h00), puis revenez faire une nouvelle réservation pour l'adulte.</p>
+              <button className="btn-primary" onClick={() => {
+                setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' })
+                setConflictMode(null)
+              }}>Nouvelle réservation →</button>
+            </div>
+          )}
+
+          {/* ── Créneau normal ── */}
+          {!conflictMode && (
+            <>
+              {slotInfo && <p className="info-msg">{slotInfo}</p>}
+              {errors.general && <p className="error-msg">{errors.general}</p>}
+
+              {suggestedSlot ? (
+                <div className="slot-option recommended selected">
+                  <span className="slot-time-big">{suggestedSlot.slot_time?.slice(0, 5)}</span>
+                </div>
+              ) : (
+                !errors.general && <p className="info-msg">Aucun créneau disponible pour vos contraintes ce jour-là.</p>
+              )}
+
+              {errors.submit && <p className="error-msg">{errors.submit}</p>}
+
+              {selectedSlot && (
+                <button className="btn-primary" onClick={submitBooking} disabled={submitting}>
+                  {submitting ? 'Envoi...' : 'Confirmer la demande'}
+                </button>
+              )}
+            </>
+          )}
+
+          {/* ── Après choix option 1 : confirmer ── */}
+          {!conflictMode && selectedSlot && slotInfo && (
+            <button className="btn-primary" onClick={submitBooking} disabled={submitting}>
+              {submitting ? 'Envoi...' : 'Confirmer la demande'}
+            </button>
+          )}
+        </section>
+      )}
+    </div>
+  )
+}
