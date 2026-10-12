@@ -22,7 +22,7 @@ export default function Booking() {
   const [contact, setContact]             = useState({ name: '', phone: '' })
   const [errors, setErrors]               = useState({})
   const [slotInfo, setSlotInfo]           = useState(null)
-  const [conflictMode, setConflictMode]   = useState(null)   // 'child_perf' | null
+  const [conflictMode, setConflictMode]   = useState(null)   // 'child_perf' | 'heavy' | 'split_message' | null
   const [slotTogether, setSlotTogether]   = useState(null)   // 8h00 slot
   const [slotAdultOnly, setSlotAdultOnly] = useState(null)   // first non-8h00 slot
   const [submitting, setSubmitting]       = useState(false)
@@ -98,6 +98,21 @@ if (hasChild && hasPerformance) {
   setStep(3); return
 }
 
+    // ── Passager lourd (>75 kg) en découverte → proposer 8h ET 9h15 ─────────
+    if (hasHeavy && !hasPerformance && !hasLightChild) {
+      const sortedSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
+      const s8h    = sortedSlots.find(s =>  isFirstSlot(s.slot_time)) || null
+      const sLater = sortedSlots.find(s => !isFirstSlot(s.slot_time)) || null
+      if (s8h && sLater) {
+        setSlotTogether(s8h)
+        setSlotAdultOnly(sLater)
+        setConflictMode('heavy')
+        setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null)
+        setStep(3); return
+      }
+      // Si un seul créneau dispo, on continue normalement avec un slotInfo
+    }
+
     // ── Conflit enfant léger + performance → impossible ──────────────────────
     if (hasLightChild && hasPerformance) {
       setSuggestedSlot(null); setSelectedSlot(null); setSlotInfo(null); setConflictMode(null)
@@ -110,8 +125,11 @@ if (hasChild && hasPerformance) {
 if (hasLightChild) {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => isFirstSlot(s.slot_time))
 } else if (hasPerformance || hasHeavy) {
+  // Performance → créneau tardif ; lourd seul → créneau tardif si dispo, sinon tous
   const laterSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)).filter(s => !isFirstSlot(s.slot_time))
-  eligibleSlots = laterSlots.length > 0 ? laterSlots : [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
+  eligibleSlots = (hasPerformance || laterSlots.length > 0)
+    ? laterSlots
+    : [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 } else {
   eligibleSlots = [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time))
 }
@@ -136,6 +154,20 @@ if (hasLightChild) {
     }
     setSlotInfo(slotInfoMsg)
     setStep(3)
+  }
+
+  // Passager lourd : choisir 8h (avec avertissement)
+  function chooseHeavy8h() {
+    setSelectedSlot(slotTogether)
+    setSlotInfo('⚠️ À 8h00, vous descendrez plus vite — les thermiques sont moins actifs tôt le matin.')
+    setConflictMode(null)
+  }
+
+  // Passager lourd : choisir créneau tardif (recommandé)
+  function chooseHeavyLater() {
+    setSelectedSlot(slotAdultOnly)
+    setSlotInfo(null)
+    setConflictMode(null)
   }
 
   // Choisir option 1 : ensemble à 8h00, tout le monde en découverte
@@ -347,6 +379,27 @@ if (hasLightChild) {
                   {slotAdultOnly
                     ? <button className="btn-secondary" onClick={chooseSplit}>Réserver en deux fois</button>
                     : <p className="error-msg">Aucun créneau disponible pour l'adulte ce jour-là.</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Passager lourd : choisir 8h ou 9h15 ── */}
+          {conflictMode === 'heavy' && (
+            <div className="conflict-block">
+              <p className="info-msg">ℹ️ Passager de plus de 75 kg — deux créneaux disponibles :</p>
+              <div className="conflict-options">
+                <div className="conflict-card">
+                  <h3>8h00</h3>
+                  <p>⚠️ Vous descendrez plus vite à cette heure — les thermiques sont moins actifs tôt le matin.</p>
+                  <button className="btn-secondary" onClick={chooseHeavy8h}>Choisir 08:00</button>
+                </div>
+                <div className="conflict-card">
+                  <h3>{slotAdultOnly?.slot_time?.slice(0, 5)} — Recommandé</h3>
+                  <p>Meilleures conditions pour les passagers de plus de 75 kg. Vol plus long et plus confortable.</p>
+                  <button className="btn-primary" onClick={chooseHeavyLater}>
+                    Choisir {slotAdultOnly?.slot_time?.slice(0, 5)}
+                  </button>
                 </div>
               </div>
             </div>
