@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Booking from './pages/Booking'
+import ManuDispo from './pages/ManuDispo'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -34,6 +35,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/reservation" element={<Booking />} />
+        <Route path="/manu-dispo"  element={<ManuDispo />} />
         <Route path="/" element={session && pilot ? <Dashboard pilot={pilot} /> : <Login />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
