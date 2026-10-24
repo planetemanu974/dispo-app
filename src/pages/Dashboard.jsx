@@ -207,6 +207,49 @@ export default function Dashboard({ pilot }) {
 
   const flightTypeLabel = t => t === 'performance' ? 'Performance' : 'Découverte'
 
+  // ── buildWhatsAppUrl ───────────────────────────────────────────────────────
+  // Builds a wa.me link with a pre-filled confirmation message.
+  function buildWhatsAppUrl(booking, action) {
+    const phone = (booking.contact_phone || '').replace(/\s+/g, '').replace(/^0/, '262')
+    const slotDate = booking.pilot_slots?.slot_date || selectedDate
+    const slotTime = booking.pilot_slots?.slot_time?.slice(0, 5) || ''
+    const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long'
+    })
+    const paxCount = booking.passengers?.length || 1
+    const paxLabel = paxCount > 1 ? `${paxCount} passagers` : '1 passager'
+
+    let msg = ''
+    if (action === 'confirmed') {
+      msg =
+        `Bonjour ${booking.contact_name} 👋\n\n` +
+        `*Votre réservation parapente est confirmée* ✅\n\n` +
+        `Je vous confirme votre vol pour ${dateLabel} à ${slotTime} pour ${paxLabel}.\n\n` +
+        `Les pilotes vous attendront à l'*atterrissage des parapentes* (plage à côté de Kélonia).\n\n` +
+        `Vous les trouverez à côté de la navette *Planète Parapente* stationnée sur le parking. Demandez *Manu*.\n` +
+        `Il est préférable de vous garer sur le grand parking à côté du rond-point.\n\n` +
+        `👟 *Équipement :* baskets\n\n` +
+        `💳 *Paiement :* espèces ou chèque (pas de carte bleue)\n\n` +
+        `📸 Photos : 10€\n` +
+        `🎥 Photos + Vidéos : 20€\n` +
+        `Transfert direct sur smartphone après le vol.\n\n` +
+        `🌤️ Un message de confirmation météo vous sera envoyé la veille du vol.\n\n` +
+        `À bientôt ! 🪂\n\n` +
+        `Manu\n` +
+        `www.planete-parapente-reunion.com\n` +
+        `06.92.719.749`
+    } else {
+      msg =
+        `Bonjour ${booking.contact_name},\n\n` +
+        `Je suis désolé, je ne suis pas disponible le ${dateLabel}.\n` +
+        `N'hésitez pas à me recontacter pour une autre date 🪂\n\n` +
+        `Manu — Planète Parapente Réunion\n` +
+        `06.92.719.749`
+    }
+
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+  }
+
   function changeDate(delta) {
     const d = new Date((selectedDate || TODAY) + 'T00:00:00')
     d.setDate(d.getDate() + delta)
@@ -363,6 +406,14 @@ export default function Dashboard({ pilot }) {
             <div className="modal-contact">
               <strong>{selectedBooking.contact_name}</strong><br />
               📞 {selectedBooking.contact_phone}
+              {selectedBooking.contact_phone && (
+                <a
+                  href={`https://wa.me/${(selectedBooking.contact_phone).replace(/\s+/g,'').replace(/^0/,'262')}`}
+                  target="_blank" rel="noreferrer"
+                  className="btn-whatsapp-contact">
+                  💬 Contacter sur WhatsApp
+                </a>
+              )}
             </div>
             <div className="modal-passengers">
               {selectedBooking.passengers?.map((p, i) => (
@@ -391,8 +442,19 @@ export default function Dashboard({ pilot }) {
                   onClick={() => handleBooking(selectedBooking.id, 'refused')}>✗ Refuser</button>
               </div>
             )}
-            {selectedBooking.status === 'confirmed' && (
-              <div className="booking-confirmed-label">✓ Vol confirmé</div>
+            {/* WhatsApp buttons — shown after confirm or refuse */}
+            {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'refused') && (
+              <div className="booking-whatsapp-actions">
+                {selectedBooking.status === 'confirmed' && (
+                  <div className="booking-confirmed-label">✓ Vol confirmé</div>
+                )}
+                <a
+                  href={buildWhatsAppUrl(selectedBooking, selectedBooking.status === 'confirmed' ? 'confirmed' : 'refused')}
+                  target="_blank" rel="noreferrer"
+                  className="btn-whatsapp-send">
+                  📲 Envoyer la confirmation WhatsApp
+                </a>
+              </div>
             )}
           </div>
         </div>
