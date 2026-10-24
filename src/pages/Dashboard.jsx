@@ -167,7 +167,8 @@ export default function Dashboard({ pilot }) {
   // ── handleBooking ──────────────────────────────────────────────────────────
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
-    setSelectedBooking(null)
+    // Keep modal open, update status locally so WhatsApp button appears
+    setSelectedBooking(prev => prev ? { ...prev, status: action } : null)
 
     const { data: slotData } = await supabase
       .from('pilot_slots').select('id, slot_date, slot_time')
