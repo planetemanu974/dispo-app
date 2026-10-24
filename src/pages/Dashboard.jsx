@@ -266,6 +266,84 @@ export default function Dashboard({ pilot }) {
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
   }
 
+  // ── handleCancel ──────────────────────────────────────────────────────────
+  async function handleCancel(bookingId) {
+    if (!window.confirm('Annuler cette réservation ?')) return
+    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+    setSelectedBooking(null)
+    setEditMode(false)
+    // Refresh pending list
+    const { data: slotData } = await supabase
+      .from('pilot_slots').select('id, slot_date, slot_time')
+      .eq('pilot_id', pilot.id).gte('slot_date', TODAY)
+    if (slotData && slotData.length > 0) {
+      const slotIds = slotData.map(s => s.id)
+      const slotMap = Object.fromEntries(slotData.map(s => [s.id, s]))
+      const { data: pending } = await supabase
+        .from('bookings').select('*, passengers(*)')
+        .in('pilot_slot_id', slotIds).eq('status', 'pending')
+        .order('created_at', { ascending: true })
+      setPendingAll((pending || []).map(b => ({ ...b, pilot_slots: slotMap[b.pilot_slot_id] })))
+    } else {
+      setPendingAll([])
+    }
+    loadDay(selectedDate)
+    loadPlanning(selectedDate)
+  }
+
+  // ── enterEditMode ──────────────────────────────────────────────────────────
+  function enterEditMode() {
+    setEditData({
+      contact_name:  selectedBooking.contact_name  || '',
+      contact_phone: selectedBooking.contact_phone || '',
+      passengers: (selectedBooking.passengers || []).map(p => ({ ...p })),
+    })
+    setEditMode(true)
+  }
+
+  // ── handleSaveEdit ─────────────────────────────────────────────────────────
+  async function handleSaveEdit() {
+    // Update booking contact fields
+    await supabase.from('bookings').update({
+      contact_name:  editData.contact_name,
+      contact_phone: editData.contact_phone,
+    }).eq('id', selectedBooking.id)
+
+    // Determine which original passengers were removed
+    const originalIds = (selectedBooking.passengers || []).map(p => p.id)
+    const keptIds     = editData.passengers.filter(p => p.id).map(p => p.id)
+    const removedIds  = originalIds.filter(id => !keptIds.includes(id))
+    if (removedIds.length > 0) {
+      await supabase.from('passengers').delete().in('id', removedIds)
+    }
+
+    // Update existing passengers, insert new ones
+    for (const p of editData.passengers) {
+      if (p.id) {
+        await supabase.from('passengers').update({
+          first_name: p.first_name, last_name: p.last_name,
+          weight_kg:  parseInt(p.weight_kg), age: parseInt(p.age),
+          flight_type: p.flight_type,
+        }).eq('id', p.id)
+      } else {
+        await supabase.from('passengers').insert({
+          booking_id:  selectedBooking.id,
+          first_name:  p.first_name, last_name: p.last_name,
+          weight_kg:   parseInt(p.weight_kg), age: parseInt(p.age),
+          flight_type: p.flight_type, price_eur: 0,
+        })
+      }
+    }
+
+    // Reload booking detail to reflect changes
+    const { data: updated } = await supabase
+      .from('bookings').select('*, passengers(*), pilot_slots(slot_date, slot_time)')
+      .eq('id', selectedBooking.id).single()
+    setSelectedBooking(updated)
+    setEditMode(false)
+    loadDay(selectedDate, true)
+  }
+
   function changeDate(delta) {
     const d = new Date((selectedDate || TODAY) + 'T00:00:00')
     d.setDate(d.getDate() + delta)
@@ -413,64 +491,151 @@ export default function Dashboard({ pilot }) {
 
       {/* ── Booking detail modal ── */}
       {selectedBooking && (
-        <div className="modal-overlay" onClick={() => setSelectedBooking(null)}>
+        <div className="modal-overlay" onClick={() => { setSelectedBooking(null); setEditMode(false) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Fiche de réservation</h2>
-              <button className="btn-ghost" onClick={() => setSelectedBooking(null)}>✕</button>
+              <h2>{editMode ? 'Modifier la réservation' : 'Fiche de réservation'}</h2>
+              <button className="btn-ghost" onClick={() => { setSelectedBooking(null); setEditMode(false) }}>✕</button>
             </div>
-            <div className="modal-contact">
-              <strong>{selectedBooking.contact_name}</strong><br />
-              📞 {selectedBooking.contact_phone}
-              {selectedBooking.contact_phone && (
-                <a
-                  href={`https://wa.me/${(selectedBooking.contact_phone).replace(/\s+/g,'').replace(/^0/,'262')}`}
-                  target="_blank" rel="noreferrer"
-                  className="btn-whatsapp-contact">
-                  💬 Contacter sur WhatsApp
-                </a>
-              )}
-            </div>
-            <div className="modal-passengers">
-              {selectedBooking.passengers?.map((p, i) => (
-                <div key={p.id} className="modal-pax-card">
-                  <div className="modal-pax-name">Passager {i + 1} — {p.first_name} {p.last_name}</div>
-                  <div className="modal-pax-details">
-                    ⚖️ {p.weight_kg} kg &nbsp;|&nbsp; 🎂 {p.age} ans &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
-                  </div>
+
+            {/* ── VIEW MODE ── */}
+            {!editMode && (
+              <>
+                <div className="modal-contact">
+                  <strong>{selectedBooking.contact_name}</strong><br />
+                  📞 {selectedBooking.contact_phone}
+                  {selectedBooking.contact_phone && (
+                    <a
+                      href={`https://wa.me/${(selectedBooking.contact_phone).replace(/\s+/g,'').replace(/^0/,'262')}`}
+                      target="_blank" rel="noreferrer"
+                      className="btn-whatsapp-contact">
+                      💬 Contacter sur WhatsApp
+                    </a>
+                  )}
                 </div>
-              ))}
-            </div>
-            {/* Notes / demande spéciale du client */}
-            {selectedBooking.notes && (
-              <div className="modal-notes">
-                <div className="modal-notes-label">📝 Demande spéciale</div>
-                <div className="modal-notes-text">{selectedBooking.notes}</div>
-              </div>
-            )}
-            <div className="modal-ref">Réf. {selectedBooking.booking_ref || selectedBooking.id?.slice(0, 8).toUpperCase()}</div>
-            {/* Show confirm/refuse only for pending bookings */}
-            {selectedBooking.status === 'pending' && (
-              <div className="booking-actions">
-                <button className="btn-confirm"
-                  onClick={() => handleBooking(selectedBooking.id, 'confirmed')}>✓ Confirmer</button>
-                <button className="btn-refuse"
-                  onClick={() => handleBooking(selectedBooking.id, 'refused')}>✗ Refuser</button>
-              </div>
-            )}
-            {/* WhatsApp buttons — shown after confirm or refuse */}
-            {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'refused') && (
-              <div className="booking-whatsapp-actions">
-                {selectedBooking.status === 'confirmed' && (
-                  <div className="booking-confirmed-label">✓ Vol confirmé</div>
+                <div className="modal-passengers">
+                  {selectedBooking.passengers?.map((p, i) => (
+                    <div key={p.id} className="modal-pax-card">
+                      <div className="modal-pax-name">Passager {i + 1} — {p.first_name} {p.last_name}</div>
+                      <div className="modal-pax-details">
+                        ⚖️ {p.weight_kg} kg &nbsp;|&nbsp; 🎂 {p.age} ans &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {selectedBooking.notes && (
+                  <div className="modal-notes">
+                    <div className="modal-notes-label">📝 Demande spéciale</div>
+                    <div className="modal-notes-text">{selectedBooking.notes}</div>
+                  </div>
                 )}
-                <a
-                  href={buildWhatsAppUrl(selectedBooking, selectedBooking.status === 'confirmed' ? 'confirmed' : 'refused')}
-                  target="_blank" rel="noreferrer"
-                  className="btn-whatsapp-send">
-                  📲 Envoyer la confirmation WhatsApp
-                </a>
-              </div>
+                <div className="modal-ref">Réf. {selectedBooking.booking_ref || selectedBooking.id?.slice(0, 8).toUpperCase()}</div>
+
+                {/* Confirm / refuse for pending */}
+                {selectedBooking.status === 'pending' && (
+                  <div className="booking-actions">
+                    <button className="btn-confirm"
+                      onClick={() => handleBooking(selectedBooking.id, 'confirmed')}>✓ Confirmer</button>
+                    <button className="btn-refuse"
+                      onClick={() => handleBooking(selectedBooking.id, 'refused')}>✗ Refuser</button>
+                  </div>
+                )}
+
+                {/* WhatsApp buttons after confirm or refuse */}
+                {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'refused') && (
+                  <div className="booking-whatsapp-actions">
+                    {selectedBooking.status === 'confirmed' && (
+                      <div className="booking-confirmed-label">✓ Vol confirmé</div>
+                    )}
+                    <a
+                      href={buildWhatsAppUrl(selectedBooking, selectedBooking.status === 'confirmed' ? 'confirmed' : 'refused')}
+                      target="_blank" rel="noreferrer"
+                      className="btn-whatsapp-send">
+                      📲 Envoyer la confirmation WhatsApp
+                    </a>
+                  </div>
+                )}
+
+                {/* Edit / Cancel actions — visible for pending and confirmed */}
+                {(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') && (
+                  <div className="booking-manage-actions">
+                    <button className="btn-edit" onClick={enterEditMode}>✏️ Modifier la réservation</button>
+                    <button className="btn-cancel-booking" onClick={() => handleCancel(selectedBooking.id)}>
+                      🗑 Annuler cette réservation
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── EDIT MODE ── */}
+            {editMode && editData && (
+              <>
+                <div className="edit-section">
+                  <label className="edit-label">Nom du contact</label>
+                  <input className="edit-input" value={editData.contact_name}
+                    onChange={e => setEditData(d => ({ ...d, contact_name: e.target.value }))} />
+                  <label className="edit-label">Téléphone</label>
+                  <input className="edit-input" type="tel" value={editData.contact_phone}
+                    onChange={e => setEditData(d => ({ ...d, contact_phone: e.target.value }))} />
+                </div>
+
+                <div className="edit-section">
+                  <div className="edit-section-title">Passagers</div>
+                  {editData.passengers.map((p, i) => (
+                    <div key={p.id || `new-${i}`} className="modal-pax-card" style={{ position: 'relative' }}>
+                      <div className="modal-pax-name" style={{ marginBottom: '8px' }}>Passager {i + 1}</div>
+                      {editData.passengers.length > 1 && (
+                        <button className="btn-ghost-small" style={{ position: 'absolute', top: 8, right: 8 }}
+                          onClick={() => setEditData(d => ({ ...d, passengers: d.passengers.filter((_, idx) => idx !== i) }))}>✕</button>
+                      )}
+                      <div className="field-row" style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ flex: 1 }}>
+                          <label className="edit-label">Prénom</label>
+                          <input className="edit-input" value={p.first_name}
+                            onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, first_name: e.target.value } : px) }))} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="edit-label">Nom</label>
+                          <input className="edit-input" value={p.last_name}
+                            onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, last_name: e.target.value } : px) }))} />
+                        </div>
+                      </div>
+                      <div className="field-row" style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ flex: 1 }}>
+                          <label className="edit-label">Poids (kg)</label>
+                          <input className="edit-input" type="number" min="10" max="120" value={p.weight_kg}
+                            onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, weight_kg: e.target.value } : px) }))} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="edit-label">Âge</label>
+                          <input className="edit-input" type="number" min="6" max="99" value={p.age}
+                            onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, age: e.target.value } : px) }))} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="edit-label">Type de vol</label>
+                        <select className="edit-input" value={p.flight_type}
+                          onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, flight_type: e.target.value } : px) }))}>
+                          <option value="discovery">Découverte (90 €)</option>
+                          <option value="performance">Performance (110–120 €)</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                  {editData.passengers.length < 4 && (
+                    <button className="btn-secondary" style={{ width: '100%', marginTop: '8px' }}
+                      onClick={() => setEditData(d => ({ ...d, passengers: [...d.passengers, { first_name: '', last_name: '', weight_kg: '', age: '', flight_type: 'discovery' }] }))}>
+                      + Ajouter un passager
+                    </button>
+                  )}
+                </div>
+
+                <div className="booking-actions">
+                  <button className="btn-confirm" onClick={handleSaveEdit}>✓ Enregistrer</button>
+                  <button className="btn-refuse" onClick={() => setEditMode(false)}>Annuler</button>
+                </div>
+              </>
             )}
           </div>
         </div>
