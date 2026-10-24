@@ -78,8 +78,9 @@ export default function Dashboard({ pilot }) {
   }, [selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── loadDay ────────────────────────────────────────────────────────────────
-  async function loadDay(date) {
-    setLoading(true)
+  // silent=true: refresh in background without showing the loading spinner
+  async function loadDay(date, silent = false) {
+    if (!silent) setLoading(true)
     await ensureSlots(date)
 
     const { data: slotsData } = await supabase
@@ -187,7 +188,7 @@ export default function Dashboard({ pilot }) {
       setPendingAll([])
     }
 
-    loadDay(selectedDate)
+    loadDay(selectedDate, true)   // silent refresh — modal stays visible
     loadPlanning(selectedDate)
   }
 
