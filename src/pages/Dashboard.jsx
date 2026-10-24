@@ -21,6 +21,8 @@ export default function Dashboard({ pilot }) {
   const [pendingAll, setPendingAll]         = useState([])
   const [loading, setLoading]               = useState(true)
   const [selectedBooking, setSelectedBooking] = useState(null)
+  const [editMode, setEditMode]               = useState(false)
+  const [editData, setEditData]               = useState(null)
 
   // 14-day planning: map of { [date]: { pending: n, confirmed: n } }
   const [planning, setPlanning]             = useState({})
