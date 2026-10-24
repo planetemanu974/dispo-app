@@ -224,16 +224,16 @@ export default function Dashboard({ pilot }) {
     const paxCount = booking.passengers?.length || 1
     const paxLabel = paxCount > 1 ? `${paxCount} passagers` : '1 passager'
 
-    // Emojis as Unicode escapes to avoid encoding issues with UTF-8 file saves
+    // Emojis as Unicode escapes — literal emoji chars corrupt on Windows file save
     const e = {
-      wave:    '👋', // 👋
-      check:   '✅',       // ✅
-      shoe:    '👟', // 👟
-      card:    '💳', // 💳
-      camera:  '📸', // 📸
-      video:   '🎥', // 🎥
-      weather: '🌤', // 🌤
-      para:    '🪂', // 🪂
+      wave:    '👋',
+      check:   '✅',
+      shoe:    '👟',
+      card:    '💳',
+      camera:  '📸',
+      video:   '🎥',
+      weather: '🌤',
+      para:    '🪂',
     }
 
     let msg = ''
@@ -350,11 +350,14 @@ export default function Dashboard({ pilot }) {
       }
     }
 
-    // Reload booking detail to reflect changes
-    const { data: updated } = await supabase
-      .from('bookings').select('*, passengers(*), pilot_slots(slot_date, slot_time)')
-      .eq('id', selectedBooking.id).single()
-    setSelectedBooking(updated)
+    // Reload booking detail — also fetch new slot explicitly to guarantee correct date/time
+    const [{ data: updated }, { data: newSlot }] = await Promise.all([
+      supabase.from('bookings').select('*, passengers(*)')
+        .eq('id', selectedBooking.id).single(),
+      supabase.from('pilot_slots').select('slot_date, slot_time')
+        .eq('id', editData.pilot_slot_id).single(),
+    ])
+    setSelectedBooking({ ...updated, pilot_slots: newSlot })
     setEditMode(false)
     // If the slot date changed, navigate to the new date
     const newDate = editData.slot_date
