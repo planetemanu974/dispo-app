@@ -90,7 +90,7 @@ export default function Dashboard({ pilot }) {
     let bookingsData = []
     if (slotIds.length > 0) {
       const { data } = await supabase
-        .from('bookings').select('*, passengers(*)')
+        .from('bookings').select('*, passengers(*), pilot_slots(slot_date, slot_time)')
         .in('pilot_slot_id', slotIds)
         .in('status', ['pending', 'confirmed'])
         .order('created_at')
@@ -219,31 +219,43 @@ export default function Dashboard({ pilot }) {
     const paxCount = booking.passengers?.length || 1
     const paxLabel = paxCount > 1 ? `${paxCount} passagers` : '1 passager'
 
+    // Emojis as Unicode escapes to avoid encoding issues with UTF-8 file saves
+    const e = {
+      wave:    '👋', // 👋
+      check:   '✅',       // ✅
+      shoe:    '👟', // 👟
+      card:    '💳', // 💳
+      camera:  '📸', // 📸
+      video:   '🎥', // 🎥
+      weather: '🌤', // 🌤
+      para:    '🪂', // 🪂
+    }
+
     let msg = ''
     if (action === 'confirmed') {
       msg =
-        `Bonjour ${booking.contact_name} 👋\n\n` +
-        `*Votre réservation parapente est confirmée* ✅\n\n` +
-        `Je vous confirme votre vol pour ${dateLabel} à ${slotTime} pour ${paxLabel}.\n\n` +
-        `Les pilotes vous attendront à l'*atterrissage des parapentes* (plage à côté de Kélonia).\n\n` +
-        `Vous les trouverez à côté de la navette *Planète Parapente* stationnée sur le parking. Demandez *Manu*.\n` +
-        `Il est préférable de vous garer sur le grand parking à côté du rond-point.\n\n` +
-        `👟 *Équipement :* baskets\n\n` +
-        `💳 *Paiement :* espèces ou chèque (pas de carte bleue)\n\n` +
-        `📸 Photos : 10€\n` +
-        `🎥 Photos + Vidéos : 20€\n` +
-        `Transfert direct sur smartphone après le vol.\n\n` +
-        `🌤️ Un message de confirmation météo vous sera envoyé la veille du vol.\n\n` +
-        `À bientôt ! 🪂\n\n` +
+        `Bonjour ${booking.contact_name} ${e.wave}\n\n` +
+        `*Votre reservation parapente est confirmee* ${e.check}\n\n` +
+        `Je vous confirme votre vol pour ${dateLabel} a ${slotTime} pour ${paxLabel}.\n\n` +
+        `Les pilotes vous attendront a l'*atterrissage des parapentes* (plage a cote de Kelonia).\n\n` +
+        `Vous les trouverez a cote de la navette *Planete Parapente* stationnee sur le parking. Demandez *Manu*.\n` +
+        `Il est preferable de vous garer sur le grand parking a cote du rond-point.\n\n` +
+        `${e.shoe} *Equipement :* baskets\n\n` +
+        `${e.card} *Paiement :* especes ou cheque (pas de carte bleue)\n\n` +
+        `${e.camera} Photos : 10€\n` +
+        `${e.video} Photos + Videos : 20€\n` +
+        `Transfert direct sur smartphone apres le vol.\n\n` +
+        `${e.weather} Un message de confirmation meteo vous sera envoye la veille du vol.\n\n` +
+        `A bientot ! ${e.para}\n\n` +
         `Manu\n` +
         `www.planete-parapente-reunion.com\n` +
         `06.92.719.749`
     } else {
       msg =
         `Bonjour ${booking.contact_name},\n\n` +
-        `Je suis désolé, je ne suis pas disponible le ${dateLabel}.\n` +
-        `N'hésitez pas à me recontacter pour une autre date 🪂\n\n` +
-        `Manu — Planète Parapente Réunion\n` +
+        `Je suis desole, je ne suis pas disponible le ${dateLabel}.\n` +
+        `N'hesitez pas a me recontacter pour une autre date ${e.para}\n\n` +
+        `Manu - Planete Parapente Reunion\n` +
         `06.92.719.749`
     }
 
