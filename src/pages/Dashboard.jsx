@@ -23,6 +23,7 @@ export default function Dashboard({ pilot }) {
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [editMode, setEditMode]               = useState(false)
   const [editData, setEditData]               = useState(null)
+  const [editSlots, setEditSlots]             = useState([])   // available slots for chosen edit date
 
   // 14-day planning: map of { [date]: { pending: n, confirmed: n } }
   const [planning, setPlanning]             = useState({})
@@ -291,22 +292,36 @@ export default function Dashboard({ pilot }) {
     loadPlanning(selectedDate)
   }
 
+  // ── loadEditSlots: fetch available slots for a given date (edit mode) ───────
+  async function loadEditSlots(date) {
+    await ensureSlots(date)
+    const { data } = await supabase
+      .from('pilot_slots').select('*')
+      .eq('pilot_id', pilot.id).eq('slot_date', date).order('slot_time')
+    setEditSlots(data || [])
+  }
+
   // ── enterEditMode ──────────────────────────────────────────────────────────
   function enterEditMode() {
+    const slotDate = selectedBooking.pilot_slots?.slot_date || selectedDate
     setEditData({
-      contact_name:  selectedBooking.contact_name  || '',
-      contact_phone: selectedBooking.contact_phone || '',
+      contact_name:   selectedBooking.contact_name  || '',
+      contact_phone:  selectedBooking.contact_phone || '',
+      slot_date:      slotDate,
+      pilot_slot_id:  selectedBooking.pilot_slot_id || '',
       passengers: (selectedBooking.passengers || []).map(p => ({ ...p })),
     })
+    loadEditSlots(slotDate)
     setEditMode(true)
   }
 
   // ── handleSaveEdit ─────────────────────────────────────────────────────────
   async function handleSaveEdit() {
-    // Update booking contact fields
+    // Update booking contact fields + slot if changed
     await supabase.from('bookings').update({
       contact_name:  editData.contact_name,
       contact_phone: editData.contact_phone,
+      pilot_slot_id: editData.pilot_slot_id,
     }).eq('id', selectedBooking.id)
 
     // Determine which original passengers were removed
@@ -341,7 +356,14 @@ export default function Dashboard({ pilot }) {
       .eq('id', selectedBooking.id).single()
     setSelectedBooking(updated)
     setEditMode(false)
-    loadDay(selectedDate, true)
+    // If the slot date changed, navigate to the new date
+    const newDate = editData.slot_date
+    if (newDate && newDate !== selectedDate) {
+      setSelectedDate(newDate)
+    } else {
+      loadDay(selectedDate, true)
+      loadPlanning(selectedDate)
+    }
   }
 
   function changeDate(delta) {
@@ -571,6 +593,30 @@ export default function Dashboard({ pilot }) {
             {/* ── EDIT MODE ── */}
             {editMode && editData && (
               <>
+                <div className="edit-section">
+                  <div className="edit-section-title">Date et créneau</div>
+                  <label className="edit-label">Date</label>
+                  <input className="edit-input" type="date" value={editData.slot_date} min={TODAY}
+                    onChange={e => {
+                      const d = e.target.value
+                      setEditData(prev => ({ ...prev, slot_date: d, pilot_slot_id: '' }))
+                      loadEditSlots(d)
+                    }} />
+                  <label className="edit-label">Créneau</label>
+                  {editSlots.length === 0
+                    ? <p style={{ fontSize: '0.85rem', color: '#888', margin: '4px 0' }}>Aucun créneau pour cette date.</p>
+                    : <select className="edit-input" value={editData.pilot_slot_id}
+                        onChange={e => setEditData(d => ({ ...d, pilot_slot_id: e.target.value }))}>
+                        <option value="">— Choisir un créneau —</option>
+                        {editSlots.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.slot_time.slice(0, 5)}{!s.is_available ? ' (indispo)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                  }
+                </div>
+
                 <div className="edit-section">
                   <label className="edit-label">Nom du contact</label>
                   <input className="edit-input" value={editData.contact_name}
