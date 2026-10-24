@@ -13,7 +13,7 @@ function isFirstSlot(slot_time) {
 }
 
 export default function Booking() {
-  const [step, setStep]                   = useState(1)
+  const [step, setStep]                   = useState(2)
   const [selectedDate, setSelectedDate]   = useState(TODAY)
   const [slots, setSlots]                 = useState([])
   const [passengers, setPassengers]       = useState([emptyPassenger()])
@@ -250,11 +250,8 @@ if (hasLightChild) {
         <section className="booking-section">
           <h2>1. Choisir une date</h2>
           <input type="date" value={selectedDate} min={TODAY} className="date-input"
-            onChange={e => { setSelectedDate(e.target.value); setStep(1) }} />
+            onChange={e => { setSelectedDate(e.target.value); setStep(2) }} />
           {slots.length === 0 && <p className="info-msg">Aucun créneau disponible pour cette date.</p>}
-          {slots.length > 0 && step === 1 && (
-            <button className="btn-primary" onClick={() => setStep(2)}>Continuer →</button>
-          )}
         </section>
       )}
 
