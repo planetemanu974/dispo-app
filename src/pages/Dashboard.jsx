@@ -4,13 +4,22 @@ import { getSlotsForDate } from '../utils/rules'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
-// ── Helper: generate array of YYYY-MM-DD for the next N days from a start date
+// ── Helper: generate array of YYYY-MM-DD for N days from a start date
 function getDayRange(startDate, count) {
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(startDate + 'T00:00:00')
     d.setDate(d.getDate() + i)
     return d.toISOString().split('T')[0]
   })
+}
+
+// ── Helper: get Monday of the week containing dateStr
+function getWeekStart(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDay() // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  return d.toISOString().split('T')[0]
 }
 
 // ── sendSMS: calls the Supabase Edge Function ──────────────────────────────
@@ -27,20 +36,28 @@ async function sendSMS(to, message) {
   }
 }
 
+// ── Day column labels
+const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+
 export default function Dashboard({ pilot }) {
-  // selectedDate starts null — init() sets it after finding pending bookings
-  const [selectedDate, setSelectedDate]     = useState(null)
-  const [slots, setSlots]                   = useState([])
-  const [bookings, setBookings]             = useState([])
-  const [pendingAll, setPendingAll]         = useState([])
-  const [loading, setLoading]               = useState(true)
+  const [viewMode, setViewMode]               = useState('week')   // 'week' | 'day'
+  const [weekStart, setWeekStart]             = useState(() => getWeekStart(TODAY))
+  const [weekData, setWeekData]               = useState({})       // { [date]: { slots, bookings } }
+  const [weekLoading, setWeekLoading]         = useState(false)
+
+  // Day view state
+  const [selectedDate, setSelectedDate]       = useState(null)
+  const [slots, setSlots]                     = useState([])
+  const [bookings, setBookings]               = useState([])
+  const [pendingAll, setPendingAll]           = useState([])
+  const [loading, setLoading]                 = useState(true)
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [editMode, setEditMode]               = useState(false)
   const [editData, setEditData]               = useState(null)
-  const [editSlots, setEditSlots]             = useState([])   // available slots for chosen edit date
+  const [editSlots, setEditSlots]             = useState([])
 
-  // 14-day planning: map of { [date]: { pending: n, confirmed: n } }
-  const [planning, setPlanning]             = useState({})
+  // 14-day planning strip state
+  const [planning, setPlanning]               = useState({})
   const [planningLoading, setPlanningLoading] = useState(false)
 
   // ── INIT: runs once on mount ───────────────────────────────────────────────
@@ -80,22 +97,73 @@ export default function Dashboard({ pilot }) {
         }
       }
 
-      await loadDay(startDate)
       setSelectedDate(startDate)
+      setWeekStart(getWeekStart(startDate))
+      await loadWeek(getWeekStart(startDate))
+      await loadDay(startDate)
+      loadPlanning(startDate)
     }
 
     init()
   }, [pilot.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Reload day when user navigates ────────────────────────────────────────
+  // ── Load week when weekStart changes ──────────────────────────────────────
+  useEffect(() => {
+    if (!weekStart) return
+    loadWeek(weekStart)
+  }, [weekStart]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Reload day view when date changes ─────────────────────────────────────
   useEffect(() => {
     if (selectedDate === null) return
-    loadDay(selectedDate)
-    loadPlanning(selectedDate)
-  }, [selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (viewMode === 'day') {
+      loadDay(selectedDate)
+      loadPlanning(selectedDate)
+    }
+  }, [selectedDate, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── loadWeek ───────────────────────────────────────────────────────────────
+  async function loadWeek(start) {
+    setWeekLoading(true)
+    const days = getDayRange(start, 7)
+
+    await Promise.all(days.map(d => ensureSlots(d)))
+
+    const { data: slotsData } = await supabase
+      .from('pilot_slots').select('*')
+      .eq('pilot_id', pilot.id)
+      .gte('slot_date', days[0])
+      .lte('slot_date', days[6])
+      .order('slot_time')
+
+    const slotIds = (slotsData || []).map(s => s.id)
+    let bookingsData = []
+    if (slotIds.length > 0) {
+      const { data } = await supabase
+        .from('bookings')
+        .select('*, passengers(*), pilot_slots(slot_date, slot_time)')
+        .in('pilot_slot_id', slotIds)
+        .in('status', ['pending', 'confirmed'])
+        .order('created_at')
+      bookingsData = data || []
+    }
+
+    // Organise by date
+    const byDate = {}
+    days.forEach(d => { byDate[d] = { slots: [], bookings: [] } })
+    ;(slotsData || []).forEach(s => {
+      if (byDate[s.slot_date]) byDate[s.slot_date].slots.push(s)
+    })
+    bookingsData.forEach(b => {
+      const d = b.pilot_slots?.slot_date
+      if (d && byDate[d]) byDate[d].bookings.push(b)
+    })
+
+    setWeekData(byDate)
+    setWeekLoading(false)
+  }
 
   // ── loadDay ────────────────────────────────────────────────────────────────
-  // silent=true: refresh in background without showing the loading spinner
   async function loadDay(date, silent = false) {
     if (!silent) setLoading(true)
     await ensureSlots(date)
@@ -120,37 +188,28 @@ export default function Dashboard({ pilot }) {
     setLoading(false)
   }
 
-  // ── loadPlanning: fetch 14-day booking summary ─────────────────────────────
+  // ── loadPlanning ──────────────────────────────────────────────────────────
   async function loadPlanning(fromDate) {
     setPlanningLoading(true)
     const days = getDayRange(fromDate, 14)
     const [dayStart, dayEnd] = [days[0], days[days.length - 1]]
 
-    // Ensure slots exist for all 14 days (upsert in parallel)
     await Promise.all(days.map(d => ensureSlots(d)))
 
     const { data: slotData } = await supabase
-      .from('pilot_slots')
-      .select('id, slot_date')
+      .from('pilot_slots').select('id, slot_date')
       .eq('pilot_id', pilot.id)
-      .gte('slot_date', dayStart)
-      .lte('slot_date', dayEnd)
+      .gte('slot_date', dayStart).lte('slot_date', dayEnd)
 
-    if (!slotData || slotData.length === 0) {
-      setPlanningLoading(false)
-      return
-    }
+    if (!slotData || slotData.length === 0) { setPlanningLoading(false); return }
 
-    const slotIds  = slotData.map(s => s.id)
-    const slotMap  = Object.fromEntries(slotData.map(s => [s.id, s.slot_date]))
+    const slotIds = slotData.map(s => s.id)
+    const slotMap = Object.fromEntries(slotData.map(s => [s.id, s.slot_date]))
 
     const { data: bkData } = await supabase
-      .from('bookings')
-      .select('id, pilot_slot_id, status')
-      .in('pilot_slot_id', slotIds)
-      .in('status', ['pending', 'confirmed'])
+      .from('bookings').select('id, pilot_slot_id, status')
+      .in('pilot_slot_id', slotIds).in('status', ['pending', 'confirmed'])
 
-    // Build summary map
     const summary = {}
     days.forEach(d => { summary[d] = { pending: 0, confirmed: 0 } })
     ;(bkData || []).forEach(b => {
@@ -175,20 +234,19 @@ export default function Dashboard({ pilot }) {
       .upsert(inserts, { onConflict: 'pilot_id,slot_date,slot_time', ignoreDuplicates: true })
   }
 
-  // ── toggleAvailability ─────────────────────────────────────────────────────
+  // ── toggleAvailability ────────────────────────────────────────────────────
   async function toggleAvailability(slot) {
     await supabase.from('pilot_slots')
       .update({ is_available: !slot.is_available }).eq('id', slot.id)
     loadDay(selectedDate)
+    loadWeek(weekStart)
   }
 
-  // ── handleBooking ──────────────────────────────────────────────────────────
+  // ── handleBooking ─────────────────────────────────────────────────────────
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
-    // Update status locally so the modal reflects the new state immediately
     setSelectedBooking(prev => prev ? { ...prev, status: action } : null)
 
-    // ── Send SMS to client on confirmation ────────────────────────────────
     if (action === 'confirmed' && selectedBooking?.contact_phone) {
       const slotDate = selectedBooking.pilot_slots?.slot_date || selectedDate
       const slotTime = selectedBooking.pilot_slots?.slot_time?.slice(0, 5) || ''
@@ -222,11 +280,12 @@ export default function Dashboard({ pilot }) {
       setPendingAll([])
     }
 
-    loadDay(selectedDate, true)   // silent refresh — modal stays visible
+    loadDay(selectedDate, true)
     loadPlanning(selectedDate)
+    loadWeek(weekStart)
   }
 
-  // ── derived ────────────────────────────────────────────────────────────────
+  // ── derived ───────────────────────────────────────────────────────────────
   const bookingsBySlot = bookings.reduce((acc, b) => {
     acc[b.pilot_slot_id] = acc[b.pilot_slot_id] || []
     acc[b.pilot_slot_id].push(b)
@@ -247,9 +306,7 @@ export default function Dashboard({ pilot }) {
   async function handleCancel(bookingId) {
     if (!window.confirm('Annuler cette reservation ?')) return
     await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
-    setSelectedBooking(null)
-    setEditMode(false)
-    // Refresh pending list
+    setSelectedBooking(null); setEditMode(false)
     const { data: slotData } = await supabase
       .from('pilot_slots').select('id, slot_date, slot_time')
       .eq('pilot_id', pilot.id).gte('slot_date', TODAY)
@@ -266,9 +323,10 @@ export default function Dashboard({ pilot }) {
     }
     loadDay(selectedDate)
     loadPlanning(selectedDate)
+    loadWeek(weekStart)
   }
 
-  // ── loadEditSlots: fetch available slots for a given date (edit mode) ───────
+  // ── loadEditSlots ─────────────────────────────────────────────────────────
   async function loadEditSlots(date) {
     await ensureSlots(date)
     const { data } = await supabase
@@ -277,30 +335,28 @@ export default function Dashboard({ pilot }) {
     setEditSlots(data || [])
   }
 
-  // ── enterEditMode ──────────────────────────────────────────────────────────
+  // ── enterEditMode ─────────────────────────────────────────────────────────
   function enterEditMode() {
     const slotDate = selectedBooking.pilot_slots?.slot_date || selectedDate
     setEditData({
-      contact_name:   selectedBooking.contact_name  || '',
-      contact_phone:  selectedBooking.contact_phone || '',
-      slot_date:      slotDate,
-      pilot_slot_id:  selectedBooking.pilot_slot_id || '',
+      contact_name:  selectedBooking.contact_name  || '',
+      contact_phone: selectedBooking.contact_phone || '',
+      slot_date:     slotDate,
+      pilot_slot_id: selectedBooking.pilot_slot_id || '',
       passengers: (selectedBooking.passengers || []).map(p => ({ ...p })),
     })
     loadEditSlots(slotDate)
     setEditMode(true)
   }
 
-  // ── handleSaveEdit ─────────────────────────────────────────────────────────
+  // ── handleSaveEdit ────────────────────────────────────────────────────────
   async function handleSaveEdit() {
-    // Update booking contact fields + slot if changed
     await supabase.from('bookings').update({
       contact_name:  editData.contact_name,
       contact_phone: editData.contact_phone,
       pilot_slot_id: editData.pilot_slot_id,
     }).eq('id', selectedBooking.id)
 
-    // Determine which original passengers were removed
     const originalIds = (selectedBooking.passengers || []).map(p => p.id)
     const keptIds     = editData.passengers.filter(p => p.id).map(p => p.id)
     const removedIds  = originalIds.filter(id => !keptIds.includes(id))
@@ -308,7 +364,6 @@ export default function Dashboard({ pilot }) {
       await supabase.from('passengers').delete().in('id', removedIds)
     }
 
-    // Update existing passengers, insert new ones
     for (const p of editData.passengers) {
       if (p.id) {
         await supabase.from('passengers').update({
@@ -326,7 +381,6 @@ export default function Dashboard({ pilot }) {
       }
     }
 
-    // Reload booking detail — also fetch new slot explicitly to guarantee correct date/time
     const [{ data: updated }, { data: newSlot }] = await Promise.all([
       supabase.from('bookings').select('*, passengers(*)')
         .eq('id', selectedBooking.id).single(),
@@ -335,13 +389,14 @@ export default function Dashboard({ pilot }) {
     ])
     setSelectedBooking({ ...updated, pilot_slots: newSlot })
     setEditMode(false)
-    // If the slot date changed, navigate to the new date
     const newDate = editData.slot_date
     if (newDate && newDate !== selectedDate) {
       setSelectedDate(newDate)
+      setWeekStart(getWeekStart(newDate))
     } else {
       loadDay(selectedDate, true)
       loadPlanning(selectedDate)
+      loadWeek(weekStart)
     }
   }
 
@@ -351,16 +406,57 @@ export default function Dashboard({ pilot }) {
     setSelectedDate(d.toISOString().split('T')[0])
   }
 
+  function changeWeek(delta) {
+    const d = new Date(weekStart + 'T00:00:00')
+    d.setDate(d.getDate() + delta * 7)
+    setWeekStart(d.toISOString().split('T')[0])
+  }
+
   // 14-day strip: always anchored to TODAY
   const planningDays = getDayRange(TODAY, 14)
 
-  // Format a date as "lun. 24"
   function formatDayLabel(dateStr) {
     const d = new Date(dateStr + 'T00:00:00')
     return {
       day: d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', ''),
       num: d.getDate(),
     }
+  }
+
+  // ── Week view helpers ─────────────────────────────────────────────────────
+
+  // Get the status colour class for a slot in the week view
+  function slotWeekStatus(slot, bookingsForSlot) {
+    const active = bookingsForSlot.filter(b => b.status === 'pending' || b.status === 'confirmed')
+    if (active.some(b => b.status === 'pending'))   return 'week-slot--pending'
+    if (active.some(b => b.status === 'confirmed')) return 'week-slot--confirmed'
+    if (!slot.is_available)                          return 'week-slot--unavailable'
+    return 'week-slot--free'
+  }
+
+  // Label shown inside a week slot block
+  function slotWeekLabel(slot, bookingsForSlot) {
+    const active = bookingsForSlot.filter(b => b.status === 'pending' || b.status === 'confirmed')
+    if (active.length === 0) return { name: 'Libre', pax: null }
+    // Show first booking's client name + total pax
+    const first    = active[0]
+    const totalPax = active.reduce((n, b) => n + (b.passengers?.length || 0), 0)
+    const name     = first.source === 'colleague'
+      ? `Pour ${first.contact_name}`
+      : first.contact_name
+    return { name, pax: totalPax }
+  }
+
+  const weekDays = getDayRange(weekStart, 7)
+
+  // Week range label: "20 – 26 oct. 2026"
+  function weekRangeLabel() {
+    const start = new Date(weekStart + 'T00:00:00')
+    const end   = new Date(weekStart + 'T00:00:00')
+    end.setDate(end.getDate() + 6)
+    const opts = { day: 'numeric' }
+    const optsEnd = { day: 'numeric', month: 'short', year: 'numeric' }
+    return `${start.toLocaleDateString('fr-FR', opts)} – ${end.toLocaleDateString('fr-FR', optsEnd)}`
   }
 
   if (selectedDate === null) return <p className="loading">Chargement...</p>
@@ -383,7 +479,7 @@ export default function Dashboard({ pilot }) {
           </div>
           {Object.entries(pendingByDate).map(([date, bks]) => (
             <div key={date} className="pending-alert-date"
-              onClick={() => setSelectedDate(date)}>
+              onClick={() => { setSelectedDate(date); setWeekStart(getWeekStart(date)); setViewMode('week') }}>
               <span className="pending-date-label">
                 {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {
                   weekday: 'short', day: 'numeric', month: 'short'
@@ -397,106 +493,217 @@ export default function Dashboard({ pilot }) {
         </div>
       )}
 
-      {/* ── 14-day planning strip ── */}
-      <div className="planning-strip-wrapper">
-        <div className="planning-strip">
-          {planningDays.map(date => {
-            const { day, num } = formatDayLabel(date)
-            const info         = planning[date] || { pending: 0, confirmed: 0 }
-            const isSelected   = date === selectedDate
-            const isToday      = date === TODAY
-            const hasPending   = info.pending > 0
-            const hasConfirmed = info.confirmed > 0
-
-            return (
-              <button
-                key={date}
-                className={[
-                  'planning-day',
-                  isSelected  ? 'planning-day--selected'  : '',
-                  isToday     ? 'planning-day--today'     : '',
-                  hasPending  ? 'planning-day--pending'   : '',
-                ].join(' ')}
-                onClick={() => setSelectedDate(date)}
-              >
-                <span className="planning-day__name">{day}</span>
-                <span className="planning-day__num">{num}</span>
-                <span className="planning-day__dots">
-                  {hasPending  && <span className="dot dot--pending"  title="En attente" />}
-                  {hasConfirmed && <span className="dot dot--confirmed" title="Confirme" />}
-                </span>
-                {(info.pending + info.confirmed) > 0 && (
-                  <span className="planning-day__count">
-                    {info.pending + info.confirmed}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
+      {/* ── View toggle ── */}
+      <div className="view-toggle">
+        <button
+          className={`view-toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
+          onClick={() => setViewMode('week')}>
+          📅 Semaine
+        </button>
+        <button
+          className={`view-toggle-btn ${viewMode === 'day' ? 'active' : ''}`}
+          onClick={() => { setViewMode('day'); loadDay(selectedDate); loadPlanning(selectedDate) }}>
+          📋 Jour
+        </button>
       </div>
 
-      {/* ── Date navigator ── */}
-      <div className="date-bar">
-        <button className="btn-ghost" onClick={() => changeDate(-1)}>‹</button>
-        <input type="date" value={selectedDate}
-          onChange={e => setSelectedDate(e.target.value)} className="date-input" />
-        <button className="btn-ghost" onClick={() => changeDate(1)}>›</button>
-      </div>
+      {/* ══════════════════════════════════════════════════════════════════════
+          WEEK VIEW
+         ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'week' && (
+        <div className="week-view">
+          {/* Week navigation */}
+          <div className="week-nav">
+            <button className="btn-ghost" onClick={() => changeWeek(-1)}>‹ Préc.</button>
+            <span className="week-nav-label">{weekRangeLabel()}</span>
+            <button className="btn-ghost" onClick={() => changeWeek(1)}>Suiv. ›</button>
+          </div>
 
-      {/* ── Slot grid ── */}
-      {loading ? <p className="loading">Chargement...</p> : (
-        <div className="slot-grid">
-          {slots.map(slot => {
-            const slotBookings = bookingsBySlot[slot.id] || []
-            const pendingBks   = slotBookings.filter(b => b.status === 'pending')
-            const confirmedBks = slotBookings.filter(b => b.status === 'confirmed')
-            return (
-              <div key={slot.id}
-                className={`slot-card ${slot.is_available ? 'available' : 'unavailable'}`}>
-                <div className="slot-time">{slot.slot_time.slice(0, 5)}</div>
-                <div className="slot-count">{slot.booked_count}/{slot.capacity} pax</div>
-                <button className={`btn-toggle ${slot.is_available ? 'on' : 'off'}`}
-                  onClick={() => toggleAvailability(slot)}>
-                  {slot.is_available ? 'DISPO' : 'PAS DISPO'}
-                </button>
-                {/* Pending bookings */}
-                {pendingBks.map(b => (
-                  <div key={b.id} className="booking-card booking-card--pending"
-                    onClick={() => setSelectedBooking(b)}
-                    style={{ cursor: 'pointer' }}>
-                    {b.source === 'colleague'
-                      ? <span className="booking-badge booking-badge--colleague">Collegue</span>
-                      : <span className="booking-badge booking-badge--pending">En attente</span>
-                    }
-                    <div className="booking-contact">{b.contact_name}{b.source !== 'colleague' && ` — ${b.contact_phone}`}</div>
-                    <div className="booking-pax">
-                      {b.source === 'colleague'
-                        ? 'Demande collegue →'
-                        : `${b.passengers?.length || 0} passager${(b.passengers?.length || 0) > 1 ? 's' : ''} — voir fiche →`
-                      }
+          {weekLoading ? <p className="loading">Chargement...</p> : (
+            <div className="week-grid">
+              {weekDays.map((date, colIdx) => {
+                const { slots: daySlots, bookings: dayBookings } = weekData[date] || { slots: [], bookings: [] }
+                const isToday     = date === TODAY
+                const isSelected  = date === selectedDate
+
+                // Group bookings by slot
+                const bkBySlot = dayBookings.reduce((acc, b) => {
+                  acc[b.pilot_slot_id] = acc[b.pilot_slot_id] || []
+                  acc[b.pilot_slot_id].push(b)
+                  return acc
+                }, {})
+
+                const d   = new Date(date + 'T00:00:00')
+                const num = d.getDate()
+                const mon = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')
+
+                return (
+                  <div key={date} className={[
+                    'week-col',
+                    isToday    ? 'week-col--today'    : '',
+                    isSelected ? 'week-col--selected' : '',
+                  ].join(' ')}>
+
+                    {/* Day header */}
+                    <div className="week-col-header"
+                      onClick={() => { setSelectedDate(date); setViewMode('day'); loadDay(date) }}>
+                      <span className="week-col-day">{DAY_LABELS[colIdx]}</span>
+                      <span className="week-col-num">{num}</span>
+                      <span className="week-col-mon">{mon}</span>
+                    </div>
+
+                    {/* Slots */}
+                    <div className="week-col-slots">
+                      {daySlots.map(slot => {
+                        const bks    = bkBySlot[slot.id] || []
+                        const status = slotWeekStatus(slot, bks)
+                        const { name, pax } = slotWeekLabel(slot, bks)
+                        const firstActive = bks.find(b => b.status === 'pending' || b.status === 'confirmed')
+
+                        return (
+                          <div
+                            key={slot.id}
+                            className={`week-slot ${status}`}
+                            onClick={() => {
+                              if (firstActive) {
+                                setSelectedBooking(firstActive)
+                              } else {
+                                // Click on free slot → open day view for that date
+                                setSelectedDate(date)
+                                setViewMode('day')
+                                loadDay(date)
+                              }
+                            }}>
+                            <span className="week-slot-time">{slot.slot_time.slice(0, 5)}</span>
+                            <span className="week-slot-name">{name}</span>
+                            {pax !== null && (
+                              <span className="week-slot-pax">
+                                {pax} pax
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {daySlots.length === 0 && (
+                        <div className="week-slot week-slot--empty">—</div>
+                      )}
                     </div>
                   </div>
-                ))}
-                {/* Confirmed bookings */}
-                {confirmedBks.map(b => (
-                  <div key={b.id} className="booking-card booking-card--confirmed"
-                    onClick={() => setSelectedBooking(b)}
-                    style={{ cursor: 'pointer' }}>
-                    <span className="booking-badge booking-badge--confirmed">✓ Confirme</span>
-                    <div className="booking-contact">{b.contact_name}</div>
-                    <div className="booking-pax">
-                      {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          })}
+                )
+              })}
+            </div>
+          )}
+
+          {/* Week legend */}
+          <div className="week-legend">
+            <span className="legend-item"><span className="legend-dot legend-dot--free" />Libre</span>
+            <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
+            <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
+          </div>
         </div>
       )}
 
-      {/* ── Booking detail modal ── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          DAY VIEW
+         ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'day' && (
+        <>
+          {/* 14-day planning strip */}
+          <div className="planning-strip-wrapper">
+            <div className="planning-strip">
+              {planningDays.map(date => {
+                const { day, num } = formatDayLabel(date)
+                const info         = planning[date] || { pending: 0, confirmed: 0 }
+                const isSelected   = date === selectedDate
+                const isToday      = date === TODAY
+                const hasPending   = info.pending > 0
+                const hasConfirmed = info.confirmed > 0
+
+                return (
+                  <button key={date}
+                    className={[
+                      'planning-day',
+                      isSelected  ? 'planning-day--selected' : '',
+                      isToday     ? 'planning-day--today'    : '',
+                      hasPending  ? 'planning-day--pending'  : '',
+                    ].join(' ')}
+                    onClick={() => setSelectedDate(date)}>
+                    <span className="planning-day__name">{day}</span>
+                    <span className="planning-day__num">{num}</span>
+                    <span className="planning-day__dots">
+                      {hasPending   && <span className="dot dot--pending"   title="En attente" />}
+                      {hasConfirmed && <span className="dot dot--confirmed" title="Confirme" />}
+                    </span>
+                    {(info.pending + info.confirmed) > 0 && (
+                      <span className="planning-day__count">
+                        {info.pending + info.confirmed}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Date navigator */}
+          <div className="date-bar">
+            <button className="btn-ghost" onClick={() => changeDate(-1)}>‹</button>
+            <input type="date" value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)} className="date-input" />
+            <button className="btn-ghost" onClick={() => changeDate(1)}>›</button>
+          </div>
+
+          {/* Slot grid */}
+          {loading ? <p className="loading">Chargement...</p> : (
+            <div className="slot-grid">
+              {slots.map(slot => {
+                const slotBookings = bookingsBySlot[slot.id] || []
+                const pendingBks   = slotBookings.filter(b => b.status === 'pending')
+                const confirmedBks = slotBookings.filter(b => b.status === 'confirmed')
+                return (
+                  <div key={slot.id}
+                    className={`slot-card ${slot.is_available ? 'available' : 'unavailable'}`}>
+                    <div className="slot-time">{slot.slot_time.slice(0, 5)}</div>
+                    <div className="slot-count">{slot.booked_count}/{slot.capacity} pax</div>
+                    <button className={`btn-toggle ${slot.is_available ? 'on' : 'off'}`}
+                      onClick={() => toggleAvailability(slot)}>
+                      {slot.is_available ? 'DISPO' : 'PAS DISPO'}
+                    </button>
+                    {pendingBks.map(b => (
+                      <div key={b.id} className="booking-card booking-card--pending"
+                        onClick={() => setSelectedBooking(b)} style={{ cursor: 'pointer' }}>
+                        {b.source === 'colleague'
+                          ? <span className="booking-badge booking-badge--colleague">Collegue</span>
+                          : <span className="booking-badge booking-badge--pending">En attente</span>
+                        }
+                        <div className="booking-contact">{b.contact_name}{b.source !== 'colleague' && ` — ${b.contact_phone}`}</div>
+                        <div className="booking-pax">
+                          {b.source === 'colleague'
+                            ? 'Demande collegue →'
+                            : `${b.passengers?.length || 0} passager${(b.passengers?.length || 0) > 1 ? 's' : ''} — voir fiche →`
+                          }
+                        </div>
+                      </div>
+                    ))}
+                    {confirmedBks.map(b => (
+                      <div key={b.id} className="booking-card booking-card--confirmed"
+                        onClick={() => setSelectedBooking(b)} style={{ cursor: 'pointer' }}>
+                        <span className="booking-badge booking-badge--confirmed">✓ Confirme</span>
+                        <div className="booking-contact">{b.contact_name}</div>
+                        <div className="booking-pax">
+                          {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Booking detail modal (shared by both views) ── */}
       {selectedBooking && (
         <div className="modal-overlay" onClick={() => { setSelectedBooking(null); setEditMode(false) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -538,7 +745,6 @@ export default function Dashboard({ pilot }) {
                 )}
                 <div className="modal-ref">Ref. {selectedBooking.booking_ref || selectedBooking.id?.slice(0, 8).toUpperCase()}</div>
 
-                {/* Confirm / refuse for pending */}
                 {selectedBooking.status === 'pending' && (
                   <div className="booking-actions">
                     <button className="btn-confirm"
@@ -547,8 +753,6 @@ export default function Dashboard({ pilot }) {
                       onClick={() => handleBooking(selectedBooking.id, 'refused')}>✗ Refuser</button>
                   </div>
                 )}
-
-                {/* Status label after confirm or refuse */}
                 {selectedBooking.status === 'confirmed' && (
                   <div className="booking-whatsapp-actions">
                     <div className="booking-confirmed-label">✓ Vol confirme — SMS envoye au client</div>
@@ -559,8 +763,6 @@ export default function Dashboard({ pilot }) {
                     <div className="booking-confirmed-label" style={{ color: '#e53e3e' }}>✗ Vol refuse</div>
                   </div>
                 )}
-
-                {/* Edit / Cancel actions — visible for pending and confirmed */}
                 {(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') && (
                   <div className="booking-manage-actions">
                     <button className="btn-edit" onClick={enterEditMode}>✏️ Modifier la reservation</button>
@@ -598,7 +800,6 @@ export default function Dashboard({ pilot }) {
                       </select>
                   }
                 </div>
-
                 <div className="edit-section">
                   <label className="edit-label">Nom du contact</label>
                   <input className="edit-input" value={editData.contact_name}
@@ -607,7 +808,6 @@ export default function Dashboard({ pilot }) {
                   <input className="edit-input" type="tel" value={editData.contact_phone}
                     onChange={e => setEditData(d => ({ ...d, contact_phone: e.target.value }))} />
                 </div>
-
                 <div className="edit-section">
                   <div className="edit-section-title">Passagers</div>
                   {editData.passengers.map((p, i) => (
@@ -658,7 +858,6 @@ export default function Dashboard({ pilot }) {
                     </button>
                   )}
                 </div>
-
                 <div className="booking-actions">
                   <button className="btn-confirm" onClick={handleSaveEdit}>✓ Enregistrer</button>
                   <button className="btn-refuse" onClick={() => setEditMode(false)}>Annuler</button>
