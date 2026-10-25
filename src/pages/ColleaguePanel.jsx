@@ -121,13 +121,20 @@ export default function ColleaguePanel({ pilot }) {
     loadColleagues()
   }
 
+  const [copied, setCopied] = useState(false)
+
   // ── Copier le lien ────────────────────────────────────────────────────
   function copyLink(link) {
-    navigator.clipboard.writeText(link).catch(() => {
-      // fallback : sélectionner le texte
-      const el = document.querySelector('[data-invite-link]')
-      if (el) { el.select(); document.execCommand('copy') }
-    })
+    navigator.clipboard.writeText(link)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2500)
+      })
+      .catch(() => {
+        // fallback : sélectionner le texte
+        const el = document.querySelector('[data-invite-link]')
+        if (el) { el.select(); document.execCommand('copy') }
+      })
   }
 
   // ── Rendu ─────────────────────────────────────────────────────────────
@@ -423,36 +430,34 @@ export default function ColleaguePanel({ pilot }) {
                   Envoyez ce lien à <strong style={{ color: '#f1f5f9' }}>{inviteName}</strong>.
                   Il lui permettra de créer son accès.
                 </p>
-                <div style={{
-                  background: '#0f172a',
-                  borderRadius: 8,
-                  padding: '10px 12px',
-                  marginBottom: 12,
-                  wordBreak: 'break-all',
-                  fontSize: 12,
-                  color: '#94a3b8',
-                }}>
-                  <input
-                    data-invite-link
-                    readOnly
-                    value={inviteLink}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      width: '100%',
-                      color: '#94a3b8',
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                <textarea
+                  data-invite-link
+                  readOnly
+                  value={inviteLink}
+                  rows={3}
+                  style={{
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    marginBottom: 12,
+                    width: '100%',
+                    color: '#94a3b8',
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    outline: 'none',
+                    resize: 'none',
+                    wordBreak: 'break-all',
+                    boxSizing: 'border-box',
+                    lineHeight: 1.5,
+                  }}
+                />
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     onClick={() => copyLink(inviteLink)}
-                    style={s.btnGreen}
+                    style={{ ...s.btnGreen, background: copied ? '#15803d' : '#16a34a' }}
                   >
-                    📋 Copier le lien
+                    {copied ? '✅ Copié !' : '📋 Copier le lien'}
                   </button>
                   <button onClick={() => setShowInvite(false)} style={s.btnGrey}>
                     Fermer
