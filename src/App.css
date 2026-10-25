@@ -444,8 +444,8 @@
 
 /* ── Couleurs de statut — vives, texte blanc ───────────────── */
 .week-slot--free {
-  background: #3b82f6;
-  border-left-color: #1d4ed8;
+  background: #2563eb;
+  border-left-color: #1e40af;
   color: white;
 }
 .week-slot--pending {
