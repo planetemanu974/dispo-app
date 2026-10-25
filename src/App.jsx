@@ -5,7 +5,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Booking from './pages/Booking'
 import ManuDispo from './pages/ManuDispo'
-
+import './App.css'
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [pilot, setPilot]     = useState(null)
