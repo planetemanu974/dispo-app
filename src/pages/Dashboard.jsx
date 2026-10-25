@@ -719,8 +719,8 @@ export default function Dashboard({ pilot }) {
                             {pax !== null && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85 }}>{pax} pax</span>
                             )}
-                            {/* "+" button when there's capacity remaining */}
-                            {firstActive && remainingW > 0 && slot.is_available && (
+                            {/* "+" button when there's capacity remaining — hidden on colleague/external slots */}
+                            {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
                               <button
                                 style={{ marginTop:'auto', alignSelf:'flex-end', background:'rgba(255,255,255,0.3)', color:'white', border:'none', borderRadius:4, fontSize:'0.7rem', fontWeight:800, padding:'1px 5px', cursor:'pointer', lineHeight:1.4, margin:'2px' }}
                                 onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
