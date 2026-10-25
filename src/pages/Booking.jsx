@@ -252,7 +252,7 @@ if (hasLightChild) {
         `Réf : ${ref}\n` +
         `Le moniteur vous confirmera votre vol par SMS.\n` +
         `CGV : planete-parapente-reunion.com/cgv\n` +
-        `Planète Parapente Réunion`
+        `L'équipe Planète Parapente`
       await sendSMS(contact.phone, clientMsg)
     }
 
