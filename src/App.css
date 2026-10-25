@@ -442,24 +442,26 @@
   opacity: 0.8;
 }
 
-/* ── Couleurs de statut ────────────────────────────────────── */
+/* ── Couleurs de statut — vives, texte blanc ───────────────── */
 .week-slot--free {
-  background: #f0f4f8;
-  border-left-color: #a0aec0;
-  color: #718096;
+  background: #3b82f6;
+  border-left-color: #1d4ed8;
+  color: white;
 }
 .week-slot--pending {
-  background: #fef9c3;
-  border-left-color: #d97706;
-  color: #78350f;
+  background: #f59e0b;
+  border-left-color: #b45309;
+  color: white;
 }
 .week-slot--confirmed {
-  background: #dcfce7;
-  border-left-color: #16a34a;
-  color: #14532d;
+  background: #16a34a;
+  border-left-color: #166534;
+  color: white;
 }
 .week-slot--unavailable {
-  display: none;
+  background: #94a3b8;
+  border-left-color: #475569;
+  color: white;
 }
 
 /* ── Légende ───────────────────────────────────────────────── */

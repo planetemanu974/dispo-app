@@ -703,6 +703,7 @@ export default function Dashboard({ pilot }) {
 
                         return (
                           <div key={slot.id}
+                            className={status}
                             style={{ position:'absolute', left:4, right:4, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
                               if (firstActive) {
