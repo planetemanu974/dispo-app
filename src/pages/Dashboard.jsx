@@ -573,26 +573,42 @@ export default function Dashboard({ pilot }) {
       </header>
 
       {/* ── Pending alert ── */}
-      {pendingAll.length > 0 && (
-        <div className="pending-alert">
-          <div className="pending-alert-title">
-            🔔 {pendingAll.length} demande{pendingAll.length > 1 ? 's' : ''} en attente
-          </div>
-          {Object.entries(pendingByDate).map(([date, bks]) => (
-            <div key={date} className="pending-alert-date"
-              onClick={() => { setSelectedDate(date); setViewMode('day') }}>
-              <span className="pending-date-label">
-                {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {
-                  weekday: 'short', day: 'numeric', month: 'short'
-                })}
-              </span>
-              <span className="pending-date-count">
-                {bks.length} demande{bks.length > 1 ? 's' : ''} →
-              </span>
+      {pendingAll.length > 0 && (() => {
+        // Sort pending dates and navigate to the first one by default
+        const sortedDates = Object.keys(pendingByDate).sort()
+        const firstDate   = sortedDates[0]
+        function goToDate(date) {
+          setSelectedDate(date)
+          setViewMode('day')
+          loadDay(date)
+          loadPlanning(date)
+          window.scrollTo(0, 0)
+        }
+        return (
+          <div className="pending-alert" style={{ cursor: 'pointer' }}
+            onClick={() => firstDate && goToDate(firstDate)}>
+            <div className="pending-alert-title">
+              🔔 {pendingAll.length} demande{pendingAll.length > 1 ? 's' : ''} en attente — appuyer pour voir
             </div>
-          ))}
-        </div>
-      )}
+            {sortedDates.map(date => {
+              const bks = pendingByDate[date]
+              return (
+                <div key={date} className="pending-alert-date"
+                  onClick={e => { e.stopPropagation(); goToDate(date) }}>
+                  <span className="pending-date-label">
+                    {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {
+                      weekday: 'short', day: 'numeric', month: 'short'
+                    })}
+                  </span>
+                  <span className="pending-date-count">
+                    {bks.length} demande{bks.length > 1 ? 's' : ''} →
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* ── View toggle ── */}
       <div className="view-toggle">
