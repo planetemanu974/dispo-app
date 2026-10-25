@@ -419,4 +419,193 @@ export default function ColleaguePanel({ pilot }) {
               </form>
             ) : (
               <>
-                <p style={{ color:
+                <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>
+                  Envoyez ce lien à <strong style={{ color: '#f1f5f9' }}>{inviteName}</strong>.
+                  Il lui permettra de créer son accès.
+                </p>
+                <div style={{
+                  background: '#0f172a',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  marginBottom: 12,
+                  wordBreak: 'break-all',
+                  fontSize: 12,
+                  color: '#94a3b8',
+                }}>
+                  <input
+                    data-invite-link
+                    readOnly
+                    value={inviteLink}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      width: '100%',
+                      color: '#94a3b8',
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => copyLink(inviteLink)}
+                    style={s.btnGreen}
+                  >
+                    📋 Copier le lien
+                  </button>
+                  <button onClick={() => setShowInvite(false)} style={s.btnGrey}>
+                    Fermer
+                  </button>
+                </div>
+                <p style={{ color: '#64748b', fontSize: 11, marginTop: 10 }}>
+                  ⚠️ Ce lien est à usage unique. Générez-en un nouveau si nécessaire.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── Badge de statut ───────────────────────────────────────────────────────
+function StatusBadge({ status }) {
+  const map = {
+    pending:  { bg: '#f59e0b22', color: '#f59e0b', label: 'En attente' },
+    accepted: { bg: '#16a34a22', color: '#16a34a', label: 'Accepté' },
+    refused:  { bg: '#94a3b822', color: '#94a3b8', label: 'Refusé' },
+  }
+  const m = map[status] || map.pending
+  return (
+    <span style={{
+      background: m.bg,
+      color: m.color,
+      fontSize: 11,
+      fontWeight: 600,
+      padding: '2px 8px',
+      borderRadius: 20,
+    }}>
+      {m.label}
+    </span>
+  )
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────
+const s = {
+  muted: { color: '#64748b', fontSize: 13, textAlign: 'center', padding: '20px 0' },
+  label: {
+    display: 'block',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    marginBottom: 6,
+  },
+  input: {
+    width: '100%',
+    padding: '10px 12px',
+    background: '#0f172a',
+    border: '1.5px solid #334155',
+    borderRadius: 8,
+    fontSize: 14,
+    color: '#f1f5f9',
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit',
+    marginBottom: 4,
+  },
+  error: {
+    color: '#fca5a5',
+    fontSize: 12,
+    marginBottom: 10,
+    background: '#7f1d1d33',
+    padding: '6px 8px',
+    borderRadius: 6,
+  },
+  btnGreen: {
+    flex: 1,
+    padding: '10px',
+    background: '#16a34a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  btnGrey: {
+    flex: 1,
+    padding: '10px',
+    background: '#334155',
+    color: '#94a3b8',
+    border: 'none',
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  btnAccept: {
+    flex: 1,
+    padding: '8px',
+    background: '#16a34a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 7,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  btnRefuse: {
+    flex: 1,
+    padding: '8px',
+    background: '#334155',
+    color: '#fca5a5',
+    border: 'none',
+    borderRadius: 7,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  btnInvite: {
+    width: '100%',
+    padding: '11px',
+    background: '#1d4ed8',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 10,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: 'pointer',
+    marginBottom: 16,
+    fontFamily: 'inherit',
+  },
+  btnSmallRed: {
+    background: '#7f1d1d44',
+    color: '#fca5a5',
+    border: 'none',
+    borderRadius: 6,
+    padding: '4px 10px',
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  btnSmallGreen: {
+    background: '#14532d44',
+    color: '#86efac',
+    border: 'none',
+    borderRadius: 6,
+    padding: '4px 10px',
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+}
