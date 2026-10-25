@@ -590,6 +590,12 @@ export default function Dashboard({ pilot }) {
             <div className="pending-alert-title">
               🔔 {pendingAll.length} demande{pendingAll.length > 1 ? 's' : ''} en attente — appuyer pour voir
             </div>
+            {/* DEBUG — à supprimer */}
+            <div style={{fontSize:10,color:'#666',wordBreak:'break-all'}}>
+              pendingByDate keys: {JSON.stringify(Object.keys(pendingByDate))} |
+              firstDate: {String(firstDate)} |
+              pilot_slots[0]: {JSON.stringify(pendingAll[0]?.pilot_slots)}
+            </div>
             {sortedDates.map(date => {
               const bks = pendingByDate[date]
               return (
