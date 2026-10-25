@@ -343,3 +343,70 @@ code {
   outline: none;
   border-color: #7c3aed;
 }
+/* ── Manu Dispo — slot buttons ──────────────────────────────────────────── */
+.manu-dispo-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manu-dispo-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: left;
+}
+
+.manu-dispo-slot--ok {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #166534;
+}
+.manu-dispo-slot--ok:hover {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+
+.manu-dispo-slot--off {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.manu-dispo-slot--selected {
+  border-color: #7c3aed !important;
+  background: #ede9fe !important;
+  color: #4c1d95 !important;
+}
+
+.manu-slot-time {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.manu-slot-status {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* ── Dashboard — badge collègue ─────────────────────────────────────────── */
+.booking-badge--colleague {
+  display: inline-block;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
