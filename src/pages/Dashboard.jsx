@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
+import ColleaguePanel from './ColleaguePanel'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -579,7 +580,7 @@ export default function Dashboard({ pilot }) {
           </div>
           {Object.entries(pendingByDate).map(([date, bks]) => (
             <div key={date} className="pending-alert-date"
-              onClick={() => { setSelectedDate(date); setWeekStart(getWeekStart(date)); setViewMode('week') }}>
+              onClick={() => { setSelectedDate(date); setViewMode('day') }}>
               <span className="pending-date-label">
                 {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {
                   weekday: 'short', day: 'numeric', month: 'short'
