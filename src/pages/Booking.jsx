@@ -12,6 +12,28 @@ function isFirstSlot(slot_time) {
   return slot_time?.startsWith('08:')
 }
 
+// Format a date string (YYYY-MM-DD) to French readable format
+function formatDateFR(dateStr) {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-')
+  const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
+  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`
+}
+
+// Send an SMS via the Supabase Edge Function
+async function sendSMS(to, message) {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: { to, message },
+    })
+    if (error) console.error('SMS error:', error)
+    return { data, error }
+  } catch (err) {
+    console.error('SMS exception:', err)
+    return { error: err }
+  }
+}
+
 export default function Booking() {
   const [step, setStep]                   = useState(2)
   const [selectedDate, setSelectedDate]   = useState(TODAY)
@@ -217,7 +239,36 @@ if (hasLightChild) {
       setSubmitting(false); return
     }
 
-    setBookingRef(bookingData.id.slice(0, 8).toUpperCase())
+    const ref     = bookingData.id.slice(0, 8).toUpperCase()
+    const dateStr = formatDateFR(selectedDate)
+    const time    = selectedSlot.slot_time?.slice(0, 5)
+    const paxList = passengers.map(p => `${p.first_name} ${p.last_name}`).join(', ')
+
+    // ── SMS au client ────────────────────────────────────────────────────────
+    if (contact.phone) {
+      const clientMsg =
+        `Bonjour ${contact.name}, votre demande de vol parapente est enregistrée !\n` +
+        `📅 ${dateStr} à ${time}\n` +
+        `Réf : ${ref}\n` +
+        `Le moniteur vous confirmera votre vol par SMS.\n` +
+        `CGV : planete-parapente-reunion.com/cgv\n` +
+        `Planète Parapente Réunion`
+      await sendSMS(contact.phone, clientMsg)
+    }
+
+    // ── SMS au pilote (Manu) ─────────────────────────────────────────────────
+    // PILOT_PHONE is set as a Supabase secret — the Edge Function reads it.
+    // Here we pass a special recipient "PILOT" so the function uses the env var.
+    const pilotMsg =
+      `🪂 Nouvelle réservation\n` +
+      `Client : ${contact.name} — ${contact.phone}\n` +
+      `📅 ${dateStr} à ${time}\n` +
+      `Passagers : ${paxList}\n` +
+      `Réf : ${ref}` +
+      (notes ? `\nNote : ${notes}` : '')
+    await sendSMS('PILOT', pilotMsg)
+
+    setBookingRef(ref)
     setStep(4); setSubmitting(false)
   }
 
