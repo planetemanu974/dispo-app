@@ -665,7 +665,7 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-col ${isToday ? 'cal-day-col--today' : ''}`}
-                      style={{ width:68, flexShrink:0, position:'relative', borderRight:'1px solid #e2e8f0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#f0f9ff' : undefined }}>
+                      style={{ width:68, flexShrink:0, position:'relative', borderRight:'1px solid #cbd5e0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#f0f9ff' : '#f8fafc' }}>
 
                       {/* Hour grid lines */}
                       {GRID_HOURS.map((h, i) => (
@@ -696,7 +696,7 @@ export default function Dashboard({ pilot }) {
                         const height        = slotHeightPx() - 3
                         const endTime       = slotEndTime(slot.slot_time)
 
-                        // Vivid block colours for week view
+                        // Vivid block colours for week view — all slots clearly visible
                         let wBg, wColor, wBorder
                         if (activeBks.some(b => b.status === 'confirmed')) {
                           wBg = '#16a34a'; wColor = 'white'; wBorder = '#15803d'
@@ -705,7 +705,7 @@ export default function Dashboard({ pilot }) {
                         } else if (!slot.is_available) {
                           wBg = '#94a3b8'; wColor = 'white'; wBorder = '#64748b'
                         } else {
-                          wBg = '#bfdbfe'; wColor = '#1e3a8a'; wBorder = '#3b82f6'
+                          wBg = '#3b82f6'; wColor = 'white'; wBorder = '#2563eb'
                         }
 
                         return (
@@ -806,7 +806,7 @@ export default function Dashboard({ pilot }) {
 
           {/* ── Day calendar grid (Google Agenda style) ── */}
           {loading ? <p className="loading">Chargement...</p> : (
-            <div style={{ margin:'8px', border:'1px solid #e2e8f0', borderRadius:12, overflow:'hidden', background:'white' }}>
+            <div style={{ margin:'8px', border:'1px solid #cbd5e0', borderRadius:12, overflow:'hidden', background:'#f8fafc' }}>
               <div style={{ display:'flex', overflowY:'auto', maxHeight:'62vh' }}>
 
                 {/* Time axis */}
@@ -849,7 +849,7 @@ export default function Dashboard({ pilot }) {
                     const height = slotHeightPx() - 3
                     const endT   = slotEndTime(slot.slot_time)
 
-                    // Determine visual style — vivid colours
+                    // Vivid colours — every slot is a clearly visible rectangle
                     let bg, border, color, label
                     if (confirmedBks.length > 0) {
                       bg = '#16a34a'; border = '#15803d'; color = 'white'; label = 'Confirmé'
@@ -858,7 +858,7 @@ export default function Dashboard({ pilot }) {
                     } else if (!slot.is_available) {
                       bg = '#94a3b8'; border = '#64748b'; color = 'white'; label = 'Pas dispo'
                     } else {
-                      bg = '#bfdbfe'; border = '#3b82f6'; color = '#1e3a8a'; label = 'Libre'
+                      bg = '#3b82f6'; border = '#2563eb'; color = 'white'; label = 'Libre'
                     }
 
                     const activeBooking = firstActive
