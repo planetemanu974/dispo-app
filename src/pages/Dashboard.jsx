@@ -561,7 +561,7 @@ export default function Dashboard({ pilot }) {
 
   return (
     <div className="dashboard">
-      <header className="dash-header">
+      <header className="dash-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #e2e8f0' }}>
         <div className="dash-title">
           <span className="logo">🪂</span>
           <span>{pilot.name}</span>
