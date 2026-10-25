@@ -91,6 +91,11 @@ export default function Dashboard({ pilot }) {
   const [editData, setEditData]               = useState(null)
   const [editSlots, setEditSlots]             = useState([])
 
+  // New booking modal state
+  const [newBookingSlot, setNewBookingSlot]   = useState(null)   // { slot, date } | null
+  const [nbForm, setNbForm]                   = useState(null)   // form data
+  const [nbSaving, setNbSaving]               = useState(false)
+
   // 14-day planning strip state
   const [planning, setPlanning]               = useState({})
   const [planningLoading, setPlanningLoading] = useState(false)
@@ -318,6 +323,62 @@ export default function Dashboard({ pilot }) {
     loadDay(selectedDate, true)
     loadPlanning(selectedDate)
     loadWeek(weekStart)
+  }
+
+  // ── openNewBooking ────────────────────────────────────────────────────────
+  function openNewBooking(slot, date) {
+    if (!slot.is_available) return   // can't book an unavailable slot
+    setNewBookingSlot({ slot, date })
+    setNbForm({
+      contactName:  '',
+      contactPhone: '',
+      notes:        '',
+      passengers:   [{ firstName: '', lastName: '', weight: '', age: '', flightType: 'discovery' }],
+    })
+  }
+
+  // ── submitNewBooking ──────────────────────────────────────────────────────
+  async function submitNewBooking() {
+    if (!nbForm || !newBookingSlot) return
+    if (!nbForm.contactName.trim()) { alert('Nom du contact requis'); return }
+    if (!nbForm.contactPhone.trim()) { alert('Téléphone requis'); return }
+    setNbSaving(true)
+
+    const ref = 'MAN-' + Date.now().toString(36).toUpperCase().slice(-6)
+
+    const { data: bk, error: bkErr } = await supabase.from('bookings').insert({
+      pilot_slot_id: newBookingSlot.slot.id,
+      contact_name:  nbForm.contactName.trim(),
+      contact_phone: nbForm.contactPhone.trim(),
+      notes:         nbForm.notes.trim() || null,
+      status:        'confirmed',
+      source:        'manual',
+      booking_ref:   ref,
+    }).select().single()
+
+    if (bkErr || !bk) { alert('Erreur lors de la création'); setNbSaving(false); return }
+
+    // Insert passengers (skip empty entries)
+    for (const p of nbForm.passengers) {
+      if (!p.firstName.trim()) continue
+      await supabase.from('passengers').insert({
+        booking_id:  bk.id,
+        first_name:  p.firstName.trim(),
+        last_name:   p.lastName.trim(),
+        weight_kg:   parseInt(p.weight)  || 0,
+        age:         parseInt(p.age)     || 0,
+        flight_type: p.flightType,
+        price_eur:   p.flightType === 'performance' ? 110 : 90,
+      })
+    }
+
+    const savedDate = newBookingSlot.date
+    setNbSaving(false)
+    setNewBookingSlot(null)
+    setNbForm(null)
+    loadDay(savedDate, true)
+    loadWeek(weekStart)
+    loadPlanning(savedDate)
   }
 
   // ── derived ───────────────────────────────────────────────────────────────
@@ -638,9 +699,7 @@ export default function Dashboard({ pilot }) {
                               if (firstActive) {
                                 setSelectedBooking(firstActive)
                               } else {
-                                setSelectedDate(date)
-                                setViewMode('day')
-                                loadDay(date)
+                                openNewBooking(slot, date)
                               }
                             }}>
                             <span className="cal-block-time">
@@ -777,7 +836,7 @@ export default function Dashboard({ pilot }) {
                     return (
                       <div key={slot.id}
                         style={{ position:'absolute', left:6, right:6, top, height, borderRadius:8, background:bg, borderLeft:`4px solid ${border}`, color, display:'flex', alignItems:'stretch', overflow:'hidden', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}
-                        onClick={() => activeBooking ? setSelectedBooking(activeBooking) : null}>
+                        onClick={() => activeBooking ? setSelectedBooking(activeBooking) : openNewBooking(slot, selectedDate)}>
 
                         {/* Main info */}
                         <div style={{ flex:1, padding:'6px 10px', display:'flex', flexDirection:'column', justifyContent:'center', gap:2 }}>
@@ -816,6 +875,101 @@ export default function Dashboard({ pilot }) {
             </div>
           )}
         </>
+      )}
+
+      {/* ── New booking modal ── */}
+      {newBookingSlot && nbForm && (
+        <div className="modal-overlay" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Nouvelle réservation</h2>
+              <button className="btn-ghost" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>✕</button>
+            </div>
+
+            {/* Slot info */}
+            <div style={{ background:'#ebf8ff', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:'0.82rem', color:'#2b6cb0', fontWeight:600 }}>
+              📅 {new Date(newBookingSlot.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}
+              &nbsp;· {newBookingSlot.slot.slot_time.slice(0,5)} – {slotEndTime(newBookingSlot.slot.slot_time)}
+            </div>
+
+            {/* Contact */}
+            <div className="edit-section">
+              <label className="edit-label">Nom du contact *</label>
+              <input className="edit-input" placeholder="Ex: Martin Dupont" value={nbForm.contactName}
+                onChange={e => setNbForm(f => ({ ...f, contactName: e.target.value }))} />
+              <label className="edit-label">Téléphone *</label>
+              <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
+                onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
+            </div>
+
+            {/* Passengers */}
+            <div className="edit-section">
+              <div className="edit-section-title">Passagers</div>
+              {nbForm.passengers.map((p, i) => (
+                <div key={i} className="modal-pax-card" style={{ position:'relative' }}>
+                  <div className="modal-pax-name" style={{ marginBottom:8 }}>Passager {i + 1}</div>
+                  {nbForm.passengers.length > 1 && (
+                    <button className="btn-ghost-small" style={{ position:'absolute', top:8, right:8 }}
+                      onClick={() => setNbForm(f => ({ ...f, passengers: f.passengers.filter((_, idx) => idx !== i) }))}>✕</button>
+                  )}
+                  <div className="field-row" style={{ display:'flex', gap:8 }}>
+                    <div style={{ flex:1 }}>
+                      <label className="edit-label">Prénom</label>
+                      <input className="edit-input" placeholder="Prénom" value={p.firstName}
+                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, firstName:e.target.value} : px) }))} />
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <label className="edit-label">Nom</label>
+                      <input className="edit-input" placeholder="Nom" value={p.lastName}
+                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, lastName:e.target.value} : px) }))} />
+                    </div>
+                  </div>
+                  <div className="field-row" style={{ display:'flex', gap:8 }}>
+                    <div style={{ flex:1 }}>
+                      <label className="edit-label">Poids (kg)</label>
+                      <input className="edit-input" type="number" min="10" max="120" placeholder="Ex: 70" value={p.weight}
+                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, weight:e.target.value} : px) }))} />
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <label className="edit-label">Âge</label>
+                      <input className="edit-input" type="number" min="6" max="99" placeholder="Ex: 35" value={p.age}
+                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, age:e.target.value} : px) }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="edit-label">Type de vol</label>
+                    <select className="edit-input" value={p.flightType}
+                      onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, flightType:e.target.value} : px) }))}>
+                      <option value="discovery">Découverte (90 €)</option>
+                      <option value="performance">Performance (110–120 €)</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+              {nbForm.passengers.length < 4 && (
+                <button className="btn-secondary" style={{ width:'100%', marginTop:8 }}
+                  onClick={() => setNbForm(f => ({ ...f, passengers: [...f.passengers, { firstName:'', lastName:'', weight:'', age:'', flightType:'discovery' }] }))}>
+                  + Ajouter un passager
+                </button>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="edit-section">
+              <label className="edit-label">Notes (optionnel)</label>
+              <textarea className="edit-input" rows={2} placeholder="Demande spéciale, remarque..." value={nbForm.notes}
+                onChange={e => setNbForm(f => ({ ...f, notes: e.target.value }))}
+                style={{ resize:'vertical', fontFamily:'inherit', fontSize:'0.85rem' }} />
+            </div>
+
+            <div className="booking-actions">
+              <button className="btn-confirm" disabled={nbSaving} onClick={submitNewBooking}>
+                {nbSaving ? 'Enregistrement...' : '✓ Confirmer la résa'}
+              </button>
+              <button className="btn-refuse" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>Annuler</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Booking detail modal (shared by both views) ── */}
