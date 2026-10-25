@@ -665,18 +665,11 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-col ${isToday ? 'cal-day-col--today' : ''}`}
-                      style={{ width:68, flexShrink:0, position:'relative', borderRight:'1px solid #cbd5e0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#f0f9ff' : '#f8fafc' }}>
+                      style={{ width:68, flexShrink:0, position:'relative', borderRight:'1px solid #cbd5e0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#eff6ff' : '#ffffff' }}>
 
-                      {/* Hour grid lines */}
+                      {/* Subtle hour lines only (no half-hour noise) */}
                       {GRID_HOURS.map((h, i) => (
-                        <div key={h} className="cal-hour-line"
-                          style={{ top: i * HOUR_HEIGHT }} />
-                      ))}
-
-                      {/* Half-hour lines */}
-                      {GRID_HOURS.slice(0, -1).map((h, i) => (
-                        <div key={`half-${h}`} className="cal-half-line"
-                          style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
+                        <div key={h} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT, height:1, background:'#e2e8f0', pointerEvents:'none' }} />
                       ))}
 
                       {/* Slot blocks */}
@@ -693,24 +686,24 @@ export default function Dashboard({ pilot }) {
                         const totalPaxW     = activeBks.reduce((n, b) => n + (b.passengers?.length || 0), 0)
                         const remainingW    = (slot.capacity || 4) - totalPaxW
                         const top           = slotTop(slot.slot_time)
-                        const height        = slotHeightPx() - 3
+                        const height        = slotHeightPx() - 8
                         const endTime       = slotEndTime(slot.slot_time)
 
                         // Vivid block colours for week view — all slots clearly visible
                         let wBg, wColor, wBorder
                         if (activeBks.some(b => b.status === 'confirmed')) {
-                          wBg = '#16a34a'; wColor = 'white'; wBorder = '#15803d'
+                          wBg = '#16a34a'; wColor = 'white'; wBorder = '#166534'
                         } else if (activeBks.some(b => b.status === 'pending')) {
-                          wBg = '#f59e0b'; wColor = 'white'; wBorder = '#d97706'
+                          wBg = '#f59e0b'; wColor = 'white'; wBorder = '#b45309'
                         } else if (!slot.is_available) {
-                          wBg = '#94a3b8'; wColor = 'white'; wBorder = '#64748b'
+                          wBg = '#94a3b8'; wColor = 'white'; wBorder = '#475569'
                         } else {
-                          wBg = '#3b82f6'; wColor = 'white'; wBorder = '#2563eb'
+                          wBg = '#3b82f6'; wColor = 'white'; wBorder = '#1d4ed8'
                         }
 
                         return (
                           <div key={slot.id}
-                            style={{ position:'absolute', left:3, right:3, top, height, borderRadius:6, background:wBg, borderLeft:`3px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}
+                            style={{ position:'absolute', left:4, right:4, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
                               if (firstActive) {
                                 setSelectedBooking(firstActive)
