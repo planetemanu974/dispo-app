@@ -719,51 +719,100 @@ export default function Dashboard({ pilot }) {
             <button className="btn-ghost" onClick={() => changeDate(1)}>›</button>
           </div>
 
-          {/* Slot grid */}
+          {/* ── Day calendar grid (Google Agenda style) ── */}
           {loading ? <p className="loading">Chargement...</p> : (
-            <div className="slot-grid">
-              {slots.map(slot => {
-                const slotBookings = bookingsBySlot[slot.id] || []
-                const pendingBks   = slotBookings.filter(b => b.status === 'pending')
-                const confirmedBks = slotBookings.filter(b => b.status === 'confirmed')
-                return (
-                  <div key={slot.id}
-                    className={`slot-card ${slot.is_available ? 'available' : 'unavailable'}`}>
-                    <div className="slot-time">{slot.slot_time.slice(0, 5)}</div>
-                    <div className="slot-count">{slot.booked_count}/{slot.capacity} pax</div>
-                    <button className={`btn-toggle ${slot.is_available ? 'on' : 'off'}`}
-                      onClick={() => toggleAvailability(slot)}>
-                      {slot.is_available ? 'DISPO' : 'PAS DISPO'}
-                    </button>
-                    {pendingBks.map(b => (
-                      <div key={b.id} className="booking-card booking-card--pending"
-                        onClick={() => setSelectedBooking(b)} style={{ cursor: 'pointer' }}>
-                        {b.source === 'colleague'
-                          ? <span className="booking-badge booking-badge--colleague">Collegue</span>
-                          : <span className="booking-badge booking-badge--pending">En attente</span>
-                        }
-                        <div className="booking-contact">{b.contact_name}{b.source !== 'colleague' && ` — ${b.contact_phone}`}</div>
-                        <div className="booking-pax">
-                          {b.source === 'colleague'
-                            ? 'Demande collegue →'
-                            : `${b.passengers?.length || 0} passager${(b.passengers?.length || 0) > 1 ? 's' : ''} — voir fiche →`
-                          }
+            <div style={{ margin:'8px', border:'1px solid #e2e8f0', borderRadius:12, overflow:'hidden', background:'white' }}>
+              <div style={{ display:'flex', overflowY:'auto', maxHeight:'62vh' }}>
+
+                {/* Time axis */}
+                <div style={{ width:44, flexShrink:0, borderRight:'1px solid #e2e8f0' }}>
+                  {GRID_HOURS.map(h => (
+                    <div key={h} style={{ height:HOUR_HEIGHT, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:6, paddingTop:3, fontSize:'0.65rem', color:'#a0aec0', fontWeight:600, boxSizing:'border-box' }}>
+                      {`${String(h).padStart(2,'0')}:00`}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Single day column */}
+                <div style={{ flex:1, position:'relative', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H) }}>
+
+                  {/* Hour lines */}
+                  {GRID_HOURS.map((h, i) => (
+                    <div key={h} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT, height:1, background:'#e2e8f0', pointerEvents:'none' }} />
+                  ))}
+                  {/* Half-hour lines */}
+                  {GRID_HOURS.slice(0,-1).map((h, i) => (
+                    <div key={`h-${h}`} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT + HOUR_HEIGHT/2, height:1, background:'#f0f4f8', pointerEvents:'none' }} />
+                  ))}
+
+                  {/* Slot blocks */}
+                  {slots.map(slot => {
+                    const slotMin = timeToMinutes(slot.slot_time)
+                    if (slotMin < GRID_START_H * 60 || slotMin >= GRID_END_H * 60) return null
+
+                    const slotBookings = bookingsBySlot[slot.id] || []
+                    const pendingBks   = slotBookings.filter(b => b.status === 'pending')
+                    const confirmedBks = slotBookings.filter(b => b.status === 'confirmed')
+                    const firstActive  = [...pendingBks, ...confirmedBks][0]
+
+                    const top    = slotTop(slot.slot_time)
+                    const height = slotHeightPx() - 3
+                    const endT   = slotEndTime(slot.slot_time)
+
+                    // Determine visual style
+                    let bg, border, color, label
+                    if (confirmedBks.length > 0) {
+                      bg = '#dcfce7'; border = '#16a34a'; color = '#14532d'; label = 'Confirmé'
+                    } else if (pendingBks.length > 0) {
+                      bg = '#fef9c3'; border = '#d97706'; color = '#78350f'; label = 'En attente'
+                    } else if (!slot.is_available) {
+                      bg = '#f1f5f9'; border = '#94a3b8'; color = '#94a3b8'; label = 'Pas dispo'
+                    } else {
+                      bg = '#f0f4f8'; border = '#a0aec0'; color = '#4a5568'; label = 'Libre'
+                    }
+
+                    const activeBooking = firstActive
+                    const timeLabel     = `${slot.slot_time.slice(0,5)} – ${endT}`
+
+                    return (
+                      <div key={slot.id}
+                        style={{ position:'absolute', left:6, right:6, top, height, borderRadius:8, background:bg, borderLeft:`4px solid ${border}`, color, display:'flex', alignItems:'stretch', overflow:'hidden', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}
+                        onClick={() => activeBooking ? setSelectedBooking(activeBooking) : null}>
+
+                        {/* Main info */}
+                        <div style={{ flex:1, padding:'6px 10px', display:'flex', flexDirection:'column', justifyContent:'center', gap:2 }}>
+                          <span style={{ fontSize:'0.7rem', fontWeight:700, opacity:0.75 }}>{timeLabel}</span>
+                          {activeBooking ? (
+                            <>
+                              <span style={{ fontSize:'0.85rem', fontWeight:800, lineHeight:1.2 }}>
+                                {activeBooking.source === 'colleague'
+                                  ? `Pour ${activeBooking.contact_name}`
+                                  : activeBooking.contact_name}
+                              </span>
+                              <span style={{ fontSize:'0.72rem', fontWeight:600, opacity:0.8 }}>
+                                {activeBooking.source === 'colleague'
+                                  ? 'Demande collègue'
+                                  : `${activeBooking.passengers?.length || 0} pax · ${label}`}
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ fontSize:'0.78rem', fontWeight:600 }}>{label}</span>
+                          )}
                         </div>
+
+                        {/* DISPO toggle on the right (only for non-booked slots) */}
+                        {!activeBooking && (
+                          <button
+                            style={{ alignSelf:'stretch', padding:'0 12px', background: slot.is_available ? '#22c55e' : '#94a3b8', color:'white', border:'none', fontSize:'0.65rem', fontWeight:800, letterSpacing:'0.05em', cursor:'pointer', borderLeft:'1px solid rgba(255,255,255,0.3)', whiteSpace:'nowrap' }}
+                            onClick={e => { e.stopPropagation(); toggleAvailability(slot) }}>
+                            {slot.is_available ? 'DISPO' : 'PAS\nDISPO'}
+                          </button>
+                        )}
                       </div>
-                    ))}
-                    {confirmedBks.map(b => (
-                      <div key={b.id} className="booking-card booking-card--confirmed"
-                        onClick={() => setSelectedBooking(b)} style={{ cursor: 'pointer' }}>
-                        <span className="booking-badge booking-badge--confirmed">✓ Confirme</span>
-                        <div className="booking-contact">{b.contact_name}</div>
-                        <div className="booking-pax">
-                          {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })}
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </>
