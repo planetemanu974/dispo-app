@@ -616,11 +616,13 @@ export default function Dashboard({ pilot }) {
           </div>
 
           {weekLoading ? <p className="loading">Chargement...</p> : (
-            <div className="cal-container">
+            /* Outer wrapper scrolls horizontally on mobile */
+            <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+            <div className="cal-container" style={{ minWidth: 7*68 + 40 }}>
 
               {/* ── Day header row ── */}
-              <div className="cal-header-row" style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#f7fafc' }}>
-                <div className="cal-gutter" style={{ width:40, flexShrink:0, borderRight:'1px solid #e2e8f0' }} />
+              <div className="cal-header-row" style={{ display:'flex', borderBottom:'2px solid #cbd5e0', background:'#edf2f7' }}>
+                <div className="cal-gutter" style={{ width:40, flexShrink:0, borderRight:'1px solid #cbd5e0' }} />
                 {weekDays.map((date, colIdx) => {
                   const d   = new Date(date + 'T00:00:00')
                   const num = d.getDate()
@@ -628,24 +630,24 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-header ${isToday ? 'cal-day-header--today' : ''}`}
-                      style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #e2e8f0', cursor:'pointer', background: isToday ? '#ebf8ff' : undefined }}
+                      style={{ width:68, flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #cbd5e0', cursor:'pointer', background: isToday ? '#bee3f8' : undefined }}
                       onClick={() => { setSelectedDate(date); setViewMode('day'); loadDay(date) }}>
-                      <span className="cal-day-name" style={{ fontSize:'0.55rem', fontWeight:700, textTransform:'uppercase', color:'#718096' }}>{DAY_LABELS[colIdx]}</span>
-                      <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`} style={{ fontSize:'0.9rem', fontWeight:700, width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', background: isToday ? '#3182ce' : undefined, color: isToday ? 'white' : '#2d3748' }}>{num}</span>
+                      <span className="cal-day-name" style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'#4a5568' }}>{DAY_LABELS[colIdx]}</span>
+                      <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`} style={{ fontSize:'1rem', fontWeight:800, width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', background: isToday ? '#2b6cb0' : undefined, color: isToday ? 'white' : '#1a202c' }}>{num}</span>
                     </div>
                   )
                 })}
               </div>
 
-              {/* ── Grid body (scrollable) ── */}
+              {/* ── Grid body (scrollable vertically) ── */}
               <div className="cal-body" style={{ display:'flex', overflowY:'auto', maxHeight:'58vh' }}>
 
                 {/* Time axis */}
-                <div className="cal-time-axis" style={{ width:40, flexShrink:0, borderRight:'1px solid #e2e8f0' }}>
+                <div className="cal-time-axis" style={{ width:40, flexShrink:0, borderRight:'1px solid #cbd5e0' }}>
                   {GRID_HOURS.map(h => (
                     <div key={h} className="cal-hour-label"
-                      style={{ height: HOUR_HEIGHT, lineHeight: `${HOUR_HEIGHT}px` }}>
-                      {`${String(h).padStart(2, '0')}:00`}
+                      style={{ height: HOUR_HEIGHT, lineHeight: `${HOUR_HEIGHT}px`, fontSize:'0.62rem', color:'#718096', fontWeight:700, textAlign:'right', paddingRight:4, boxSizing:'border-box' }}>
+                      {`${String(h).padStart(2, '0')}h`}
                     </div>
                   ))}
                 </div>
@@ -663,7 +665,7 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-col ${isToday ? 'cal-day-col--today' : ''}`}
-                      style={{ flex:1, position:'relative', borderRight:'1px solid #e2e8f0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#fafeff' : undefined }}>
+                      style={{ width:68, flexShrink:0, position:'relative', borderRight:'1px solid #e2e8f0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#f0f9ff' : undefined }}>
 
                       {/* Hour grid lines */}
                       {GRID_HOURS.map((h, i) => (
@@ -694,10 +696,21 @@ export default function Dashboard({ pilot }) {
                         const height        = slotHeightPx() - 3
                         const endTime       = slotEndTime(slot.slot_time)
 
+                        // Vivid block colours for week view
+                        let wBg, wColor, wBorder
+                        if (activeBks.some(b => b.status === 'confirmed')) {
+                          wBg = '#16a34a'; wColor = 'white'; wBorder = '#15803d'
+                        } else if (activeBks.some(b => b.status === 'pending')) {
+                          wBg = '#f59e0b'; wColor = 'white'; wBorder = '#d97706'
+                        } else if (!slot.is_available) {
+                          wBg = '#94a3b8'; wColor = 'white'; wBorder = '#64748b'
+                        } else {
+                          wBg = '#bfdbfe'; wColor = '#1e3a8a'; wBorder = '#3b82f6'
+                        }
+
                         return (
                           <div key={slot.id}
-                            className={`cal-block ${status}`}
-                            style={{ top, height, display:'flex', flexDirection:'column', overflow:'hidden' }}
+                            style={{ position:'absolute', left:3, right:3, top, height, borderRadius:6, background:wBg, borderLeft:`3px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}
                             onClick={() => {
                               if (firstActive) {
                                 setSelectedBooking(firstActive)
@@ -705,17 +718,17 @@ export default function Dashboard({ pilot }) {
                                 openNewBooking(slot, date)
                               }
                             }}>
-                            <span className="cal-block-time">
-                              {slot.slot_time.slice(0, 5)} – {endTime}
+                            <span style={{ fontSize:'0.55rem', fontWeight:700, padding:'2px 4px 0', opacity:0.85 }}>
+                              {slot.slot_time.slice(0, 5)}
                             </span>
-                            <span className="cal-block-name">{name}</span>
+                            <span style={{ fontSize:'0.65rem', fontWeight:800, padding:'0 4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
                             {pax !== null && (
-                              <span className="cal-block-pax">{pax} pax</span>
+                              <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85 }}>{pax} pax</span>
                             )}
                             {/* "+" button when there's capacity remaining */}
                             {firstActive && remainingW > 0 && slot.is_available && (
                               <button
-                                style={{ marginTop:'auto', alignSelf:'flex-end', background:'rgba(49,130,206,0.15)', color:'#2b6cb0', border:'none', borderRadius:4, fontSize:'0.75rem', fontWeight:800, padding:'1px 5px', cursor:'pointer', lineHeight:1.4 }}
+                                style={{ marginTop:'auto', alignSelf:'flex-end', background:'rgba(255,255,255,0.3)', color:'white', border:'none', borderRadius:4, fontSize:'0.7rem', fontWeight:800, padding:'1px 5px', cursor:'pointer', lineHeight:1.4, margin:'2px' }}
                                 onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
                                 title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
                                 +{remainingW}
@@ -729,6 +742,7 @@ export default function Dashboard({ pilot }) {
                 })}
               </div>
             </div>
+            </div>{/* end horizontal scroll wrapper */}
           )}
 
           {/* Calendar legend */}
@@ -835,16 +849,16 @@ export default function Dashboard({ pilot }) {
                     const height = slotHeightPx() - 3
                     const endT   = slotEndTime(slot.slot_time)
 
-                    // Determine visual style
+                    // Determine visual style — vivid colours
                     let bg, border, color, label
                     if (confirmedBks.length > 0) {
-                      bg = '#dcfce7'; border = '#16a34a'; color = '#14532d'; label = 'Confirmé'
+                      bg = '#16a34a'; border = '#15803d'; color = 'white'; label = 'Confirmé'
                     } else if (pendingBks.length > 0) {
-                      bg = '#fef9c3'; border = '#d97706'; color = '#78350f'; label = 'En attente'
+                      bg = '#f59e0b'; border = '#d97706'; color = 'white'; label = 'En attente'
                     } else if (!slot.is_available) {
-                      bg = '#f1f5f9'; border = '#94a3b8'; color = '#94a3b8'; label = 'Pas dispo'
+                      bg = '#94a3b8'; border = '#64748b'; color = 'white'; label = 'Pas dispo'
                     } else {
-                      bg = '#f0f4f8'; border = '#a0aec0'; color = '#4a5568'; label = 'Libre'
+                      bg = '#bfdbfe'; border = '#3b82f6'; color = '#1e3a8a'; label = 'Libre'
                     }
 
                     const activeBooking = firstActive
