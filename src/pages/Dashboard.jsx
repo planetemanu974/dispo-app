@@ -13,6 +13,20 @@ function getDayRange(startDate, count) {
   })
 }
 
+// ── sendSMS: calls the Supabase Edge Function ──────────────────────────────
+async function sendSMS(to, message) {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: { to, message },
+    })
+    if (error) console.error('SMS error:', error)
+    return { data, error }
+  } catch (err) {
+    console.error('SMS exception:', err)
+    return { error: err }
+  }
+}
+
 export default function Dashboard({ pilot }) {
   // selectedDate starts null — init() sets it after finding pending bookings
   const [selectedDate, setSelectedDate]     = useState(null)
@@ -171,8 +185,25 @@ export default function Dashboard({ pilot }) {
   // ── handleBooking ──────────────────────────────────────────────────────────
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
-    // Keep modal open, update status locally so WhatsApp button appears
+    // Update status locally so the modal reflects the new state immediately
     setSelectedBooking(prev => prev ? { ...prev, status: action } : null)
+
+    // ── Send SMS to client on confirmation ────────────────────────────────
+    if (action === 'confirmed' && selectedBooking?.contact_phone) {
+      const slotDate = selectedBooking.pilot_slots?.slot_date || selectedDate
+      const slotTime = selectedBooking.pilot_slots?.slot_time?.slice(0, 5) || ''
+      const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long'
+      })
+      const paxCount = selectedBooking.passengers?.length || 1
+      const paxLabel = paxCount > 1 ? `${paxCount} personnes` : '1 personne'
+      const confirmMsg =
+        `Bonjour, votre vol parapente est confirme pour le ${dateLabel} a ${slotTime} pour ${paxLabel}. ` +
+        `RDV plage a cote de Kelonia, navette Planete Parapente. ` +
+        `Chaussures fermees obligatoires. Paiement especes/cheque. ` +
+        `Manu 0692719749`
+      await sendSMS(selectedBooking.contact_phone, confirmMsg)
+    }
 
     const { data: slotData } = await supabase
       .from('pilot_slots').select('id, slot_date, slot_time')
@@ -210,66 +241,11 @@ export default function Dashboard({ pilot }) {
     return acc
   }, {})
 
-  const flightTypeLabel = t => t === 'performance' ? 'Performance' : 'Découverte'
-
-  // ── buildWhatsAppUrl ───────────────────────────────────────────────────────
-  // Builds a wa.me link with a pre-filled confirmation message.
-  function buildWhatsAppUrl(booking, action) {
-    const phone = (booking.contact_phone || '').replace(/\s+/g, '').replace(/^0/, '262')
-    const slotDate = booking.pilot_slots?.slot_date || selectedDate
-    const slotTime = booking.pilot_slots?.slot_time?.slice(0, 5) || ''
-    const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long'
-    })
-    const paxCount = booking.passengers?.length || 1
-    const paxLabel = paxCount > 1 ? `${paxCount} passagers` : '1 passager'
-
-    // Emojis as Unicode escapes — literal emoji chars corrupt on Windows file save
-    const e = {
-      wave:    '👋',
-      check:   '✅',
-      shoe:    '👟',
-      card:    '💳',
-      camera:  '📸',
-      video:   '🎥',
-      weather: '🌤',
-      para:    '🪂',
-    }
-
-    let msg = ''
-    if (action === 'confirmed') {
-      msg =
-        `Bonjour ${booking.contact_name} ${e.wave}\n\n` +
-        `*Votre reservation parapente est confirmee* ${e.check}\n\n` +
-        `Je vous confirme votre vol pour ${dateLabel} a ${slotTime} pour ${paxLabel}.\n\n` +
-        `Les pilotes vous attendront a l'*atterrissage des parapentes* (plage a cote de Kelonia).\n\n` +
-        `Vous les trouverez a cote de la navette *Planete Parapente* stationnee sur le parking. Demandez *Manu*.\n` +
-        `Il est preferable de vous garer sur le grand parking a cote du rond-point.\n\n` +
-        `${e.shoe} *Equipement :* baskets\n\n` +
-        `${e.card} *Paiement :* especes ou cheque (pas de carte bleue)\n\n` +
-        `${e.camera} Photos : 10€\n` +
-        `${e.video} Photos + Videos : 20€\n` +
-        `Transfert direct sur smartphone apres le vol.\n\n` +
-        `${e.weather} Un message de confirmation meteo vous sera envoye la veille du vol.\n\n` +
-        `A bientot ! ${e.para}\n\n` +
-        `Manu\n` +
-        `www.planete-parapente-reunion.com\n` +
-        `06.92.719.749`
-    } else {
-      msg =
-        `Bonjour ${booking.contact_name},\n\n` +
-        `Je suis desole, je ne suis pas disponible le ${dateLabel}.\n` +
-        `N'hesitez pas a me recontacter pour une autre date ${e.para}\n\n` +
-        `Manu - Planete Parapente Reunion\n` +
-        `06.92.719.749`
-    }
-
-    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
-  }
+  const flightTypeLabel = t => t === 'performance' ? 'Performance' : 'Decouverte'
 
   // ── handleCancel ──────────────────────────────────────────────────────────
   async function handleCancel(bookingId) {
-    if (!window.confirm('Annuler cette réservation ?')) return
+    if (!window.confirm('Annuler cette reservation ?')) return
     await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
     setSelectedBooking(null)
     setEditMode(false)
@@ -396,7 +372,7 @@ export default function Dashboard({ pilot }) {
           <span className="logo">🪂</span>
           <span>{pilot.name}</span>
         </div>
-        <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
+        <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Deconnexion</button>
       </header>
 
       {/* ── Pending alert ── */}
@@ -447,7 +423,7 @@ export default function Dashboard({ pilot }) {
                 <span className="planning-day__num">{num}</span>
                 <span className="planning-day__dots">
                   {hasPending  && <span className="dot dot--pending"  title="En attente" />}
-                  {hasConfirmed && <span className="dot dot--confirmed" title="Confirmé" />}
+                  {hasConfirmed && <span className="dot dot--confirmed" title="Confirme" />}
                 </span>
                 {(info.pending + info.confirmed) > 0 && (
                   <span className="planning-day__count">
@@ -489,10 +465,16 @@ export default function Dashboard({ pilot }) {
                   <div key={b.id} className="booking-card booking-card--pending"
                     onClick={() => setSelectedBooking(b)}
                     style={{ cursor: 'pointer' }}>
-                    <span className="booking-badge booking-badge--pending">En attente</span>
-                    <div className="booking-contact">{b.contact_name} — {b.contact_phone}</div>
+                    {b.source === 'colleague'
+                      ? <span className="booking-badge booking-badge--colleague">Collegue</span>
+                      : <span className="booking-badge booking-badge--pending">En attente</span>
+                    }
+                    <div className="booking-contact">{b.contact_name}{b.source !== 'colleague' && ` — ${b.contact_phone}`}</div>
                     <div className="booking-pax">
-                      {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''} — voir fiche →
+                      {b.source === 'colleague'
+                        ? 'Demande collegue →'
+                        : `${b.passengers?.length || 0} passager${(b.passengers?.length || 0) > 1 ? 's' : ''} — voir fiche →`
+                      }
                     </div>
                   </div>
                 ))}
@@ -501,7 +483,7 @@ export default function Dashboard({ pilot }) {
                   <div key={b.id} className="booking-card booking-card--confirmed"
                     onClick={() => setSelectedBooking(b)}
                     style={{ cursor: 'pointer' }}>
-                    <span className="booking-badge booking-badge--confirmed">✓ Confirmé</span>
+                    <span className="booking-badge booking-badge--confirmed">✓ Confirme</span>
                     <div className="booking-contact">{b.contact_name}</div>
                     <div className="booking-pax">
                       {b.passengers?.length || 0} passager{(b.passengers?.length || 0) > 1 ? 's' : ''}
@@ -519,7 +501,7 @@ export default function Dashboard({ pilot }) {
         <div className="modal-overlay" onClick={() => { setSelectedBooking(null); setEditMode(false) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editMode ? 'Modifier la réservation' : 'Fiche de réservation'}</h2>
+              <h2>{editMode ? 'Modifier la reservation' : 'Fiche de reservation'}</h2>
               <button className="btn-ghost" onClick={() => { setSelectedBooking(null); setEditMode(false) }}>✕</button>
             </div>
 
@@ -550,11 +532,11 @@ export default function Dashboard({ pilot }) {
                 </div>
                 {selectedBooking.notes && (
                   <div className="modal-notes">
-                    <div className="modal-notes-label">📝 Demande spéciale</div>
+                    <div className="modal-notes-label">📝 Demande speciale</div>
                     <div className="modal-notes-text">{selectedBooking.notes}</div>
                   </div>
                 )}
-                <div className="modal-ref">Réf. {selectedBooking.booking_ref || selectedBooking.id?.slice(0, 8).toUpperCase()}</div>
+                <div className="modal-ref">Ref. {selectedBooking.booking_ref || selectedBooking.id?.slice(0, 8).toUpperCase()}</div>
 
                 {/* Confirm / refuse for pending */}
                 {selectedBooking.status === 'pending' && (
@@ -566,27 +548,24 @@ export default function Dashboard({ pilot }) {
                   </div>
                 )}
 
-                {/* WhatsApp buttons after confirm or refuse */}
-                {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'refused') && (
+                {/* Status label after confirm or refuse */}
+                {selectedBooking.status === 'confirmed' && (
                   <div className="booking-whatsapp-actions">
-                    {selectedBooking.status === 'confirmed' && (
-                      <div className="booking-confirmed-label">✓ Vol confirmé</div>
-                    )}
-                    <a
-                      href={buildWhatsAppUrl(selectedBooking, selectedBooking.status === 'confirmed' ? 'confirmed' : 'refused')}
-                      target="_blank" rel="noreferrer"
-                      className="btn-whatsapp-send">
-                      📲 Envoyer la confirmation WhatsApp
-                    </a>
+                    <div className="booking-confirmed-label">✓ Vol confirme — SMS envoye au client</div>
+                  </div>
+                )}
+                {selectedBooking.status === 'refused' && (
+                  <div className="booking-whatsapp-actions">
+                    <div className="booking-confirmed-label" style={{ color: '#e53e3e' }}>✗ Vol refuse</div>
                   </div>
                 )}
 
                 {/* Edit / Cancel actions — visible for pending and confirmed */}
                 {(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') && (
                   <div className="booking-manage-actions">
-                    <button className="btn-edit" onClick={enterEditMode}>✏️ Modifier la réservation</button>
+                    <button className="btn-edit" onClick={enterEditMode}>✏️ Modifier la reservation</button>
                     <button className="btn-cancel-booking" onClick={() => handleCancel(selectedBooking.id)}>
-                      🗑 Annuler cette réservation
+                      🗑 Annuler cette reservation
                     </button>
                   </div>
                 )}
@@ -597,7 +576,7 @@ export default function Dashboard({ pilot }) {
             {editMode && editData && (
               <>
                 <div className="edit-section">
-                  <div className="edit-section-title">Date et créneau</div>
+                  <div className="edit-section-title">Date et creneau</div>
                   <label className="edit-label">Date</label>
                   <input className="edit-input" type="date" value={editData.slot_date} min={TODAY}
                     onChange={e => {
@@ -605,12 +584,12 @@ export default function Dashboard({ pilot }) {
                       setEditData(prev => ({ ...prev, slot_date: d, pilot_slot_id: '' }))
                       loadEditSlots(d)
                     }} />
-                  <label className="edit-label">Créneau</label>
+                  <label className="edit-label">Creneau</label>
                   {editSlots.length === 0
-                    ? <p style={{ fontSize: '0.85rem', color: '#888', margin: '4px 0' }}>Aucun créneau pour cette date.</p>
+                    ? <p style={{ fontSize: '0.85rem', color: '#888', margin: '4px 0' }}>Aucun creneau pour cette date.</p>
                     : <select className="edit-input" value={editData.pilot_slot_id}
                         onChange={e => setEditData(d => ({ ...d, pilot_slot_id: e.target.value }))}>
-                        <option value="">— Choisir un créneau —</option>
+                        <option value="">— Choisir un creneau —</option>
                         {editSlots.map(s => (
                           <option key={s.id} value={s.id}>
                             {s.slot_time.slice(0, 5)}{!s.is_available ? ' (indispo)' : ''}
@@ -624,7 +603,7 @@ export default function Dashboard({ pilot }) {
                   <label className="edit-label">Nom du contact</label>
                   <input className="edit-input" value={editData.contact_name}
                     onChange={e => setEditData(d => ({ ...d, contact_name: e.target.value }))} />
-                  <label className="edit-label">Téléphone</label>
+                  <label className="edit-label">Telephone</label>
                   <input className="edit-input" type="tel" value={editData.contact_phone}
                     onChange={e => setEditData(d => ({ ...d, contact_phone: e.target.value }))} />
                 </div>
@@ -640,7 +619,7 @@ export default function Dashboard({ pilot }) {
                       )}
                       <div className="field-row" style={{ display: 'flex', gap: '8px' }}>
                         <div style={{ flex: 1 }}>
-                          <label className="edit-label">Prénom</label>
+                          <label className="edit-label">Prenom</label>
                           <input className="edit-input" value={p.first_name}
                             onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, first_name: e.target.value } : px) }))} />
                         </div>
@@ -657,7 +636,7 @@ export default function Dashboard({ pilot }) {
                             onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, weight_kg: e.target.value } : px) }))} />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <label className="edit-label">Âge</label>
+                          <label className="edit-label">Age</label>
                           <input className="edit-input" type="number" min="6" max="99" value={p.age}
                             onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, age: e.target.value } : px) }))} />
                         </div>
@@ -666,7 +645,7 @@ export default function Dashboard({ pilot }) {
                         <label className="edit-label">Type de vol</label>
                         <select className="edit-input" value={p.flight_type}
                           onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, flight_type: e.target.value } : px) }))}>
-                          <option value="discovery">Découverte (90 €)</option>
+                          <option value="discovery">Decouverte (90 €)</option>
                           <option value="performance">Performance (110–120 €)</option>
                         </select>
                       </div>
