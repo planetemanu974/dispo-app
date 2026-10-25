@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
-import ColleaguePanel from './ColleaguePanel'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
