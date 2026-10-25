@@ -39,6 +39,41 @@ async function sendSMS(to, message) {
 // ── Day column labels
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 
+// ── Calendar grid constants (Google Calendar style)
+const HOUR_HEIGHT  = 80   // px per hour
+const GRID_START_H = 8    // axis starts at 08:00
+const GRID_END_H   = 15   // axis ends at 15:00
+const SLOT_DURATION_MIN = 75  // default slot duration in minutes
+
+// Grid hours array: [8, 9, 10, 11, 12, 13, 14, 15]
+const GRID_HOURS = Array.from(
+  { length: GRID_END_H - GRID_START_H + 1 },
+  (_, i) => GRID_START_H + i
+)
+
+// Convert "HH:MM:SS" → minutes from midnight
+function timeToMinutes(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number)
+  return h * 60 + m
+}
+
+// CSS top offset (px) for a given time string
+function slotTop(timeStr) {
+  const minutes = timeToMinutes(timeStr)
+  return ((minutes - GRID_START_H * 60) / 60) * HOUR_HEIGHT
+}
+
+// CSS height (px) for a duration in minutes
+function slotHeightPx(durationMin = SLOT_DURATION_MIN) {
+  return (durationMin / 60) * HOUR_HEIGHT
+}
+
+// Format end time string given start time + duration
+function slotEndTime(timeStr, durationMin = SLOT_DURATION_MIN) {
+  const total = timeToMinutes(timeStr) + durationMin
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 export default function Dashboard({ pilot }) {
   const [viewMode, setViewMode]               = useState('week')   // 'week' | 'day'
   const [weekStart, setWeekStart]             = useState(() => getWeekStart(TODAY))
@@ -520,81 +555,112 @@ export default function Dashboard({ pilot }) {
           </div>
 
           {weekLoading ? <p className="loading">Chargement...</p> : (
-            <div className="week-grid">
-              {weekDays.map((date, colIdx) => {
-                const { slots: daySlots, bookings: dayBookings } = weekData[date] || { slots: [], bookings: [] }
-                const isToday     = date === TODAY
-                const isSelected  = date === selectedDate
+            <div className="cal-container">
 
-                // Group bookings by slot
-                const bkBySlot = dayBookings.reduce((acc, b) => {
-                  acc[b.pilot_slot_id] = acc[b.pilot_slot_id] || []
-                  acc[b.pilot_slot_id].push(b)
-                  return acc
-                }, {})
-
-                const d   = new Date(date + 'T00:00:00')
-                const num = d.getDate()
-                const mon = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')
-
-                return (
-                  <div key={date} className={[
-                    'week-col',
-                    isToday    ? 'week-col--today'    : '',
-                    isSelected ? 'week-col--selected' : '',
-                  ].join(' ')}>
-
-                    {/* Day header */}
-                    <div className="week-col-header"
+              {/* ── Day header row ── */}
+              <div className="cal-header-row" style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#f7fafc' }}>
+                <div className="cal-gutter" style={{ width:40, flexShrink:0, borderRight:'1px solid #e2e8f0' }} />
+                {weekDays.map((date, colIdx) => {
+                  const d   = new Date(date + 'T00:00:00')
+                  const num = d.getDate()
+                  const isToday = date === TODAY
+                  return (
+                    <div key={date}
+                      className={`cal-day-header ${isToday ? 'cal-day-header--today' : ''}`}
+                      style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #e2e8f0', cursor:'pointer', background: isToday ? '#ebf8ff' : undefined }}
                       onClick={() => { setSelectedDate(date); setViewMode('day'); loadDay(date) }}>
-                      <span className="week-col-day">{DAY_LABELS[colIdx]}</span>
-                      <span className="week-col-num">{num}</span>
-                      <span className="week-col-mon">{mon}</span>
+                      <span className="cal-day-name" style={{ fontSize:'0.55rem', fontWeight:700, textTransform:'uppercase', color:'#718096' }}>{DAY_LABELS[colIdx]}</span>
+                      <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`} style={{ fontSize:'0.9rem', fontWeight:700, width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', background: isToday ? '#3182ce' : undefined, color: isToday ? 'white' : '#2d3748' }}>{num}</span>
                     </div>
+                  )
+                })}
+              </div>
 
-                    {/* Slots */}
-                    <div className="week-col-slots">
+              {/* ── Grid body (scrollable) ── */}
+              <div className="cal-body" style={{ display:'flex', overflowY:'auto', maxHeight:'58vh' }}>
+
+                {/* Time axis */}
+                <div className="cal-time-axis" style={{ width:40, flexShrink:0, borderRight:'1px solid #e2e8f0' }}>
+                  {GRID_HOURS.map(h => (
+                    <div key={h} className="cal-hour-label"
+                      style={{ height: HOUR_HEIGHT, lineHeight: `${HOUR_HEIGHT}px` }}>
+                      {`${String(h).padStart(2, '0')}:00`}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day columns */}
+                {weekDays.map((date) => {
+                  const { slots: daySlots = [], bookings: dayBookings = [] } = weekData[date] || {}
+                  const bkBySlot = dayBookings.reduce((acc, b) => {
+                    acc[b.pilot_slot_id] = acc[b.pilot_slot_id] || []
+                    acc[b.pilot_slot_id].push(b)
+                    return acc
+                  }, {})
+                  const isToday = date === TODAY
+
+                  return (
+                    <div key={date}
+                      className={`cal-day-col ${isToday ? 'cal-day-col--today' : ''}`}
+                      style={{ flex:1, position:'relative', borderRight:'1px solid #e2e8f0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#fafeff' : undefined }}>
+
+                      {/* Hour grid lines */}
+                      {GRID_HOURS.map((h, i) => (
+                        <div key={h} className="cal-hour-line"
+                          style={{ top: i * HOUR_HEIGHT }} />
+                      ))}
+
+                      {/* Half-hour lines */}
+                      {GRID_HOURS.slice(0, -1).map((h, i) => (
+                        <div key={`half-${h}`} className="cal-half-line"
+                          style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
+                      ))}
+
+                      {/* Slot blocks */}
                       {daySlots.map(slot => {
-                        const bks    = bkBySlot[slot.id] || []
-                        const status = slotWeekStatus(slot, bks)
+                        // Skip slots outside the visible grid range
+                        const slotMin = timeToMinutes(slot.slot_time)
+                        if (slotMin < GRID_START_H * 60 || slotMin >= GRID_END_H * 60) return null
+
+                        const bks         = bkBySlot[slot.id] || []
+                        const status      = slotWeekStatus(slot, bks)
                         const { name, pax } = slotWeekLabel(slot, bks)
                         const firstActive = bks.find(b => b.status === 'pending' || b.status === 'confirmed')
+                        const top         = slotTop(slot.slot_time)
+                        const height      = slotHeightPx() - 3
+                        const endTime     = slotEndTime(slot.slot_time)
 
                         return (
-                          <div
-                            key={slot.id}
-                            className={`week-slot ${status}`}
+                          <div key={slot.id}
+                            className={`cal-block ${status}`}
+                            style={{ top, height }}
                             onClick={() => {
                               if (firstActive) {
                                 setSelectedBooking(firstActive)
                               } else {
-                                // Click on free slot → open day view for that date
                                 setSelectedDate(date)
                                 setViewMode('day')
                                 loadDay(date)
                               }
                             }}>
-                            <span className="week-slot-time">{slot.slot_time.slice(0, 5)}</span>
-                            <span className="week-slot-name">{name}</span>
+                            <span className="cal-block-time">
+                              {slot.slot_time.slice(0, 5)} – {endTime}
+                            </span>
+                            <span className="cal-block-name">{name}</span>
                             {pax !== null && (
-                              <span className="week-slot-pax">
-                                {pax} pax
-                              </span>
+                              <span className="cal-block-pax">{pax} pax</span>
                             )}
                           </div>
                         )
                       })}
-                      {daySlots.length === 0 && (
-                        <div className="week-slot week-slot--empty">—</div>
-                      )}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           )}
 
-          {/* Week legend */}
+          {/* Calendar legend */}
           <div className="week-legend">
             <span className="legend-item"><span className="legend-dot legend-dot--free" />Libre</span>
             <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
