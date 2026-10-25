@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
+import ColleaguePanel from './ColleaguePanel'
+import ColleaguePanel from './ColleaguePanel'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -564,7 +566,10 @@ export default function Dashboard({ pilot }) {
           <span className="logo">🪂</span>
           <span>{pilot.name}</span>
         </div>
-        <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Deconnexion</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <ColleaguePanel pilot={pilot} />
+          <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Deconnexion</button>
+        </div>
       </header>
 
       {/* ── Pending alert ── */}
