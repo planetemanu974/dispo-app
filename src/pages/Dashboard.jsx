@@ -736,7 +736,7 @@ export default function Dashboard({ pilot }) {
                 })}
               </div>
             </div>
-            </div>{/* end horizontal scroll wrapper */}
+            </div>
           )}
 
           {/* Calendar legend */}
