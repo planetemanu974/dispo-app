@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Booking from './pages/Booking'
-import ManuDispo from './pages/ManuDispo'
+import Login         from './pages/Login'
+import Dashboard     from './pages/Dashboard'
+import Booking       from './pages/Booking'
+import ManuDispo     from './pages/ManuDispo'
+import ColleagueJoin  from './pages/ColleagueJoin'
+import ColleagueDispo from './pages/ColleagueDispo'
 import './App.css'
+
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [pilot, setPilot]     = useState(null)
@@ -36,6 +39,8 @@ export default function App() {
       <Routes>
         <Route path="/reservation" element={<Booking />} />
         <Route path="/manu-dispo"  element={<ManuDispo />} />
+        <Route path="/join"        element={<ColleagueJoin />} />
+        <Route path="/dispo"       element={<ColleagueDispo />} />
         <Route path="/" element={session && pilot ? <Dashboard pilot={pilot} /> : <Login />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
