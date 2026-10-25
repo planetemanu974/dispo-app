@@ -51,6 +51,11 @@ export default function Booking() {
   const [submitting, setSubmitting]       = useState(false)
   const [bookingRef, setBookingRef]       = useState(null)
 
+  // OTP verification state
+  const [otpStep, setOtpStep]   = useState(null)   // null | 'sending' | 'waiting' | 'verifying' | 'error'
+  const [otpCode, setOtpCode]   = useState('')
+  const [otpError, setOtpError] = useState('')
+
   useEffect(() => { if (selectedDate) loadSlots(selectedDate) }, [selectedDate])
 
 async function loadSlots(date) {
@@ -203,6 +208,55 @@ if (hasLightChild) {
   function chooseSplit() {
     setConflictMode('split_message')
     setSelectedSlot(null)
+  }
+
+  // ── OTP: send code to client phone ─────────────────────────────────────────
+  async function requestOtp() {
+    if (!contact.phone) {
+      setErrors(prev => ({ ...prev, submit: 'Numéro de téléphone requis pour vérifier votre identité.' }))
+      return
+    }
+    setOtpStep('sending')
+    setOtpError('')
+    setOtpCode('')
+
+    try {
+      const { error } = await supabase.functions.invoke('send-otp', {
+        body: { phone: contact.phone },
+      })
+      if (error) {
+        setOtpStep('error')
+        setOtpError('Impossible d\'envoyer le SMS. Vérifiez votre numéro.')
+        return
+      }
+      setOtpStep('waiting')
+    } catch (err) {
+      setOtpStep('error')
+      setOtpError('Erreur réseau. Réessayez.')
+    }
+  }
+
+  // ── OTP: verify code then submit ────────────────────────────────────────────
+  async function verifyOtpAndSubmit() {
+    if (otpCode.length !== 4) { setOtpError('Entrez les 4 chiffres reçus par SMS.'); return }
+    setOtpStep('verifying')
+    setOtpError('')
+
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
+        body: { phone: contact.phone, code: otpCode },
+      })
+      if (error || !data?.valid) {
+        setOtpStep('waiting')
+        setOtpError('Code incorrect ou expiré. Réessayez ou demandez un nouveau code.')
+        return
+      }
+      // Code is valid → proceed to actual booking
+      await submitBooking()
+    } catch (err) {
+      setOtpStep('waiting')
+      setOtpError('Erreur réseau. Réessayez.')
+    }
   }
 
   async function submitBooking() {
@@ -490,19 +544,63 @@ if (hasLightChild) {
 
               {errors.submit && <p className="error-msg">{errors.submit}</p>}
 
-              {selectedSlot && (
-                <button className="btn-primary" onClick={submitBooking} disabled={submitting}>
-                  {submitting ? 'Envoi...' : 'Confirmer la demande'}
+              {selectedSlot && !otpStep && (
+                <button className="btn-primary" onClick={requestOtp}>
+                  Valider ma réservation →
                 </button>
               )}
-            </>
-          )}
 
-          {/* ── Après choix option 1 : confirmer ── */}
-          {!conflictMode && selectedSlot && slotInfo && (
-            <button className="btn-primary" onClick={submitBooking} disabled={submitting}>
-              {submitting ? 'Envoi...' : 'Confirmer la demande'}
-            </button>
+              {/* ── OTP verification block ── */}
+              {selectedSlot && otpStep && (
+                <div className="otp-block">
+                  {otpStep === 'sending' && (
+                    <p className="info-msg">📲 Envoi du code par SMS…</p>
+                  )}
+
+                  {(otpStep === 'waiting' || otpStep === 'verifying') && (
+                    <>
+                      <p className="info-msg">
+                        📲 Un code à 4 chiffres a été envoyé au <strong>{contact.phone}</strong>.
+                      </p>
+                      <div className="otp-input-row">
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          maxLength={4}
+                          placeholder="_ _ _ _"
+                          value={otpCode}
+                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          className="otp-input"
+                          autoFocus
+                        />
+                        <button
+                          className="btn-primary"
+                          onClick={verifyOtpAndSubmit}
+                          disabled={otpStep === 'verifying' || otpCode.length !== 4}
+                        >
+                          {otpStep === 'verifying' ? 'Vérification…' : 'Confirmer'}
+                        </button>
+                      </div>
+                      {otpError && <p className="error-msg">{otpError}</p>}
+                      <button
+                        className="btn-ghost-small"
+                        onClick={requestOtp}
+                        disabled={otpStep === 'sending' || otpStep === 'verifying'}
+                      >
+                        Renvoyer le code
+                      </button>
+                    </>
+                  )}
+
+                  {otpStep === 'error' && (
+                    <>
+                      <p className="error-msg">{otpError}</p>
+                      <button className="btn-secondary" onClick={requestOtp}>Réessayer</button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
