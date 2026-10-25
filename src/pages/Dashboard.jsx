@@ -683,18 +683,21 @@ export default function Dashboard({ pilot }) {
                         const slotMin = timeToMinutes(slot.slot_time)
                         if (slotMin < GRID_START_H * 60 || slotMin >= GRID_END_H * 60) return null
 
-                        const bks         = bkBySlot[slot.id] || []
-                        const status      = slotWeekStatus(slot, bks)
+                        const bks           = bkBySlot[slot.id] || []
+                        const status        = slotWeekStatus(slot, bks)
                         const { name, pax } = slotWeekLabel(slot, bks)
-                        const firstActive = bks.find(b => b.status === 'pending' || b.status === 'confirmed')
-                        const top         = slotTop(slot.slot_time)
-                        const height      = slotHeightPx() - 3
-                        const endTime     = slotEndTime(slot.slot_time)
+                        const firstActive   = bks.find(b => b.status === 'pending' || b.status === 'confirmed')
+                        const activeBks     = bks.filter(b => b.status === 'pending' || b.status === 'confirmed')
+                        const totalPaxW     = activeBks.reduce((n, b) => n + (b.passengers?.length || 0), 0)
+                        const remainingW    = (slot.capacity || 4) - totalPaxW
+                        const top           = slotTop(slot.slot_time)
+                        const height        = slotHeightPx() - 3
+                        const endTime       = slotEndTime(slot.slot_time)
 
                         return (
                           <div key={slot.id}
                             className={`cal-block ${status}`}
-                            style={{ top, height }}
+                            style={{ top, height, display:'flex', flexDirection:'column', overflow:'hidden' }}
                             onClick={() => {
                               if (firstActive) {
                                 setSelectedBooking(firstActive)
@@ -708,6 +711,15 @@ export default function Dashboard({ pilot }) {
                             <span className="cal-block-name">{name}</span>
                             {pax !== null && (
                               <span className="cal-block-pax">{pax} pax</span>
+                            )}
+                            {/* "+" button when there's capacity remaining */}
+                            {firstActive && remainingW > 0 && slot.is_available && (
+                              <button
+                                style={{ marginTop:'auto', alignSelf:'flex-end', background:'rgba(49,130,206,0.15)', color:'#2b6cb0', border:'none', borderRadius:4, fontSize:'0.75rem', fontWeight:800, padding:'1px 5px', cursor:'pointer', lineHeight:1.4 }}
+                                onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
+                                title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
+                                +{remainingW}
+                              </button>
                             )}
                           </div>
                         )
@@ -814,6 +826,11 @@ export default function Dashboard({ pilot }) {
                     const confirmedBks = slotBookings.filter(b => b.status === 'confirmed')
                     const firstActive  = [...pendingBks, ...confirmedBks][0]
 
+                    // Remaining capacity: slot.capacity minus all active passengers
+                    const activeBks    = [...pendingBks, ...confirmedBks]
+                    const totalPax     = activeBks.reduce((n, b) => n + (b.passengers?.length || 0), 0)
+                    const remaining    = (slot.capacity || 4) - totalPax
+
                     const top    = slotTop(slot.slot_time)
                     const height = slotHeightPx() - 3
                     const endT   = slotEndTime(slot.slot_time)
@@ -851,13 +868,23 @@ export default function Dashboard({ pilot }) {
                               <span style={{ fontSize:'0.72rem', fontWeight:600, opacity:0.8 }}>
                                 {activeBooking.source === 'colleague'
                                   ? 'Demande collègue'
-                                  : `${activeBooking.passengers?.length || 0} pax · ${label}`}
+                                  : `${totalPax} pax · ${remaining} place${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`}
                               </span>
                             </>
                           ) : (
                             <span style={{ fontSize:'0.78rem', fontWeight:600 }}>{label}</span>
                           )}
                         </div>
+
+                        {/* Add booking button when slot has bookings but capacity remains */}
+                        {activeBooking && remaining > 0 && slot.is_available && (
+                          <button
+                            style={{ alignSelf:'stretch', padding:'0 10px', background:'#3182ce', color:'white', border:'none', fontSize:'1rem', fontWeight:800, cursor:'pointer', borderLeft:'1px solid rgba(255,255,255,0.3)' }}
+                            onClick={e => { e.stopPropagation(); openNewBooking(slot, selectedDate) }}
+                            title={`Ajouter une réservation (${remaining} place${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''})`}>
+                            +
+                          </button>
+                        )}
 
                         {/* DISPO toggle on the right (only for non-booked slots) */}
                         {!activeBooking && (
