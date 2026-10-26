@@ -39,7 +39,7 @@ async function sendSMS(to, message) {
 
 // ── Day column labels
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-const WEEK_DAYS_COUNT = 5  // show 5 days at a time for readability on mobile
+const WEEK_DAYS_COUNT = 7  // show full week Mon–Sun
 
 // ── Calendar grid constants (Google Calendar style)
 const HOUR_HEIGHT  = 56   // px per hour
