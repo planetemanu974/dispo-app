@@ -218,7 +218,7 @@ export default function Dashboard({ pilot }) {
       .from('pilot_slots').select('*')
       .eq('pilot_id', pilot.id)
       .gte('slot_date', days[0])
-      .lte('slot_date', days[6])
+      .lte('slot_date', days[days.length - 1])
       .order('slot_time')
 
     const slotIds = (slotsData || []).map(s => s.id)
@@ -548,8 +548,9 @@ export default function Dashboard({ pilot }) {
   }
 
   function changeWeek(delta) {
+    // Always jump by 7 days to stay Monday-anchored
     const d = new Date(weekStart + 'T00:00:00')
-    d.setDate(d.getDate() + delta * WEEK_DAYS_COUNT)
+    d.setDate(d.getDate() + delta * 7)
     setWeekStart(d.toISOString().split('T')[0])
   }
 
