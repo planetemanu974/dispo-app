@@ -163,7 +163,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, active, invite_used, created_at')
+      .select('id, name, address, siret, phone, email, active, invite_used, created_at')
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -237,6 +237,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
         address: detailColleague.address || null,
         siret:   detailColleague.siret   || null,
         phone:   detailColleague.phone   || null,
+        email:   detailColleague.email   || null,
       })
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
@@ -296,6 +297,10 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   async function handleGenerateInvoice(e) {
     e.preventDefault()
     if (!invoiceAmount || Number(invoiceAmount) <= 0) { setInvoiceError('Veuillez saisir un montant valide.'); return }
+
+    // Detect which button was clicked: "save" (download) or "send" (email)
+    const action = e.nativeEvent?.submitter?.value || 'save'
+
     setInvoiceSaving(true); setInvoiceError(null)
 
     // Recalculer le numéro (date peut avoir changé)
@@ -323,7 +328,32 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     const JsPDF = await loadJsPDF()
     const doc = generateInvoicePDF({ JsPDF, invoiceNumber: finalN, invoiceDate, amount: invoiceAmount, designation: invoiceDesig, colleague: invoiceColleague })
     const safe = (invoiceColleague.name || 'collegue').toLowerCase().replace(/[^a-z0-9]/g, '_')
-    doc.save(`facture_${prefix}_${seq}_${safe}.pdf`)
+    const filename = `facture_${prefix}_${seq}_${safe}.pdf`
+
+    if (action === 'send' && invoiceColleague.email) {
+      // Generate PDF as blob, try Web Share API first (mobile), fallback to mailto
+      const pdfBlob = doc.output('blob')
+      const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' })
+      const subject = encodeURIComponent(`Facture ${finalN}`)
+      const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${finalN}.\n\nCordialement`)
+
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        // Mobile: Web Share API with file attachment
+        try {
+          await navigator.share({ files: [pdfFile], title: `Facture ${finalN}`, text: 'Facture parapente' })
+        } catch (shareErr) {
+          // User cancelled share or share failed — fallback to download
+          if (shareErr.name !== 'AbortError') doc.save(filename)
+        }
+      } else {
+        // Desktop: open mailto with PDF downloaded first so user can attach manually
+        doc.save(filename)
+        window.location.href = `mailto:${invoiceColleague.email}?subject=${subject}&body=${body}`
+      }
+    } else {
+      // Default: download PDF
+      doc.save(filename)
+    }
 
     setInvoiceColleague(null)
     setInvoiceSaving(false)
@@ -514,6 +544,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
             <label style={{ ...s.label, marginTop: 12 }}>Téléphone</label>
             <input type="tel" value={detailColleague.phone || ''} onChange={e => setDetailColleague(p => ({ ...p, phone: e.target.value }))} style={s.input} placeholder="Ex : 0692 …" />
 
+            <label style={{ ...s.label, marginTop: 12 }}>Email</label>
+            <input type="email" value={detailColleague.email || ''} onChange={e => setDetailColleague(p => ({ ...p, email: e.target.value }))} style={s.input} placeholder="Ex : contact@974parapente.re" />
+
             {detailError && <p style={{ ...s.error, marginTop: 8 }}>{detailError}</p>}
 
             <button type="submit" disabled={detailSaving} style={{ ...s.btnGreen, width: '100%', marginTop: 16 }}>
@@ -617,9 +650,14 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
 
             {invoiceError && <p style={{ ...s.error, marginTop: 8 }}>{invoiceError}</p>}
 
+            {invoiceError && <p style={{ ...s.error, marginTop: 8 }}>{invoiceError}</p>}
+
             <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
               <button type="button" onClick={() => setInvoiceColleague(null)} style={s.btnGrey}>Annuler</button>
-              <button type="submit" disabled={invoiceSaving} style={s.btnGreen}>{invoiceSaving ? 'Génération…' : '⬇️ Générer PDF'}</button>
+              <button type="submit" name="action" value="save" disabled={invoiceSaving} style={s.btnGreen}>{invoiceSaving ? 'Génération…' : '📥 Enregistrer'}</button>
+              {invoiceColleague?.email && (
+                <button type="submit" name="action" value="send" disabled={invoiceSaving} style={{ ...s.btnGreen, background: '#0369a1', flex: 1 }}>📧 Envoyer</button>
+              )}
             </div>
           </form>
         </ModalOverlay>
