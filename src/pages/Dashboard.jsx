@@ -577,7 +577,7 @@ export default function Dashboard({ pilot }) {
   // Label shown inside a week slot block
   function slotWeekLabel(slot, bookingsForSlot) {
     const active = bookingsForSlot.filter(b => b.status === 'pending' || b.status === 'confirmed')
-    if (active.length === 0) return { name: 'Libre', pax: null }
+    if (active.length === 0) return { name: null, pax: null }
     // Show first booking's client name + total pax
     const first    = active[0]
     const totalPax = active.reduce((n, b) => n + (b.passengers?.length || 0), 0)
@@ -604,84 +604,72 @@ export default function Dashboard({ pilot }) {
   return (
     <div className="dashboard">
 
-      {/* ── Side menu drawer overlay ── */}
+      {/* ── Side menu overlay ── */}
       {menuOpen && (
-        <div
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200 }}
-          onClick={() => setMenuOpen(false)}
-        />
+        <div onClick={() => setMenuOpen(false)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:200 }} />
       )}
 
       {/* ── Side menu drawer ── */}
       <div style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0, width: 270,
-        background: '#1e293b', color: 'white', zIndex: 201,
+        position:'fixed', top:0, left:0, bottom:0, width:260,
+        background:'#1e293b', color:'white', zIndex:201,
         transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.25s ease', display: 'flex', flexDirection: 'column',
-        padding: '0 0 32px', boxShadow: menuOpen ? '4px 0 24px rgba(0,0,0,0.4)' : 'none',
+        transition:'transform 0.25s ease',
+        display:'flex', flexDirection:'column',
+        boxShadow: menuOpen ? '6px 0 32px rgba(0,0,0,0.5)' : 'none',
       }}>
-        {/* Drawer header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 16px 12px', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
-          <DpdLogo size={36} color="white" />
-          <span style={{ flex:1, marginLeft:12, fontSize:'1.1rem', fontWeight:700, letterSpacing:'0.02em' }}>DISPO / PAS DISPO</span>
-          <button onClick={() => setMenuOpen(false)} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.6)', fontSize:22, cursor:'pointer', lineHeight:1 }}>✕</button>
+        {/* Logo + fermer */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'14px 16px 12px', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
+          <img src="/logo.png" alt="Logo" style={{ height:32, filter:'invert(1)' }} />
+          <span style={{ flex:1, fontSize:'0.95rem', fontWeight:700, letterSpacing:'0.03em', color:'#e2e8f0' }}>DISPO / PAS DISPO</span>
+          <button onClick={() => setMenuOpen(false)} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:20, cursor:'pointer' }}>✕</button>
         </div>
-
-        {/* Pilot name */}
-        <div style={{ padding:'12px 16px', fontSize:'0.85rem', color:'rgba(255,255,255,0.5)', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ padding:'8px 16px 10px', fontSize:'0.8rem', color:'#64748b', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
           🪂 {pilot.name}
         </div>
 
-        {/* Menu items */}
-        <nav style={{ flex:1, padding:'8px 0' }}>
-          <MenuLink icon="📅" label="Planning" onClick={() => setMenuOpen(false)} />
-          <MenuLink icon="👥" label="Collègues" onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
-          <div style={{ margin:'8px 16px', height:1, background:'rgba(255,255,255,0.08)' }} />
-          <MenuLink icon="🧾" label="Factures" onClick={() => setMenuOpen(false)} disabled />
-          <MenuLink icon="📊" label="Comptabilité" onClick={() => setMenuOpen(false)} disabled />
-          <MenuLink icon="☁️" label="Météo" onClick={() => setMenuOpen(false)} disabled />
+        <nav style={{ flex:1, paddingTop:6 }}>
+          <MenuLink icon="📅" label="Planning"      onClick={() => setMenuOpen(false)} />
+          <MenuLink icon="👥" label="Collègues"     onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
+          <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
+          <MenuLink icon="🧾" label="Factures"      disabled />
+          <MenuLink icon="📊" label="Comptabilité"  disabled />
+          <MenuLink icon="☁️" label="Météo"         disabled />
         </nav>
 
-        {/* Deconnexion */}
-        <div style={{ padding:'0 16px' }}>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            style={{ width:'100%', padding:'10px', background:'rgba(239,68,68,0.15)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, color:'#fca5a5', fontSize:'0.9rem', cursor:'pointer', fontWeight:600 }}>
+        <div style={{ padding:'0 16px 16px' }}>
+          <button onClick={() => supabase.auth.signOut()}
+            style={{ width:'100%', padding:'10px', background:'rgba(239,68,68,0.15)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, color:'#fca5a5', fontSize:'0.88rem', cursor:'pointer', fontWeight:600 }}>
             Déconnexion
           </button>
         </div>
       </div>
 
-      {/* ── Top header ── */}
-      <header className="dash-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #e2e8f0', background:'white', position:'sticky', top:0, zIndex:10 }}>
-        {/* Logo button */}
-        <button
-          onClick={() => setMenuOpen(true)}
-          style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', alignItems:'center', gap:8 }}>
-          <DpdLogo size={32} color="#1e293b" />
+      {/* ── Header ── logo (= menu) à gauche, toggle vue au centre */}
+      <header style={{ display:'flex', alignItems:'center', padding:'6px 12px', borderBottom:'1px solid #e2e8f0', background:'white', position:'sticky', top:0, zIndex:10, gap:10 }}>
+        {/* Bouton logo → ouvre le menu */}
+        <button onClick={() => setMenuOpen(true)}
+          style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0 }}>
+          <img src="/logo.png" alt="Menu" style={{ height:36, display:'block' }} />
         </button>
 
-        {/* View toggle in header */}
-        <div style={{ display:'flex', gap:6 }}>
-          <button
-            className={`view-toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
-            style={{ padding:'6px 14px', fontSize:'0.82rem' }}
+        {/* Toggle Semaine / Jour — prend l'espace restant */}
+        <div style={{ display:'flex', gap:6, flex:1, justifyContent:'center' }}>
+          <button className={`view-toggle-btn ${viewMode==='week'?'active':''}`}
+            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem' }}
             onClick={() => setViewMode('week')}>
             📅 Semaine
           </button>
-          <button
-            className={`view-toggle-btn ${viewMode === 'day' ? 'active' : ''}`}
-            style={{ padding:'6px 14px', fontSize:'0.82rem' }}
+          <button className={`view-toggle-btn ${viewMode==='day'?'active':''}`}
+            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem' }}
             onClick={() => { setViewMode('day'); loadDay(selectedDate); loadPlanning(selectedDate) }}>
             📋 Jour
           </button>
         </div>
-
-        {/* Empty right side for balance */}
-        <div style={{ width:40 }} />
       </header>
 
-      {/* ColleaguePanel — invisible until triggered from menu */}
+      {/* ColleaguePanel — déclenché uniquement depuis le menu */}
       <ColleaguePanel
         pilot={pilot}
         forceOpen={colleaguePanelOpen}
@@ -838,7 +826,7 @@ export default function Dashboard({ pilot }) {
                             <span style={{ fontSize:'0.55rem', fontWeight:700, padding:'2px 4px 0', opacity:0.85 }}>
                               {slot.slot_time.slice(0, 5)}
                             </span>
-                            <span style={{ fontSize:'0.65rem', fontWeight:800, padding:'0 4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
+                            {name && <span style={{ fontSize:'0.65rem', fontWeight:800, padding:'0 4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>}
                             {pax !== null && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85 }}>{pax} pax</span>
                             )}

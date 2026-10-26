@@ -147,8 +147,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   // ── Rendu ─────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Bouton flottant dans le header (masqué si déclenché depuis le menu) */}
-      {!forceOpen && (
+      {/* ── Bouton flottant dans le header (masqué si le panneau est contrôlé depuis le menu) */}
+      {forceOpen === undefined && (
       <button
         onClick={() => setOpen(true)}
         style={{
