@@ -286,9 +286,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
         const subject = encodeURIComponent(`Facture ${inv.invoice_number}`)
         const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${inv.invoice_number}.\n\nCordialement`)
         doc.save(filename)
-        // Open Gmail compose with pre-filled fields; user attaches the downloaded PDF manually
+        // Use anchor click instead of window.open to bypass async popup blocker
         const gmailUrl = `https://mail.google.com/mail/?view=cm${email ? `&to=${encodeURIComponent(email)}` : ''}&su=${subject}&body=${body}`
-        window.open(gmailUrl, '_blank')
+        const a = document.createElement('a'); a.href = gmailUrl; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); document.body.removeChild(a)
       }
     } else {
       doc.save(filename)
@@ -358,7 +358,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       doc.save(filename)
       if (emailTo) {
         const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${body}`
-        window.open(gmailUrl, '_blank')
+        const a = document.createElement('a'); a.href = gmailUrl; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); document.body.removeChild(a)
       } else {
         setInvoiceError('Aucun email enregistré pour ce collègue. PDF téléchargé — ajoutez son email dans sa fiche.')
         setInvoiceSaving(false)
