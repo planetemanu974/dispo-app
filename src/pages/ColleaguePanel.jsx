@@ -357,7 +357,10 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${finalN}.\n\nCordialement`)
       const emailTo = invoiceColleague.email || ''
 
-      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      // Restrict Web Share to mobile devices — Windows 11 also supports canShare
+      // but doesn't show Gmail, so desktop goes straight to the Gmail compose flow
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      if (isMobileDevice && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
         // Mobile: Web Share API with file attachment (no email needed)
         try {
           await navigator.share({ files: [pdfFile], title: `Facture ${finalN}`, text: 'Facture parapente' })
