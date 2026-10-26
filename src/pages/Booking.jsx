@@ -380,13 +380,11 @@ if (hasLightChild) {
                 </div>
 
                 <div className="field-row">
-                  <div className="field"><label>Prénom</label>
+                  <div className="field"><label>Prénom (optionnel)</label>
                     <input value={p.first_name} onChange={e => updatePassenger(i, 'first_name', e.target.value)} />
-                    {errors[`${i}_first_name`] && <span className="error-msg">{errors[`${i}_first_name`]}</span>}
                   </div>
-                  <div className="field"><label>Nom</label>
+                  <div className="field"><label>Nom (optionnel)</label>
                     <input value={p.last_name} onChange={e => updatePassenger(i, 'last_name', e.target.value)} />
-                    {errors[`${i}_last_name`] && <span className="error-msg">{errors[`${i}_last_name`]}</span>}
                   </div>
                 </div>
 
