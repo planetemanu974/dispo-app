@@ -261,7 +261,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   }
 
   // ── Re-télécharger une facture existante ─────────────────────────────────
-  async function redownloadInvoice(inv) {
+  async function redownloadInvoice(inv, action = 'save') {
     const JsPDF = await loadJsPDF()
     const doc = generateInvoicePDF({
       JsPDF,
@@ -272,8 +272,25 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       colleague:     detailColleague,
     })
     const [prefix, seq] = inv.invoice_number.split('/')
-    const safe = (detailColleague.name || 'collegue').toLowerCase().replace(/[^a-z0-9]/g, '_')
-    doc.save(`facture_${prefix}_${seq || '1'}_${safe}.pdf`)
+    const safe     = (detailColleague.name || 'collegue').toLowerCase().replace(/[^a-z0-9]/g, '_')
+    const filename = `facture_${prefix}_${seq || '1'}_${safe}.pdf`
+
+    if (action === 'send') {
+      const pdfBlob = doc.output('blob')
+      const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' })
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try { await navigator.share({ files: [pdfFile], title: `Facture ${inv.invoice_number}` }) }
+        catch (err) { if (err.name !== 'AbortError') doc.save(filename) }
+      } else {
+        const email   = detailColleague.email || ''
+        const subject = encodeURIComponent(`Facture ${inv.invoice_number}`)
+        const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${inv.invoice_number}.\n\nCordialement`)
+        doc.save(filename)
+        if (email) window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
+      }
+    } else {
+      doc.save(filename)
+    }
   }
 
   // ── Facture ───────────────────────────────────────────────────────────────
@@ -593,7 +610,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                           <span style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{Number(inv.amount_eur).toFixed(2)} €</span>
-                          <button onClick={() => redownloadInvoice(inv)} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📥 PDF</button>
+                          <button onClick={() => redownloadInvoice(inv, 'save')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📥 PDF</button>
+                          <button onClick={() => redownloadInvoice(inv, 'send')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#7dd3fc', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
                         </div>
                       </div>
                     ))
