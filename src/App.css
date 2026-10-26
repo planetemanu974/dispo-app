@@ -302,9 +302,10 @@
 
 /* ── Calendar Grid (style Google Agenda) ──────────────────── */
 .cal-container {
-  margin: 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  margin: 0;                        /* ← plein écran sur mobile */
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0;
   overflow: hidden;
   background: white;
 }
