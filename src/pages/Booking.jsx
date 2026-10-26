@@ -154,8 +154,9 @@ async function loadSlots(date) {
       const age    = parseInt(p.age, 10)
       const weight = parseInt(p.weight_kg, 10)
 
-      // Weight required for everyone; adults use dropdown (value = 60 or 80)
-      if (!p.weight_kg || p.weight_kg === '') { newErrors[`${i}_weight`] = 'Veuillez indiquer le poids'; valid = false }
+      // Weight required for marmaille and discovery adults; not needed for performance
+      const needsWeight = p.is_marmaille || p.flight_type !== 'performance'
+      if (needsWeight && (!p.weight_kg || p.weight_kg === '')) { newErrors[`${i}_weight`] = 'Veuillez indiquer le poids'; valid = false }
 
       // Age required only for marmaille
       if (p.is_marmaille && (!age || age < 0)) { newErrors[`${i}_age`] = 'Âge requis'; valid = false }
@@ -687,8 +688,11 @@ if (hasLightChild) {
                       {errors[`${i}_age`] && <span className="error-msg">{errors[`${i}_age`]}</span>}
                     </div>
                   </div>
+                ) : p.flight_type === 'performance' ? (
+                  /* Performance — weight irrelevant (no 8h slot, no light-passenger rule) */
+                  null
                 ) : (
-                  /* Adult — simple weight category, no age needed */
+                  /* Discovery adult — weight category needed for slot suggestion */
                   <div className="field">
                     <label>Poids</label>
                     <select value={p.weight_kg}
