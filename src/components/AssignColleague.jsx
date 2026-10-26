@@ -15,14 +15,19 @@ function toE164(raw) {
   return '+262' + digits
 }
 
-// Open the native SMS app with a pre-filled message (no Twilio — sends from pilot's own number)
+// Detect mobile device (sms: URI only works on mobile)
+function isMobileDevice() {
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)
+}
+
+// Open the native SMS app (mobile) or return false (desktop — show fallback)
 function openSMSApp(phone, message) {
   const e164 = toE164(phone)
   const encoded = encodeURIComponent(message)
-  // sms: URI — works on iOS and Android in a PWA/mobile browser
   const link = document.createElement('a')
   link.href = `sms:${e164}?body=${encoded}`
   link.click()
+  return isMobileDevice()
 }
 
 // ── AssignColleague ───────────────────────────────────────────────────────────
@@ -32,6 +37,7 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
   const [loading,      setLoading]      = useState(true)
   const [sending,      setSending]      = useState(null) // id of colleague being assigned
   const [freshSmsName, setFreshSmsName] = useState('') // always up-to-date sms_name from DB
+  const [desktopSms,   setDesktopSms]   = useState(null) // { phone, message } shown as fallback on desktop
 
   useEffect(() => {
     loadData()
@@ -102,7 +108,11 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
       `Reponds "Ok dispo" ou "Non pas dispo".`
 
     // Open native SMS app — colleague sees pilot's real phone number, replies directly
-    openSMSApp(colleague.phone, smsMsg)
+    // On desktop the sms: URI does nothing — show fallback panel with number + message to copy
+    const opened = openSMSApp(colleague.phone, smsMsg)
+    if (!opened) {
+      setDesktopSms({ phone: colleague.phone, e164: toE164(colleague.phone), message: smsMsg })
+    }
 
     await loadData()
     setSending(null)
@@ -239,6 +249,43 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
             </div>
           )
         })}
+
+        {/* Desktop fallback — sms: URI doesn't work on computers */}
+        {desktopSms && (
+          <div style={{ marginTop: 16, padding: 14, background: '#0f172a', borderRadius: 10, border: '1px solid #f59e0b' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+              📋 Envoyez ce SMS depuis votre téléphone
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 2 }}>Destinataire</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <code style={{ flex: 1, background: '#1e293b', color: '#e2e8f0', padding: '6px 10px', borderRadius: 6, fontSize: '0.88rem', fontFamily: 'monospace' }}>
+                  {desktopSms.phone}
+                </code>
+                <button onClick={() => navigator.clipboard?.writeText(desktopSms.phone)}
+                  style={{ padding: '5px 10px', background: '#1e3a5f', border: 'none', borderRadius: 6, color: '#93c5fd', fontSize: '0.75rem', cursor: 'pointer' }}>
+                  Copier
+                </button>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 2 }}>Message</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1, background: '#1e293b', color: '#e2e8f0', padding: '8px 10px', borderRadius: 6, fontSize: '0.82rem', lineHeight: 1.5 }}>
+                  {desktopSms.message}
+                </div>
+                <button onClick={() => navigator.clipboard?.writeText(desktopSms.message)}
+                  style={{ padding: '5px 10px', background: '#1e3a5f', border: 'none', borderRadius: 6, color: '#93c5fd', fontSize: '0.75rem', cursor: 'pointer', flexShrink: 0 }}>
+                  Copier
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setDesktopSms(null)}
+              style={{ marginTop: 10, width: '100%', padding: '6px', background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', fontSize: '0.75rem', cursor: 'pointer' }}>
+              Fermer
+            </button>
+          </div>
+        )}
 
         {/* Reminder */}
         <p style={{ marginTop: 12, fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>
