@@ -350,32 +350,16 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     const filename = `facture_${prefix}_${seq}_${safe}.pdf`
 
     if (action === 'send') {
-      // Generate PDF as blob, try Web Share API first (mobile), fallback to mailto
-      const pdfBlob = doc.output('blob')
-      const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' })
+      // Send action: download PDF + open Gmail compose in a new tab
       const subject = encodeURIComponent(`Facture ${finalN}`)
       const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${finalN}.\n\nCordialement`)
       const emailTo = invoiceColleague.email || ''
 
-      // Restrict Web Share to mobile devices — Windows 11 also supports canShare
-      // but doesn't show Gmail, so desktop goes straight to the Gmail compose flow
-      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-      if (isMobileDevice && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        // Mobile: Web Share API with file attachment (no email needed)
-        try {
-          await navigator.share({ files: [pdfFile], title: `Facture ${finalN}`, text: 'Facture parapente' })
-        } catch (shareErr) {
-          // User cancelled share or share failed — fallback to download
-          if (shareErr.name !== 'AbortError') doc.save(filename)
-        }
-      } else if (emailTo) {
-        // Desktop with email: download PDF + open Gmail compose in new tab
-        doc.save(filename)
+      doc.save(filename)
+      if (emailTo) {
         const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${body}`
         window.open(gmailUrl, '_blank')
       } else {
-        // Desktop without email: just download and tell user to add email
-        doc.save(filename)
         setInvoiceError('Aucun email enregistré pour ce collègue. PDF téléchargé — ajoutez son email dans sa fiche.')
         setInvoiceSaving(false)
         return
