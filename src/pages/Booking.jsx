@@ -158,12 +158,27 @@ async function loadSlots(date) {
       if (!weight || weight <= 0) { newErrors[`${i}_weight`] = 'Poids requis';   valid = false }
       if (!age    || age    < 0)  { newErrors[`${i}_age`]    = 'Âge requis';     valid = false }
 
+      // Marmaille age range check (blocks submission if age out of range)
+      if (p.is_marmaille && age) {
+        const minAge = childFlightType?.min_age ?? 6
+        const maxAge = childFlightType?.max_age ?? 14
+        if (age < minAge) {
+          newErrors[`${i}_age`] = `Le parapente est réservé aux enfants de ${minAge} ans minimum. Cette réservation ne peut pas aboutir.`
+          valid = false
+        } else if (age > maxAge) {
+          newErrors[`${i}_age`] = `Le vol marmaille est réservé aux enfants jusqu'à ${maxAge} ans. Changez le type de vol.`
+          valid = false
+        }
+      }
+
       if (weight && age) {
         const wResult = validateWeight(weight)
         if (wResult.blocked) { newErrors[`${i}_weight`] = wResult.warning; valid = false }
 
-        const aResult = validateAge(age, weight, p.flight_type)
-        if (!aResult.ok) { newErrors[`${i}_age`] = aResult.error; valid = false }
+        if (!p.is_marmaille) {
+          const aResult = validateAge(age, weight, p.flight_type)
+          if (!aResult.ok) { newErrors[`${i}_age`] = aResult.error; valid = false }
+        }
 
         if (age < 18 && !p.parental_auth) {
           newErrors[`${i}_parental`] = 'Autorisation parentale requise'; valid = false
@@ -631,8 +646,25 @@ if (hasLightChild) {
                     {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
                   </div>
                   <div className="field"><label>Âge</label>
-                    <input type="number" min="6" max="99" value={p.age}
+                    <input type="number" min="1" max="99" value={p.age}
                       onChange={e => updatePassenger(i, 'age', e.target.value)} />
+                    {/* Inline warning for marmaille out-of-range age (live feedback before submit) */}
+                    {p.is_marmaille && p.age !== '' && (() => {
+                      const a = parseInt(p.age, 10)
+                      const minA = childFlightType?.min_age ?? 6
+                      const maxA = childFlightType?.max_age ?? 14
+                      if (!isNaN(a) && a < minA) return (
+                        <span className="error-msg" style={{ display:'block', marginTop:4 }}>
+                          ⚠️ Le parapente est réservé aux enfants de {minA} ans minimum. Cette réservation ne peut pas aboutir.
+                        </span>
+                      )
+                      if (!isNaN(a) && a > maxA) return (
+                        <span className="error-msg" style={{ display:'block', marginTop:4 }}>
+                          ⚠️ Le vol marmaille est pour les {minA}–{maxA} ans. Modifiez le type de vol ci-dessus.
+                        </span>
+                      )
+                      return null
+                    })()}
                     {errors[`${i}_age`] && <span className="error-msg">{errors[`${i}_age`]}</span>}
                   </div>
                 </div>
