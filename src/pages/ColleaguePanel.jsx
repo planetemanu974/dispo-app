@@ -663,7 +663,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
 
       {invoiceColleague && (
         <ModalOverlay onClose={() => { setInvoiceColleague(null); setInvoiceGmailUrl(null) }}>
-          <h3 style={{ ...s.modalTitle, marginBottom: 4 }}>🧾 Facture <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>v4</span></h3>
+          <h3 style={{ ...s.modalTitle, marginBottom: 4 }}>🧾 Facture</h3>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 12 }}>
             {invoiceColleague.name} · N° {invoiceNumber || '…'}
           </p>

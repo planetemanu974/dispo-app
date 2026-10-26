@@ -52,6 +52,8 @@
 
 body {
   margin: 0;
+  background: #000;
+  color: #f1f5f9;
 }
 
 #root {
@@ -59,11 +61,12 @@ body {
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
+  border-inline: 1px solid #1e293b;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  background: #000;
 }
 
 h1,
@@ -126,7 +129,7 @@ code {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;          /* Firefox */
   padding: 8px 0 4px;
-  border-bottom: 1px solid #e5e9ee;
+  border-bottom: 1px solid #1e293b;
   margin-bottom: 4px;
 }
 .planning-strip-wrapper::-webkit-scrollbar { display: none; }
@@ -165,7 +168,7 @@ code {
 .planning-day__num {
   font-size: 18px;
   font-weight: 700;
-  color: #1c2b3a;
+  color: #cbd5e1;
   line-height: 1;
 }
 
@@ -189,35 +192,35 @@ code {
 .planning-day__count {
   font-size: 10px;
   font-weight: 700;
-  color: #5d7386;
+  color: #64748b;
 }
 
 /* State modifiers */
 .planning-day--today .planning-day__num {
-  color: #2e86c1;
+  color: #60a5fa;
 }
 .planning-day--today {
-  border-color: #2e86c1;
+  border-color: #3b82f6;
 }
 
 .planning-day--selected {
-  background: #2e86c1;
-  border-color: #2e86c1;
+  background: #1d4ed8;
+  border-color: #3b82f6;
 }
 .planning-day--selected .planning-day__name,
 .planning-day--selected .planning-day__num,
 .planning-day--selected .planning-day__count {
   color: #fff;
 }
-.planning-day--selected .dot--pending   { background: #ffe0b2; }
-.planning-day--selected .dot--confirmed { background: #b9f6ca; }
+.planning-day--selected .dot--pending   { background: #fed7aa; }
+.planning-day--selected .dot--confirmed { background: #bbf7d0; }
 
 .planning-day--pending {
   /* subtle orange tint when there are pending bookings */
-  background: #fff8f2;
+  background: #1c0f00;
 }
 .planning-day--pending.planning-day--selected {
-  background: #2e86c1; /* selected wins */
+  background: #1d4ed8; /* selected wins */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -233,11 +236,11 @@ code {
   border-radius: 4px;
   margin-bottom: 4px;
 }
-.booking-badge--pending   { background: #fdebd0; color: #d35400; }
-.booking-badge--confirmed { background: #d5f5e3; color: #1e8449; }
+.booking-badge--pending   { background: #431407; color: #fb923c; }
+.booking-badge--confirmed { background: #052e16; color: #4ade80; }
 
 .booking-card--confirmed {
-  border-left: 3px solid #27ae60;
+  border-left: 3px solid #16a34a;
   opacity: 0.85;
 }
 
@@ -245,8 +248,8 @@ code {
    Modal — notes block
 ───────────────────────────────────────────────────────────────────────────── */
 .modal-notes {
-  background: #fff8f2;
-  border-left: 3px solid #e67e22;
+  background: #1c0d00;
+  border-left: 3px solid #f59e0b;
   border-radius: 6px;
   padding: 10px 12px;
   margin: 10px 0;
@@ -255,13 +258,13 @@ code {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #d35400;
+  color: #f59e0b;
   margin-bottom: 4px;
   letter-spacing: 0.05em;
 }
 .modal-notes-text {
   font-size: 14px;
-  color: #3d2b1a;
+  color: #fde68a;
   line-height: 1.5;
 }
 
@@ -269,9 +272,9 @@ code {
 .booking-confirmed-label {
   text-align: center;
   font-weight: 700;
-  color: #1e8449;
+  color: #4ade80;
   padding: 12px;
-  background: #d5f5e3;
+  background: #052e16;
   border-radius: 8px;
   margin-top: 12px;
 }
@@ -282,32 +285,32 @@ code {
   gap: 8px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #1e293b;
 }
 
 .btn-edit {
   width: 100%;
   padding: 10px;
-  background: #f0f0f0;
-  color: #333;
+  background: #1e293b;
+  color: #e2e8f0;
   border: none;
   border-radius: 8px;
   font-size: 0.95rem;
   cursor: pointer;
 }
-.btn-edit:hover { background: #e0e0e0; }
+.btn-edit:hover { background: #334155; }
 
 .btn-cancel-booking {
   width: 100%;
   padding: 10px;
-  background: #fff0f0;
-  color: #c0392b;
-  border: 1px solid #f5c6cb;
+  background: #1f0a0a;
+  color: #f87171;
+  border: 1px solid #7f1d1d;
   border-radius: 8px;
   font-size: 0.95rem;
   cursor: pointer;
 }
-.btn-cancel-booking:hover { background: #fde0e0; }
+.btn-cancel-booking:hover { background: #2d0d0d; }
 
 /* ── Edit mode form fields ───────────────────────────────────────────────── */
 .edit-section {
@@ -317,7 +320,7 @@ code {
 .edit-section-title {
   font-weight: 600;
   margin-bottom: 8px;
-  color: #555;
+  color: #94a3b8;
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -326,7 +329,7 @@ code {
 .edit-label {
   display: block;
   font-size: 0.8rem;
-  color: #666;
+  color: #64748b;
   margin-bottom: 3px;
   margin-top: 8px;
 }
@@ -334,10 +337,12 @@ code {
 .edit-input {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #ccc;
+  border: 1px solid #334155;
   border-radius: 6px;
   font-size: 0.95rem;
   box-sizing: border-box;
+  background: #1e293b;
+  color: #e2e8f0;
 }
 .edit-input:focus {
   outline: none;
@@ -365,26 +370,26 @@ code {
 }
 
 .manu-dispo-slot--ok {
-  background: #f0fdf4;
-  border-color: #86efac;
-  color: #166534;
+  background: #052e16;
+  border-color: #16a34a;
+  color: #86efac;
 }
 .manu-dispo-slot--ok:hover {
-  background: #dcfce7;
-  border-color: #4ade80;
+  background: #14532d;
+  border-color: #22c55e;
 }
 
 .manu-dispo-slot--off {
-  background: #f9fafb;
-  border-color: #e5e7eb;
-  color: #9ca3af;
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #475569;
   cursor: not-allowed;
 }
 
 .manu-dispo-slot--selected {
   border-color: #7c3aed !important;
-  background: #ede9fe !important;
-  color: #4c1d95 !important;
+  background: #1e1245 !important;
+  color: #c4b5fd !important;
 }
 
 .manu-slot-time {
@@ -401,9 +406,9 @@ code {
 /* ── Dashboard — badge collègue ─────────────────────────────────────────── */
 .booking-badge--colleague {
   display: inline-block;
-  background: #fff7ed;
-  color: #c2410c;
-  border: 1px solid #fed7aa;
+  background: #431407;
+  color: #fb923c;
+  border: 1px solid #7c2d12;
   border-radius: 4px;
   padding: 2px 7px;
   font-size: 0.75rem;

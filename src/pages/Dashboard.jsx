@@ -670,11 +670,11 @@ export default function Dashboard({ pilot }) {
       </div>
 
       {/* ── Header ── logo (= menu) à gauche, toggle vue au centre */}
-      <header style={{ display:'flex', alignItems:'center', padding:'6px 12px', borderBottom:'1px solid #e2e8f0', background:'white', position:'sticky', top:0, zIndex:10, gap:10 }}>
+      <header style={{ display:'flex', alignItems:'center', padding:'6px 12px', borderBottom:'1px solid #1e293b', background:'#000', position:'sticky', top:0, zIndex:10, gap:10 }}>
         {/* Bouton logo → ouvre le menu (badge jaune si mise à jour dispo) */}
         <button onClick={() => setMenuOpen(true)}
           style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0, position:'relative' }}>
-          <img src="/logo.png" alt="Menu" style={{ height:36, display:'block' }} />
+          <img src="/logo-icon.png" alt="Menu" style={{ height:36, display:'block' }} />
           {updateReady && (
             <span style={{ position:'absolute', top:0, right:0, width:10, height:10, background:'#eab308', borderRadius:'50%', border:'2px solid white' }} />
           )}
@@ -682,13 +682,13 @@ export default function Dashboard({ pilot }) {
 
         {/* Toggle Semaine / Jour — prend l'espace restant */}
         <div style={{ display:'flex', gap:6, flex:1, justifyContent:'center' }}>
-          <button className={`view-toggle-btn ${viewMode==='week'?'active':''}`}
-            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem' }}
+          <button
+            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => setViewMode('week')}>
             📅 Semaine
           </button>
-          <button className={`view-toggle-btn ${viewMode==='day'?'active':''}`}
-            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem' }}
+          <button
+            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => { setViewMode('day'); loadDay(selectedDate); loadPlanning(selectedDate) }}>
             📋 Jour
           </button>
@@ -758,7 +758,7 @@ export default function Dashboard({ pilot }) {
             <div className="cal-container" style={{ minWidth: 0 }}>
 
               {/* ── Day header row ── */}
-              <div className="cal-header-row" style={{ display:'flex', borderBottom:'2px solid #cbd5e0', background:'#edf2f7' }}>
+              <div className="cal-header-row" style={{ display:'flex', borderBottom:'2px solid #1e293b', background:'#0f172a' }}>
                 <div className="cal-gutter" style={{ width:40, flexShrink:0, borderRight:'1px solid #cbd5e0' }} />
                 {weekDays.map((date, colIdx) => {
                   const d   = new Date(date + 'T00:00:00')
@@ -767,10 +767,10 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-header ${isToday ? 'cal-day-header--today' : ''}`}
-                      style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #cbd5e0', cursor:'pointer', background: isToday ? '#bee3f8' : undefined }}
+                      style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #1e293b', cursor:'pointer', background: isToday ? '#172554' : undefined }}
                       onClick={() => { setSelectedDate(date); setViewMode('day'); loadDay(date) }}>
-                      <span className="cal-day-name" style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'#4a5568' }}>{DAY_LABELS[colIdx]}</span>
-                      <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`} style={{ fontSize:'1rem', fontWeight:800, width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', background: isToday ? '#2b6cb0' : undefined, color: isToday ? 'white' : '#1a202c' }}>{num}</span>
+                      <span className="cal-day-name" style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'#94a3b8' }}>{DAY_LABELS[colIdx]}</span>
+                      <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`} style={{ fontSize:'1rem', fontWeight:800, width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', background: isToday ? '#3b82f6' : undefined, color: isToday ? 'white' : '#e2e8f0' }}>{num}</span>
                     </div>
                   )
                 })}
@@ -780,10 +780,10 @@ export default function Dashboard({ pilot }) {
               <div className="cal-body" style={{ display:'flex', overflowY:'auto', maxHeight:'58vh' }}>
 
                 {/* Time axis */}
-                <div className="cal-time-axis" style={{ width:40, flexShrink:0, borderRight:'1px solid #cbd5e0' }}>
+                <div className="cal-time-axis" style={{ width:40, flexShrink:0, borderRight:'1px solid #1e293b' }}>
                   {GRID_HOURS.map(h => (
                     <div key={h} className="cal-hour-label"
-                      style={{ height: HOUR_HEIGHT, lineHeight: `${HOUR_HEIGHT}px`, fontSize:'0.62rem', color:'#718096', fontWeight:700, textAlign:'right', paddingRight:4, boxSizing:'border-box' }}>
+                      style={{ height: HOUR_HEIGHT, lineHeight: `${HOUR_HEIGHT}px`, fontSize:'0.62rem', color:'#64748b', fontWeight:700, textAlign:'right', paddingRight:4, boxSizing:'border-box' }}>
                       {`${String(h).padStart(2, '0')}h`}
                     </div>
                   ))}
@@ -802,11 +802,11 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-col ${isToday ? 'cal-day-col--today' : ''}`}
-                      style={{ flex:1, minWidth:0, position:'relative', borderRight:'1px solid #cbd5e0', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#eff6ff' : '#ffffff' }}>
+                      style={{ flex:1, minWidth:0, position:'relative', borderRight:'1px solid #1e293b', minHeight: HOUR_HEIGHT * (GRID_END_H - GRID_START_H), background: isToday ? '#0c1a2e' : '#050a12' }}>
 
                       {/* Subtle hour lines only (no half-hour noise) */}
                       {GRID_HOURS.map((h, i) => (
-                        <div key={h} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT, height:1, background:'#e2e8f0', pointerEvents:'none' }} />
+                        <div key={h} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT, height:1, background:'#1e293b', pointerEvents:'none' }} />
                       ))}
 
                       {/* Slot blocks */}
@@ -937,13 +937,13 @@ export default function Dashboard({ pilot }) {
 
           {/* ── Day calendar grid (Google Agenda style) ── */}
           {loading ? <p className="loading">Chargement...</p> : (
-            <div style={{ margin:'8px', border:'1px solid #cbd5e0', borderRadius:12, overflow:'hidden', background:'#f8fafc' }}>
+            <div style={{ margin:'8px', border:'1px solid #1e293b', borderRadius:12, overflow:'hidden', background:'#050a12' }}>
               <div style={{ display:'flex', overflowY:'auto', maxHeight:'62vh' }}>
 
                 {/* Time axis */}
-                <div style={{ width:44, flexShrink:0, borderRight:'1px solid #e2e8f0' }}>
+                <div style={{ width:44, flexShrink:0, borderRight:'1px solid #1e293b' }}>
                   {GRID_HOURS.map(h => (
-                    <div key={h} style={{ height:HOUR_HEIGHT, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:6, paddingTop:3, fontSize:'0.65rem', color:'#a0aec0', fontWeight:600, boxSizing:'border-box' }}>
+                    <div key={h} style={{ height:HOUR_HEIGHT, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:6, paddingTop:3, fontSize:'0.65rem', color:'#475569', fontWeight:600, boxSizing:'border-box' }}>
                       {`${String(h).padStart(2,'0')}:00`}
                     </div>
                   ))}
@@ -954,11 +954,11 @@ export default function Dashboard({ pilot }) {
 
                   {/* Hour lines */}
                   {GRID_HOURS.map((h, i) => (
-                    <div key={h} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT, height:1, background:'#e2e8f0', pointerEvents:'none' }} />
+                    <div key={h} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT, height:1, background:'#1e293b', pointerEvents:'none' }} />
                   ))}
                   {/* Half-hour lines */}
                   {GRID_HOURS.slice(0,-1).map((h, i) => (
-                    <div key={`h-${h}`} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT + HOUR_HEIGHT/2, height:1, background:'#f0f4f8', pointerEvents:'none' }} />
+                    <div key={`h-${h}`} style={{ position:'absolute', left:0, right:0, top: i * HOUR_HEIGHT + HOUR_HEIGHT/2, height:1, background:'#0f172a', pointerEvents:'none' }} />
                   ))}
 
                   {/* Slot blocks */}
