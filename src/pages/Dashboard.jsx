@@ -44,7 +44,7 @@ const WEEK_DAYS_COUNT = 7  // show full week Mon–Sun
 // ── Calendar grid constants (Google Calendar style)
 const HOUR_HEIGHT  = 56   // px per hour
 const GRID_START_H = 8    // axis starts at 08:00
-const GRID_END_H   = 15   // axis ends at 15:00
+const GRID_END_H   = 16   // axis ends at 16:00 (last slot 14:30 ends at 15:45)
 const SLOT_DURATION_MIN = 75  // default slot duration in minutes
 
 // Grid hours array: [8, 9, 10, 11, 12, 13, 14, 15]
