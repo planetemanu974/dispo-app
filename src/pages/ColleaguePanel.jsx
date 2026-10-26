@@ -137,6 +137,11 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   const [detailSaving,    setDetailSaving]    = useState(false)
   const [detailError,     setDetailError]     = useState(null)
 
+  // Historique (dans la fiche collègue)
+  const [history,        setHistory]        = useState({ invoices: [], requests: [] })
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyTab,     setHistoryTab]     = useState('invoices')  // 'invoices' | 'requests'
+
   // Modal : facture
   const [invoiceColleague, setInvoiceColleague] = useState(null)
   const [invoiceAmount,    setInvoiceAmount]    = useState('')
@@ -202,9 +207,24 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   }
 
   // ── Fiche collègue ────────────────────────────────────────────────────────
-  function openDetail(c) {
+  async function openDetail(c) {
     setDetailColleague({ ...c })
     setDetailError(null)
+    setHistoryTab('invoices')
+    setHistoryLoading(true)
+    // Charger factures + demandes en parallèle
+    const [invRes, reqRes] = await Promise.all([
+      supabase
+        .from('colleague_invoices')
+        .select('id, invoice_number, invoice_date, amount_eur, designation')
+        .eq('colleague_id', c.id)
+        .order('invoice_date', { ascending: false }),
+      supabase
+        .rpc('get_colleague_requests', { p_pilot_id: pilot.id })
+        .then(({ data }) => ({ data: (data || []).filter(r => r.colleague_id === c.id) }))
+    ])
+    setHistory({ invoices: invRes.data || [], requests: reqRes.data || [] })
+    setHistoryLoading(false)
   }
 
   async function handleSaveDetail(e) {
@@ -237,6 +257,22 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       .eq('pilot_id', pilot.id)
     setDetailColleague(prev => ({ ...prev, active: newActive }))
     loadColleagues()
+  }
+
+  // ── Re-télécharger une facture existante ─────────────────────────────────
+  async function redownloadInvoice(inv) {
+    const JsPDF = await loadJsPDF()
+    const doc = generateInvoicePDF({
+      JsPDF,
+      invoiceNumber: inv.invoice_number,
+      invoiceDate:   inv.invoice_date,
+      amount:        inv.amount_eur,
+      designation:   inv.designation,
+      colleague:     detailColleague,
+    })
+    const [prefix, seq] = inv.invoice_number.split('/')
+    const safe = (detailColleague.name || 'collegue').toLowerCase().replace(/[^a-z0-9]/g, '_')
+    doc.save(`facture_${prefix}_${seq || '1'}_${safe}.pdf`)
   }
 
   // ── Facture ───────────────────────────────────────────────────────────────
@@ -494,6 +530,52 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
               🧾 Nouvelle facture
             </button>
           )}
+
+          {/* ── Historique ── */}
+          <div style={{ marginTop: 20, borderTop: '1px solid #1e293b', paddingTop: 14 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              {[{ id: 'invoices', label: `🧾 Factures (${history.invoices.length})` }, { id: 'requests', label: `📋 Demandes (${history.requests.length})` }].map(t => (
+                <button key={t.id} onClick={() => setHistoryTab(t.id)} style={{ flex: 1, padding: '7px 4px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: historyTab === t.id ? 700 : 500, background: historyTab === t.id ? '#0ea5e9' : '#1e293b', color: historyTab === t.id ? '#fff' : '#94a3b8' }}>{t.label}</button>
+              ))}
+            </div>
+
+            {historyLoading ? <p style={{ ...s.muted, textAlign: 'center' }}>Chargement…</p> : (
+              <>
+                {/* Factures */}
+                {historyTab === 'invoices' && (
+                  history.invoices.length === 0
+                    ? <p style={s.muted}>Aucune facture pour ce collègue.</p>
+                    : history.invoices.map(inv => (
+                      <div key={inv.id} style={{ background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 12px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#93c5fd', fontSize: 13 }}>N° {inv.invoice_number}</div>
+                          <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>{fmtDateFR(inv.invoice_date)} · {inv.designation}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                          <span style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{Number(inv.amount_eur).toFixed(2)} €</span>
+                          <button onClick={() => redownloadInvoice(inv)} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📥 PDF</button>
+                        </div>
+                      </div>
+                    ))
+                )}
+
+                {/* Demandes */}
+                {historyTab === 'requests' && (
+                  history.requests.length === 0
+                    ? <p style={s.muted}>Aucune demande de ce collègue.</p>
+                    : history.requests.map(r => (
+                      <div key={r.request_id} style={{ background: '#0f172a', border: `1px solid ${r.status === 'pending' ? '#92400e' : r.status === 'accepted' ? '#14532d' : '#1e293b'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ color: '#f1f5f9', fontSize: 13 }}>📅 {fmtDate(r.slot_date)} · 🕐 {fmtTime(r.slot_time)}</span>
+                          <StatusBadge status={r.status} />
+                        </div>
+                        {r.note && <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>💬 {r.note}</div>}
+                      </div>
+                    ))
+                )}
+              </>
+            )}
+          </div>
 
           {/* Révoquer / Réactiver */}
           <button
