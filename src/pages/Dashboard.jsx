@@ -520,7 +520,18 @@ export default function Dashboard({ pilot }) {
         `RDV plage a cote de Kelonia, navette Planete Parapente. ` +
         `Chaussures fermees obligatoires. Paiement especes/cheque. ` +
         `Manu 0692719749`
-      await sendSMS(nbForm.contactPhone.trim(), smsMsg)
+      const { error: smsErr } = await sendSMS(nbForm.contactPhone.trim(), smsMsg)
+      if (smsErr) {
+        // Mark the booking so the pilot can see it in the detail view
+        await supabase.from('bookings').update({
+          notes: (nbForm.notes.trim() ? nbForm.notes.trim() + '\n' : '') + '⚠️ SMS non envoyé (vérifier le numéro)',
+        }).eq('id', bk.id)
+        alert(
+          `⚠️ Réservation créée, mais le SMS n'a pas pu être envoyé au client.\n` +
+          `Numéro : ${nbForm.contactPhone.trim()}\n` +
+          `Vérifiez le numéro et recontactez le client si nécessaire.`
+        )
+      }
     }
 
     const savedDate = newBookingSlot.date
