@@ -14,8 +14,15 @@ function fmtDate(dateStr) {
 }
 function fmtTime(t) { return t ? t.slice(0, 5) : '' }
 
-export default function ColleaguePanel({ pilot }) {
+// forceOpen: if passed as a prop, the panel opens when this value becomes true
+// onClose: callback when the panel closes (so parent can reset forceOpen)
+export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   const [open, setOpen]             = useState(false)
+
+  // Sync with forceOpen prop from parent (e.g. side menu trigger)
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
   const [tab, setTab]               = useState('requests')  // 'requests' | 'colleagues'
 
   // ── Demandes entrantes ────────────────────────────────────────────────
@@ -140,7 +147,8 @@ export default function ColleaguePanel({ pilot }) {
   // ── Rendu ─────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Bouton flottant dans le header (badge si demandes en attente) */}
+      {/* ── Bouton flottant dans le header (masqué si déclenché depuis le menu) */}
+      {!forceOpen && (
       <button
         onClick={() => setOpen(true)}
         style={{
@@ -177,6 +185,7 @@ export default function ColleaguePanel({ pilot }) {
           </span>
         )}
       </button>
+      )}
 
       {/* ── Drawer / panneau ─────────────────────────────────────────────── */}
       {open && (
@@ -190,7 +199,7 @@ export default function ColleaguePanel({ pilot }) {
             flexDirection: 'column',
             justifyContent: 'flex-end',
           }}
-          onClick={e => e.target === e.currentTarget && setOpen(false)}
+          onClick={e => { if (e.target === e.currentTarget) { setOpen(false); onClose && onClose() } }}
         >
           <div style={{
             background: '#0f172a',
@@ -212,7 +221,7 @@ export default function ColleaguePanel({ pilot }) {
                 🤝 Structures collègues
               </h2>
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => { setOpen(false); onClose && onClose() }}
                 style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 22, cursor: 'pointer' }}
               >
                 ×
