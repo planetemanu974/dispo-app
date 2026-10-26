@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import { useSettings } from '../contexts/SettingsContext'
+import { supabase } from '../lib/supabase'
 import ColleagueManager from '../components/ColleagueManager'
 
 // --------------- Inline styles ---------------
@@ -340,9 +341,53 @@ function TabAppearance({ settings, saveSettings }) {
   )
 }
 
+// --------------- Tab: Profil (SMS name) ---------------
+
+function TabProfile({ pilot }) {
+  const [smsName, setSmsName] = useState(pilot?.sms_name || '')
+  const [saving,  setSaving]  = useState(false)
+  const [saved,   setSaved]   = useState(false)
+  const [error,   setError]   = useState('')
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true); setError('')
+    const { error: err } = await supabase
+      .from('pilots').update({ sms_name: smsName.trim() }).eq('id', pilot.id)
+    if (err) { setError('Erreur lors de la sauvegarde.') }
+    else { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      <p style={{ color: '#94a3b8', fontSize: 14, marginTop: 0 }}>
+        Ce nom apparaît dans les SMS envoyés à vos collègues quand vous demandez un renfort.
+      </p>
+      <form onSubmit={handleSave}>
+        <div style={{ marginBottom: 16 }}>
+          <label style={s.label}>Nom affiché dans les SMS</label>
+          <input style={s.input}
+            value={smsName}
+            onChange={e => setSmsName(e.target.value)}
+            placeholder="ex : Planète Parapente, PPR..." />
+          <p style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
+            Exemple de SMS : « Dispo lundi 27 oct à 10h30 pour <strong style={{ color: '#94a3b8' }}>{smsName || '…'}</strong> ? »
+          </p>
+        </div>
+        {error && <p style={{ color: '#f87171', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+        <button type="submit" disabled={saving} style={{ ...s.btn, ...s.btnPrimary }}>
+          {saving ? 'Enregistrement…' : saved ? '✓ Enregistré' : 'Enregistrer'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 // --------------- Main component ---------------
 
 const TABS = [
+  { id: 'profile',    label: '👤 Profil' },
   { id: 'slots',      label: '🕐 Créneaux' },
   { id: 'flights',    label: '🪂 Vols & tarifs' },
   { id: 'colleagues', label: '👥 Collègues' },
@@ -351,7 +396,7 @@ const TABS = [
 
 export default function Settings({ onBack, pilot }) {
   const { settings, saveSettings } = useSettings()
-  const [activeTab, setActiveTab] = useState('slots')
+  const [activeTab, setActiveTab] = useState('profile')
 
   return (
     <div style={s.page}>
@@ -383,6 +428,7 @@ export default function Settings({ onBack, pilot }) {
 
       {/* Tab content */}
       <div style={s.body}>
+        {activeTab === 'profile'    && pilot && <TabProfile    pilot={pilot} />}
         {activeTab === 'slots'      && <TabSlots      settings={settings} saveSettings={saveSettings} />}
         {activeTab === 'flights'    && <TabFlights    settings={settings} saveSettings={saveSettings} />}
         {activeTab === 'colleagues' && pilot && <ColleagueManager pilot={pilot} />}

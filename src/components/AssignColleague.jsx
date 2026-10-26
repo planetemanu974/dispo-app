@@ -5,9 +5,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-// Base URL for the job response page
-const APP_URL = import.meta.env.VITE_APP_URL || 'https://dispo-app-pi.vercel.app'
-
 async function sendSMS(to, message) {
   try {
     const { data, error } = await supabase.functions.invoke('send-sms', {
@@ -81,15 +78,15 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
       return
     }
 
-    // Build SMS — short and clear, oui/non via link
+    // SMS without link — colleague replies directly by text
     const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
       weekday: 'long', day: 'numeric', month: 'long',
     })
     const timeLabel = slotTime?.slice(0, 5) || ''
-    const responseUrl = `${APP_URL}/job/${assign.token}`
+    const smsName = pilot.sms_name?.trim() || pilot.name || 'votre partenaire'
     const smsMsg =
-      `Dispo ${dateLabel} a ${timeLabel} pour ${pilot.name} ? ` +
-      `Repondre ici : ${responseUrl}`
+      `Dispo ${dateLabel} a ${timeLabel} pour ${smsName} ? ` +
+      `Reponds "Ok dispo" ou "Non pas dispo".`
 
     const { error: smsErr } = await sendSMS(colleague.phone, smsMsg)
 
@@ -105,6 +102,16 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
   async function handleRevoke(assignment) {
     if (!window.confirm(`Annuler la mission de ${assignment.colleagues?.name} ?`)) return
     await supabase.from('booking_assignments').delete().eq('id', assignment.id)
+    await loadData()
+    if (onAssigned) onAssigned()
+  }
+
+  // Pilot manually marks assignment after reading colleague's SMS reply
+  async function handleManualStatus(assignment, newStatus) {
+    await supabase
+      .from('booking_assignments')
+      .update({ status: newStatus, responded_at: new Date().toISOString() })
+      .eq('id', assignment.id)
     await loadData()
     if (onAssigned) onAssigned()
   }
@@ -193,7 +200,7 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
               </div>
 
               {/* Action button */}
-              <div style={{ flexShrink: 0 }}>
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
                 {!assign || assign.status === 'refused' ? (
                   <button onClick={() => handleAssign(c)} disabled={!!sending}
                     style={{
@@ -203,12 +210,21 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
                     }}>
                     {isSending ? '…' : '📩 Envoyer'}
                   </button>
-                ) : assign.status === 'pending' ? (
+                ) : assign.status === 'pending' ? (<>
+                  {/* Pilot marks manually after reading colleague's SMS reply */}
+                  <button onClick={() => handleManualStatus(assign, 'accepted')}
+                    style={{ padding: '5px 10px', background: '#16a34a', border: 'none', borderRadius: 7, color: 'white', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                    ✅ Accepté
+                  </button>
+                  <button onClick={() => handleManualStatus(assign, 'refused')}
+                    style={{ padding: '5px 10px', background: 'transparent', border: '1px solid #475569', borderRadius: 7, color: '#94a3b8', fontSize: '0.75rem', cursor: 'pointer' }}>
+                    ❌ Refusé
+                  </button>
                   <button onClick={() => handleRevoke(assign)}
-                    style={{ padding: '7px 12px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: '0.78rem', cursor: 'pointer' }}>
+                    style={{ padding: '3px 8px', background: 'transparent', border: 'none', color: '#475569', fontSize: '0.7rem', cursor: 'pointer' }}>
                     Annuler
                   </button>
-                ) : null /* accepted: show status chip only */}
+                </>) : null /* accepted: show status chip only */}
               </div>
             </div>
           )
@@ -216,8 +232,8 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
 
         {/* Reminder */}
         <p style={{ marginTop: 12, fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>
-          Le collègue reçoit un SMS avec un lien pour accepter ou refuser.<br />
-          Vous recevez un SMS dès qu'il répond.
+          Le collègue reçoit un SMS et répond directement par texto.<br />
+          Marquez manuellement sa réponse ici avec ✅ ou ❌.
         </p>
       </div>
     </div>

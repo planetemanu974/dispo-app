@@ -274,6 +274,18 @@ export default function Dashboard({ pilot }) {
       bookingsData = data || []
     }
 
+    // Fetch pending colleague assignments for these bookings (for orange slot indicator)
+    const bookingIds = bookingsData.map(b => b.id)
+    let pendingAssignmentBookingIds = new Set()
+    if (bookingIds.length > 0) {
+      const { data: assignData } = await supabase
+        .from('booking_assignments')
+        .select('booking_id')
+        .in('booking_id', bookingIds)
+        .eq('status', 'pending')
+      ;(assignData || []).forEach(a => pendingAssignmentBookingIds.add(a.booking_id))
+    }
+
     // Organise by date
     const byDate = {}
     days.forEach(d => { byDate[d] = { slots: [], bookings: [] } })
@@ -283,6 +295,11 @@ export default function Dashboard({ pilot }) {
     bookingsData.forEach(b => {
       const d = b.pilot_slots?.slot_date
       if (d && byDate[d]) byDate[d].bookings.push(b)
+    })
+
+    // Attach pending-assignment flag to each booking
+    Object.values(byDate).forEach(({ bookings }) => {
+      bookings.forEach(b => { b._hasPendingAssignment = pendingAssignmentBookingIds.has(b.id) })
     })
 
     setWeekData(byDate)
@@ -1047,8 +1064,12 @@ export default function Dashboard({ pilot }) {
                         const endTime       = slotEndTime(slot.slot_time)
 
                         // Vivid block colours for week view — all slots clearly visible
+                        // Orange = waiting for colleague response (pending assignment)
+                        const hasPendingAssignment = activeBks.some(b => b._hasPendingAssignment)
                         let wBg, wColor, wBorder
-                        if (activeBks.some(b => b.status === 'confirmed')) {
+                        if (hasPendingAssignment) {
+                          wBg = '#ea580c'; wColor = 'white'; wBorder = '#9a3412' // orange = en attente collègue
+                        } else if (activeBks.some(b => b.status === 'confirmed')) {
                           wBg = '#16a34a'; wColor = 'white'; wBorder = '#166534'
                         } else if (activeBks.some(b => b.status === 'pending')) {
                           wBg = '#f59e0b'; wColor = 'white'; wBorder = '#b45309'
@@ -1101,6 +1122,7 @@ export default function Dashboard({ pilot }) {
             <span className="legend-item"><span className="legend-dot legend-dot--free" />Libre</span>
             <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
             <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
+            <span className="legend-item"><span className="legend-dot" style={{ background:'#ea580c' }} />Collègue ?</span>
           </div>
         </div>
       )}
