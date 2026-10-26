@@ -1,9 +1,25 @@
 // ColleaguePanel.jsx — Panneau de gestion des collègues (pour le pilote)
 // Inclus dans Dashboard.jsx via : <ColleaguePanel pilot={pilot} />
 // Fonctions : inviter une structure, voir/gérer les demandes, éditer fiche, émettre des factures
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { jsPDF } from 'jspdf'
+
+// Load jsPDF from CDN on demand (avoids build-time npm dependency)
+let jsPDFClass = null
+async function loadJsPDF() {
+  if (jsPDFClass) return jsPDFClass
+  await new Promise((resolve, reject) => {
+    if (document.querySelector('script[data-jspdf]')) { resolve(); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+    s.setAttribute('data-jspdf', '1')
+    s.onload  = resolve
+    s.onerror = reject
+    document.head.appendChild(s)
+  })
+  jsPDFClass = window.jspdf.jsPDF
+  return jsPDFClass
+}
 
 // ── Constantes pilote (informations de facturation) ───────────────────────────
 const PILOT_INFO = {
@@ -28,8 +44,8 @@ function todayISO()      { return new Date().toISOString().split('T')[0] }
 function invoiceDatePrefix(iso) { const [y,m,d]=iso.split('-'); return `${d}${m}${y.slice(2)}` }
 
 // ── Génération du PDF de facture ──────────────────────────────────────────────
-function generateInvoicePDF({ invoiceNumber, invoiceDate, amount, designation, colleague }) {
-  const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+function generateInvoicePDF({ JsPDF, invoiceNumber, invoiceDate, amount, designation, colleague }) {
+  const doc  = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const W    = 210
   const M    = 20   // marge gauche/droite
 
@@ -268,7 +284,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       })
     if (error) { setInvoiceError('Erreur lors de la sauvegarde.'); setInvoiceSaving(false); return }
 
-    const doc = generateInvoicePDF({ invoiceNumber: finalN, invoiceDate, amount: invoiceAmount, designation: invoiceDesig, colleague: invoiceColleague })
+    const JsPDF = await loadJsPDF()
+    const doc = generateInvoicePDF({ JsPDF, invoiceNumber: finalN, invoiceDate, amount: invoiceAmount, designation: invoiceDesig, colleague: invoiceColleague })
     const safe = (invoiceColleague.name || 'collegue').toLowerCase().replace(/[^a-z0-9]/g, '_')
     doc.save(`facture_${prefix}_${seq}_${safe}.pdf`)
 
