@@ -84,6 +84,10 @@ async function loadSlots(date) {
   function validateAndSuggest() {
     const newErrors = {}; let valid = true
 
+    // Contact is always required
+    if (!contact.name.trim())  { newErrors.contact_name  = 'Nom requis';      valid = false }
+    if (!contact.phone.trim()) { newErrors.contact_phone = 'Téléphone requis'; valid = false }
+
     passengers.forEach((p, i) => {
       const age    = parseInt(p.age, 10)
       const weight = parseInt(p.weight_kg, 10)
@@ -370,9 +374,11 @@ if (hasLightChild) {
             <div className="field-row">
               <div className="field"><label>Nom</label>
                 <input value={contact.name} onChange={e => setContact(c => ({ ...c, name: e.target.value }))} />
+                {errors.contact_name && <span className="error-msg">{errors.contact_name}</span>}
               </div>
               <div className="field"><label>Téléphone</label>
                 <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
+                {errors.contact_phone && <span className="error-msg">{errors.contact_phone}</span>}
               </div>
             </div>
           </div>
