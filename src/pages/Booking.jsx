@@ -75,7 +75,11 @@ async function loadSlots(date) {
       const updated = { ...p, [field]: value }
       if (field === 'age') {
         const age = parseInt(value, 10)
-        if (!isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE) updated.flight_type = 'discovery'
+        // Auto-assign marmaille for children ≤ 14, reset to discovery for adults
+        if (!isNaN(age)) {
+          if (age <= AGE_LIMITS.CHILD_MAX_AGE) updated.flight_type = 'marmaille'
+          else if (updated.flight_type === 'marmaille') updated.flight_type = 'discovery'
+        }
       }
       return updated
     }))
@@ -385,7 +389,7 @@ if (hasLightChild) {
 
           {passengers.map((p, i) => {
             const age       = parseInt(p.age, 10)
-            const isChild   = !isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE
+            const isChild   = !isNaN(age) && age > 0 && age <= AGE_LIMITS.CHILD_MAX_AGE
             const onlyFirst = slots.every(s => isFirstSlot(s.slot_time))
 
             return (
@@ -425,10 +429,15 @@ if (hasLightChild) {
                   <select value={p.flight_type}
                     onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
                     disabled={isChild || onlyFirst}>
-                    <option value="discovery">Découverte — 20 min (90 €)</option>
-                    <option value="performance">Performance — 30/40 min (110–120 €)</option>
+                    {isChild
+                      ? <option value="marmaille">Vol marmaille — 20 min (80 €)</option>
+                      : <>
+                          <option value="discovery">Découverte — 20 min (90 €)</option>
+                          <option value="performance">Performance — 30/40 min (110–120 €)</option>
+                        </>
+                    }
                   </select>
-                  {isChild && <span className="info-msg">Vol découverte uniquement pour les moins de 13 ans.</span>}
+                  {isChild && <span className="info-msg">Tarif marmaille (6–14 ans) — vol découverte 20 min.</span>}
                   {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
                 </div>
 

@@ -11,12 +11,12 @@ export const WEIGHT_LIMITS = {
 export const AGE_LIMITS = {
   MIN_AGE:       6,
   MIN_WEIGHT_KG: 18,
-  CHILD_MAX_AGE: 12,
+  CHILD_MAX_AGE: 14,   // ≤ 14 ans → vol marmaille (80 €), discovery only
 }
 
 export const PRICES = {
   DISCOVERY_ADULT:  9000,
-  DISCOVERY_CHILD:  8000,
+  MARMAILLE:        8000,  // discovery for children 6–14 ans, 80 €
   PERFORMANCE_BASE: 11000,
   PERFORMANCE_LONG: 12000,
 }
@@ -53,15 +53,17 @@ export function validateAge(age, weightKg, flightType) {
   if (weightKg < AGE_LIMITS.MIN_WEIGHT_KG) {
     return { ok: false, error: `Poids minimum : ${AGE_LIMITS.MIN_WEIGHT_KG} kg`, requiresParentalAuth: false }
   }
-  if (age <= AGE_LIMITS.CHILD_MAX_AGE && flightType !== 'discovery') {
-    return { ok: false, error: `Enfants (6-12 ans) : vol découverte uniquement`, requiresParentalAuth: true }
+  // Children ≤ 14 ans: marmaille or discovery only (no performance)
+  if (age <= AGE_LIMITS.CHILD_MAX_AGE && flightType === 'performance') {
+    return { ok: false, error: `Les moins de 15 ans : vol découverte / marmaille uniquement`, requiresParentalAuth: true }
   }
   return { ok: true, error: null, requiresParentalAuth: age < 18 }
 }
 
 // Price in euros
 export function calculatePrice(age, flightType, durationMin = 20) {
-  if (age < 13) return PRICES.DISCOVERY_CHILD / 100
+  // Children ≤ 14 ans → tarif marmaille (80 €) regardless of flight_type label
+  if (age <= AGE_LIMITS.CHILD_MAX_AGE) return PRICES.MARMAILLE / 100
   if (flightType === 'performance') {
     return durationMin >= 40 ? PRICES.PERFORMANCE_LONG / 100 : PRICES.PERFORMANCE_BASE / 100
   }
