@@ -600,11 +600,13 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
                           <div style={{ fontWeight: 700, color: '#93c5fd', fontSize: 13 }}>N° {inv.invoice_number}</div>
                           <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>{fmtDateFR(inv.invoice_date)} · {inv.designation}</div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                           <span style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{Number(inv.amount_eur).toFixed(2)} €</span>
-                          <button onClick={() => redownloadInvoice(inv, 'save')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📥 PDF</button>
-                          <button onClick={() => redownloadInvoice(inv, 'send')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#7dd3fc', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
-                          <button onClick={() => deleteInvoice(inv)} style={{ fontSize: 11, padding: '4px 8px', background: '#3b0a0a', color: '#fca5a5', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>🗑️</button>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={() => redownloadInvoice(inv, 'save')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📥 PDF</button>
+                            <button onClick={() => redownloadInvoice(inv, 'send')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#7dd3fc', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
+                            <button onClick={() => deleteInvoice(inv)} style={{ fontSize: 11, padding: '4px 8px', background: '#3b0a0a', color: '#fca5a5', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>🗑️</button>
+                          </div>
                         </div>
                       </div>
                     ))
