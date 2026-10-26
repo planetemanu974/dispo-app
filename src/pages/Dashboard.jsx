@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
+import Settings from './Settings'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -140,6 +141,7 @@ export default function Dashboard({ pilot }) {
   // Side menu drawer state
   const [menuOpen, setMenuOpen]               = useState(false)
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
+  const [showSettings, setShowSettings]       = useState(false)
 
   // PWA update detection — fires when a new service worker takes control
   const [updateReady, setUpdateReady] = useState(false)
@@ -693,7 +695,22 @@ export default function Dashboard({ pilot }) {
             📋 Jour
           </button>
         </div>
+
+        {/* Bouton Paramètres */}
+        <button
+          onClick={() => setShowSettings(true)}
+          style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 6px', flexShrink:0, fontSize:22, lineHeight:1 }}
+          aria-label="Paramètres"
+          title="Paramètres"
+        >⚙️</button>
       </header>
+
+      {/* Page Paramètres — overlay plein écran */}
+      {showSettings && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
+          <Settings onBack={() => setShowSettings(false)} />
+        </div>
+      )}
 
       {/* ColleaguePanel — déclenché uniquement depuis le menu */}
       <ColleaguePanel

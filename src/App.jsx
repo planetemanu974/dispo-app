@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
+import { SettingsProvider } from './contexts/SettingsContext'
 import Login         from './pages/Login'
 import Dashboard     from './pages/Dashboard'
 import Booking       from './pages/Booking'
@@ -35,15 +36,17 @@ export default function App() {
   if (session === undefined) return <div className="loading-screen">Chargement...</div>
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/reservation" element={<Booking />} />
-        <Route path="/manu-dispo"  element={<ManuDispo />} />
-        <Route path="/join"        element={<ColleagueJoin />} />
-        <Route path="/dispo"       element={<ColleagueDispo />} />
-        <Route path="/" element={session && pilot ? <Dashboard pilot={pilot} /> : <Login />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <SettingsProvider userId={session?.user?.id ?? null}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/reservation" element={<Booking />} />
+          <Route path="/manu-dispo"  element={<ManuDispo />} />
+          <Route path="/join"        element={<ColleagueJoin />} />
+          <Route path="/dispo"       element={<ColleagueDispo />} />
+          <Route path="/" element={session && pilot ? <Dashboard pilot={pilot} /> : <Login />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </SettingsProvider>
   )
 }
