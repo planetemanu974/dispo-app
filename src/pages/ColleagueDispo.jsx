@@ -76,16 +76,40 @@ export default function ColleagueDispo() {
   const [requestError, setRequestError]   = useState(null)
   const [requestDone, setRequestDone]     = useState(false)
 
+  // ── Récupérer le nom affiché du pilote ───────────────────────────────
+  async function fetchPilotName(pilotId) {
+    // Essaie d'abord sms_name (champ court dédié), puis name générique
+    const { data } = await supabase
+      .from('pilots')
+      .select('sms_name, name')
+      .eq('id', pilotId)
+      .maybeSingle()
+    return data?.sms_name || data?.name || null
+  }
+
   // ── Charger la session depuis localStorage ────────────────────────────
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('colleagueSession')
-      if (raw) {
-        const s = JSON.parse(raw)
-        if (s?.colleague_id && s?.pilot_id) setSession(s)
-      }
-    } catch { /* ignore */ }
-    setAuthLoading(false)
+    async function init() {
+      try {
+        const raw = localStorage.getItem('colleagueSession')
+        if (raw) {
+          const s = JSON.parse(raw)
+          if (s?.colleague_id && s?.pilot_id) {
+            // Récupérer le nom du pilote si pas encore en cache
+            if (!s.pilotName) {
+              const pName = await fetchPilotName(s.pilot_id)
+              if (pName) {
+                s.pilotName = pName
+                try { localStorage.setItem('colleagueSession', JSON.stringify(s)) } catch { }
+              }
+            }
+            setSession(s)
+          }
+        }
+      } catch { /* ignore */ }
+      setAuthLoading(false)
+    }
+    init()
   }, [])
 
   // ── Charger l'historique des demandes ────────────────────────────────
@@ -141,7 +165,8 @@ export default function ColleagueDispo() {
     }
 
     const { colleague_id, pilot_id } = data[0]
-    const newSession = { colleague_id, pilot_id, name: loginName.trim() }
+    const pilotName = await fetchPilotName(pilot_id)
+    const newSession = { colleague_id, pilot_id, name: loginName.trim(), pilotName: pilotName || '' }
 
     try { localStorage.setItem('colleagueSession', JSON.stringify(newSession)) } catch { }
 
@@ -262,8 +287,21 @@ export default function ColleagueDispo() {
     <Screen>
       {/* ── Header ── */}
       <div style={s.header}>
-        <img src="/logo-text.png" alt="Dispo Pas Dispo" style={{ height: 36, display: 'block' }} />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+        {/* Logo gauche */}
+        <img src="/logo-text.png" alt="Dispo Pas Dispo" style={{ height: 36, display: 'block', flexShrink: 0 }} />
+
+        {/* Titre centré : "[Nom du pilote] Dispo" */}
+        <div style={{ flex: 1, textAlign: 'center', padding: '0 8px' }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9', letterSpacing: '0.01em' }}>
+            {session.pilotName || 'Mon pilote'}
+          </span>
+          <span style={{ fontSize: 15, fontWeight: 400, color: '#64748b', marginLeft: 5 }}>
+            Dispo
+          </span>
+        </div>
+
+        {/* Déconnexion droite */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: '#64748b' }}>{session.name}</span>
           <button onClick={handleLogout} style={s.logoutBtn}>Déconnexion</button>
         </div>
