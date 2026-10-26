@@ -807,25 +807,41 @@ if (hasLightChild) {
 
                 <div className={`conflict-card ${!slotAdultOnly ? 'disabled' : ''}`}>
                   <h3>Option 2 — Deux créneaux</h3>
-                  <div style={{ margin:'8px 0', fontSize:13, lineHeight:1.7 }}>
-                    {passengers.map((p, idx) => {
-                      const ft = flightTypes.find(f => f.id === p.flight_type)
-                      const slot = p.is_marmaille || p.flight_type !== 'performance'
-                        ? '08:00'
-                        : slotAdultOnly?.slot_time?.slice(0, 5) || '—'
-                      return (
-                        <div key={idx} style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
-                          <span style={{ opacity:.8 }}>
-                            {p.is_marmaille ? '🟡' : '🔵'} Passager {idx + 1}
-                            {p.first_name ? ` — ${p.first_name}` : ''}
-                          </span>
-                          <span style={{ fontWeight:600, whiteSpace:'nowrap' }}>
-                            🕗 {slot}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  {(() => {
+                    // Compute slot per passenger:
+                    // - marmaille → 08:00
+                    // - performance → later slot
+                    // - discovery light (<70 kg, value=60) → 08:00
+                    // - discovery heavy (≥70 kg, value=80) → later slot
+                    // Edge case: if no discovery adult is at 08:00 but child is, put first heavy adult at 08:00
+                    const time8    = slotTogether?.slot_time?.slice(0, 5) || '08:00'
+                    const timeLate = slotAdultOnly?.slot_time?.slice(0, 5) || '—'
+                    const slots = passengers.map(p => {
+                      if (p.is_marmaille) return time8
+                      if (p.flight_type === 'performance') return timeLate
+                      return parseInt(p.weight_kg) < 70 ? time8 : timeLate
+                    })
+                    // Ensure child has an adult companion at 08:00
+                    const hasChild       = passengers.some(p => p.is_marmaille)
+                    const hasAdultAt8    = slots.some((s, i) => s === time8 && !passengers[i].is_marmaille)
+                    if (hasChild && !hasAdultAt8) {
+                      const firstDiscoIdx = passengers.findIndex(p => !p.is_marmaille && p.flight_type !== 'performance')
+                      if (firstDiscoIdx >= 0) slots[firstDiscoIdx] = time8
+                    }
+                    return (
+                      <div style={{ margin:'8px 0', fontSize:13, lineHeight:1.9 }}>
+                        {passengers.map((p, idx) => (
+                          <div key={idx} style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
+                            <span style={{ opacity:.8 }}>
+                              {p.is_marmaille ? '🟡' : '🔵'} Passager {idx + 1}
+                              {p.first_name ? ` — ${p.first_name}` : ''}
+                            </span>
+                            <span style={{ fontWeight:600, whiteSpace:'nowrap' }}>🕗 {slots[idx]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   {slotAdultOnly
                     ? <button className="btn-secondary" onClick={chooseSplit}>Réserver en deux fois</button>
                     : <p className="error-msg">Aucun créneau disponible ce jour-là.</p>}
