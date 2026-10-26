@@ -50,6 +50,11 @@ export default function Booking() {
   const [selectedDate, setSelectedDate]   = useState(TODAY)
   const [slots, setSlots]                 = useState([])
   const [passengers, setPassengers]       = useState([emptyPassenger()])
+  // Quick-fill counts
+  const [totalCount, setTotalCount]           = useState(1)
+  const [childCount, setChildCount]           = useState(0)
+  const [discoveryCount, setDiscoveryCount]   = useState(1)
+  const [performanceCount, setPerformanceCount] = useState(0)
   const [suggestedSlot, setSuggestedSlot] = useState(null)
   const [selectedSlot, setSelectedSlot]   = useState(null)
   const [contact, setContact]             = useState({ name: '', phone: '' })
@@ -79,6 +84,31 @@ async function loadSlots(date) {
     setSuggestedSlot(null); setSelectedSlot(null); setSelectedSlots([])
     setSlotInfo(null); setConflictMode(null)
     setSlotTogether(null); setSlotAdultOnly(null)
+  }
+
+  // Build passenger rows from the 4 quick-fill counts, preserving existing data
+  function buildPassengersFromCounts(total, children, disco, perf, existing) {
+    const childFTId = childFlightType?.id || 'discovery'
+    const rows = []
+    for (let i = 0; i < total; i++) {
+      const prev = existing[i] || {}
+      if (i < children) {
+        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
+                    weight_kg: prev.weight_kg||'', age: prev.age||'',
+                    flight_type: childFTId, parental_auth: prev.parental_auth||false })
+      } else if (i < children + disco) {
+        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
+                    weight_kg: prev.weight_kg||'', age: prev.age||'', flight_type: 'discovery' })
+      } else if (i < children + disco + perf) {
+        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
+                    weight_kg: prev.weight_kg||'', age: prev.age||'', flight_type: 'performance' })
+      } else {
+        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
+                    weight_kg: prev.weight_kg||'', age: prev.age||'',
+                    flight_type: adultFlightTypes[0]?.id || 'discovery' })
+      }
+    }
+    return rows
   }
 
   function updatePassenger(i, field, value) {
@@ -433,6 +463,7 @@ if (hasLightChild) {
         <button className="btn-primary" onClick={() => {
           setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' }); setNotes('')
           setSelectedSlots([]); setSuggestedSlot(null); setSelectedSlot(null)
+          setTotalCount(1); setChildCount(0); setDiscoveryCount(1); setPerformanceCount(0)
         }}>Nouvelle réservation</button>
       </div>
     </div>
@@ -473,6 +504,73 @@ if (hasLightChild) {
               <div className="field"><label>Téléphone</label>
                 <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
                 {errors.contact_phone && <span className="error-msg">{errors.contact_phone}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Quick-fill: 4 compact dropdowns ─────────────────────────────── */}
+          <div className="passenger-card">
+            <div className="passenger-header">Votre groupe</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+
+              {/* Personnes */}
+              <div className="field">
+                <label>Personnes</label>
+                <select value={totalCount} onChange={e => {
+                  const total    = parseInt(e.target.value)
+                  const children = Math.min(childCount, total)
+                  const free     = total - children
+                  const disco    = Math.min(discoveryCount, free)
+                  const perf     = Math.min(performanceCount, free - disco)
+                  setTotalCount(total); setChildCount(children)
+                  setDiscoveryCount(disco); setPerformanceCount(perf)
+                  setPassengers(buildPassengersFromCounts(total, children, disco, perf, passengers))
+                }}>
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+
+              {/* Marmailles */}
+              <div className="field">
+                <label>Enfants (–14 ans)</label>
+                <select value={childCount} onChange={e => {
+                  const children = parseInt(e.target.value)
+                  const free     = totalCount - children
+                  const disco    = Math.min(discoveryCount, free)
+                  const perf     = Math.min(performanceCount, free - disco)
+                  setChildCount(children); setDiscoveryCount(disco); setPerformanceCount(perf)
+                  setPassengers(buildPassengersFromCounts(totalCount, children, disco, perf, passengers))
+                }}>
+                  {Array.from({ length: totalCount + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+
+              {/* Découverte */}
+              <div className="field">
+                <label>Vols Découverte</label>
+                <select value={discoveryCount} onChange={e => {
+                  const disco = parseInt(e.target.value)
+                  const free  = totalCount - childCount
+                  const perf  = Math.min(performanceCount, free - disco)
+                  setDiscoveryCount(disco); setPerformanceCount(perf)
+                  setPassengers(buildPassengersFromCounts(totalCount, childCount, disco, perf, passengers))
+                }}>
+                  {Array.from({ length: totalCount - childCount + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+
+              {/* Performance */}
+              <div className="field">
+                <label>Vols Performance</label>
+                <select value={performanceCount} onChange={e => {
+                  const perf  = parseInt(e.target.value)
+                  const free  = totalCount - childCount
+                  const disco = Math.min(discoveryCount, free - perf)
+                  setPerformanceCount(perf); setDiscoveryCount(disco)
+                  setPassengers(buildPassengersFromCounts(totalCount, childCount, disco, perf, passengers))
+                }}>
+                  {Array.from({ length: totalCount - childCount + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+                </select>
               </div>
             </div>
           </div>
