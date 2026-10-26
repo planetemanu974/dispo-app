@@ -154,9 +154,11 @@ async function loadSlots(date) {
       const age    = parseInt(p.age, 10)
       const weight = parseInt(p.weight_kg, 10)
 
-      // First name and last name are optional (contact info is enough)
-      if (!weight || weight <= 0) { newErrors[`${i}_weight`] = 'Poids requis';   valid = false }
-      if (!age    || age    < 0)  { newErrors[`${i}_age`]    = 'Âge requis';     valid = false }
+      // Weight required for everyone; adults use dropdown (value = 60 or 80)
+      if (!p.weight_kg || p.weight_kg === '') { newErrors[`${i}_weight`] = 'Veuillez indiquer le poids'; valid = false }
+
+      // Age required only for marmaille
+      if (p.is_marmaille && (!age || age < 0)) { newErrors[`${i}_age`] = 'Âge requis'; valid = false }
 
       // Marmaille weight check — insurance minimum 18 kg
       if (p.is_marmaille && weight) {
@@ -180,18 +182,15 @@ async function loadSlots(date) {
         }
       }
 
-      if (weight && age) {
+      // Adults: validate weight category and parental auth only (no age check)
+      if (!p.is_marmaille && weight) {
         const wResult = validateWeight(weight)
         if (wResult.blocked) { newErrors[`${i}_weight`] = wResult.warning; valid = false }
+      }
 
-        if (!p.is_marmaille) {
-          const aResult = validateAge(age, weight, p.flight_type)
-          if (!aResult.ok) { newErrors[`${i}_age`] = aResult.error; valid = false }
-        }
-
-        if (age < 18 && !p.parental_auth) {
-          newErrors[`${i}_parental`] = 'Autorisation parentale requise'; valid = false
-        }
+      // Marmaille parental auth check (age always < 18)
+      if (p.is_marmaille && !p.parental_auth) {
+        newErrors[`${i}_parental`] = 'Autorisation parentale requise'; valid = false
       }
     })
 
@@ -648,46 +647,59 @@ if (hasLightChild) {
                   </div>
                 </div>
 
-                <div className="field-row">
-                  <div className="field"><label>Poids (kg)</label>
-                    <input type="number" min="1" max="100" value={p.weight_kg}
-                      onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
-                    {/* Inline warning for marmaille under insurance weight minimum */}
-                    {p.is_marmaille && p.weight_kg !== '' && (() => {
-                      const w = parseInt(p.weight_kg, 10)
-                      const minW = AGE_LIMITS.MIN_WEIGHT_KG ?? 18
-                      if (!isNaN(w) && w < minW) return (
-                        <span className="error-msg" style={{ display:'block', marginTop:4 }}>
-                          ⚠️ Pour des raisons d'assurance, nous ne faisons voler les enfants qu'à partir de {minW} kg.
-                        </span>
-                      )
-                      return null
-                    })()}
+                {p.is_marmaille ? (
+                  /* Marmaille — exact weight (18 kg min) + age (6–14) required */
+                  <div className="field-row">
+                    <div className="field"><label>Poids (kg)</label>
+                      <input type="number" min="1" max="100" value={p.weight_kg}
+                        onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
+                      {p.weight_kg !== '' && (() => {
+                        const w = parseInt(p.weight_kg, 10)
+                        const minW = AGE_LIMITS.MIN_WEIGHT_KG ?? 18
+                        if (!isNaN(w) && w < minW) return (
+                          <span className="error-msg" style={{ display:'block', marginTop:4 }}>
+                            ⚠️ Pour des raisons d'assurance, nous ne faisons voler les enfants qu'à partir de {minW} kg.
+                          </span>
+                        )
+                        return null
+                      })()}
+                      {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
+                    </div>
+                    <div className="field"><label>Âge</label>
+                      <input type="number" min="1" max="99" value={p.age}
+                        onChange={e => updatePassenger(i, 'age', e.target.value)} />
+                      {p.age !== '' && (() => {
+                        const a = parseInt(p.age, 10)
+                        const minA = childFlightType?.min_age ?? 6
+                        const maxA = childFlightType?.max_age ?? 14
+                        if (!isNaN(a) && a < minA) return (
+                          <span className="error-msg" style={{ display:'block', marginTop:4 }}>
+                            ⚠️ Le parapente est réservé aux enfants de {minA} ans minimum. Cette réservation ne peut pas aboutir.
+                          </span>
+                        )
+                        if (!isNaN(a) && a > maxA) return (
+                          <span className="error-msg" style={{ display:'block', marginTop:4 }}>
+                            ⚠️ Le vol marmaille est pour les {minA}–{maxA} ans. Modifiez le type de vol ci-dessus.
+                          </span>
+                        )
+                        return null
+                      })()}
+                      {errors[`${i}_age`] && <span className="error-msg">{errors[`${i}_age`]}</span>}
+                    </div>
+                  </div>
+                ) : (
+                  /* Adult — simple weight category, no age needed */
+                  <div className="field">
+                    <label>Poids</label>
+                    <select value={p.weight_kg}
+                      onChange={e => updatePassenger(i, 'weight_kg', e.target.value)}>
+                      <option value="">— Sélectionnez —</option>
+                      <option value="60">Moins de 70 kg</option>
+                      <option value="80">70 kg et plus</option>
+                    </select>
                     {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
                   </div>
-                  <div className="field"><label>Âge</label>
-                    <input type="number" min="1" max="99" value={p.age}
-                      onChange={e => updatePassenger(i, 'age', e.target.value)} />
-                    {/* Inline warning for marmaille out-of-range age (live feedback before submit) */}
-                    {p.is_marmaille && p.age !== '' && (() => {
-                      const a = parseInt(p.age, 10)
-                      const minA = childFlightType?.min_age ?? 6
-                      const maxA = childFlightType?.max_age ?? 14
-                      if (!isNaN(a) && a < minA) return (
-                        <span className="error-msg" style={{ display:'block', marginTop:4 }}>
-                          ⚠️ Le parapente est réservé aux enfants de {minA} ans minimum. Cette réservation ne peut pas aboutir.
-                        </span>
-                      )
-                      if (!isNaN(a) && a > maxA) return (
-                        <span className="error-msg" style={{ display:'block', marginTop:4 }}>
-                          ⚠️ Le vol marmaille est pour les {minA}–{maxA} ans. Modifiez le type de vol ci-dessus.
-                        </span>
-                      )
-                      return null
-                    })()}
-                    {errors[`${i}_age`] && <span className="error-msg">{errors[`${i}_age`]}</span>}
-                  </div>
-                </div>
+                )}
 
                 <div className="field">
                   <label>Type de vol</label>
