@@ -345,7 +345,7 @@ if (hasLightChild) {
   return (
     <div className="booking-page">
       <header className="booking-header">
-        <span className="logo">🪂</span>
+        <img src="/logo-icon.png" alt="Dispo Pas Dispo" style={{ height: 48, marginBottom: 10 }} />
         <h1>Réserver un vol</h1>
         <p>Planète Parapente Réunion — Saint-Leu</p>
       </header>
