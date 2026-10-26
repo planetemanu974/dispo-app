@@ -59,6 +59,7 @@ export default function Booking() {
   const [conflictMode, setConflictMode]   = useState(null)   // 'child_perf' | 'heavy' | 'split_message' | null
   const [slotTogether, setSlotTogether]   = useState(null)   // 8h00 slot
   const [slotAdultOnly, setSlotAdultOnly] = useState(null)   // first non-8h00 slot
+  const [selectedSlots, setSelectedSlots] = useState([])    // consecutive slots for multi-slot flights
   const [submitting, setSubmitting]       = useState(false)
   const [bookingRef, setBookingRef]       = useState(null)
 
@@ -75,7 +76,7 @@ async function loadSlots(date) {
       .eq('has_capacity', true)
     const sorted = (data || []).sort((a, b) => a.slot_time.localeCompare(b.slot_time))
     setSlots(sorted)
-    setSuggestedSlot(null); setSelectedSlot(null)
+    setSuggestedSlot(null); setSelectedSlot(null); setSelectedSlots([])
     setSlotInfo(null); setConflictMode(null)
     setSlotTogether(null); setSlotAdultOnly(null)
   }
@@ -192,6 +193,50 @@ if (hasLightChild) {
       setStep(3); return
     }
 
+    // ── Multi-slot flight type detection ────────────────────────────────────
+    // If any passenger has a flight type requiring N consecutive slots, find them
+    const maxBlocks = passengers.reduce((max, p) => {
+      const ft = flightTypes.find(f => f.id === p.flight_type)
+      return Math.max(max, ft?.blocks_slots ?? 1)
+    }, 1)
+
+    if (maxBlocks > 1) {
+      // Ordered slot times from settings (e.g. ['08:00','09:15','10:30',...])
+      const slotsConfig = settingsCtx?.settings?.slots ?? DEFAULT_SETTINGS.slots
+      // Map available eligible slots by normalized HH:MM
+      const availableByTime = {}
+      for (const s of eligibleSlots) availableByTime[s.slot_time.slice(0, 5)] = s
+
+      // Find first run of maxBlocks consecutive config slots all available
+      let foundSlots = null
+      for (let i = 0; i <= slotsConfig.length - maxBlocks; i++) {
+        const run = []
+        for (let j = 0; j < maxBlocks; j++) {
+          const t = slotsConfig[i + j]
+          if (availableByTime[t]) run.push(availableByTime[t])
+          else break
+        }
+        if (run.length === maxBlocks) { foundSlots = run; break }
+      }
+
+      if (!foundSlots) {
+        setSuggestedSlot(null); setSelectedSlot(null); setSelectedSlots([])
+        setConflictMode(null); setSlotInfo(null)
+        setErrors({ general: `Aucune série de ${maxBlocks} créneaux consécutifs disponible ce jour-là. Essayez une autre date.` })
+        setStep(3); return
+      }
+
+      const timesStr = foundSlots.map(s => s.slot_time.slice(0, 5)).join(' + ')
+      setSuggestedSlot(foundSlots[0])
+      setSelectedSlot(foundSlots[0])
+      setSelectedSlots(foundSlots)
+      setConflictMode(null)
+      setSlotInfo(`Ce vol occupe ${maxBlocks} créneaux consécutifs : ${timesStr}.`)
+      setStep(3); return
+    }
+
+    // ── Single slot ─────────────────────────────────────────────────────────
+    setSelectedSlots([])
     const { optionB } = suggestSlots(eligibleSlots)
     setSuggestedSlot(optionB); setSelectedSlot(optionB); setConflictMode(null)
     let slotInfoMsg = null
@@ -280,13 +325,16 @@ if (hasLightChild) {
   }
 
   async function submitBooking() {
-    if (!selectedSlot) return
+    // Use multi-slot array when available, otherwise single slot
+    const slotsToBook = selectedSlots.length > 1 ? selectedSlots : (selectedSlot ? [selectedSlot] : [])
+    if (slotsToBook.length === 0) return
     setSubmitting(true)
 
+    // ── Create primary booking on first slot ─────────────────────────────────
     const { data: bookingData, error: bookingError } = await supabase.from('bookings')
       .insert({
-        pilot_slot_id: selectedSlot.id, status: 'pending', source: 'public',
-        contact_name:  contact.name,    contact_phone: contact.phone,
+        pilot_slot_id: slotsToBook[0].id, status: 'pending', source: 'public',
+        contact_name:  contact.name,       contact_phone: contact.phone,
         notes:         notes || null,
       })
       .select().single()
@@ -295,6 +343,8 @@ if (hasLightChild) {
       setErrors({ submit: 'Erreur lors de la réservation. Réessayez.' })
       setSubmitting(false); return
     }
+
+    const ref = bookingData.id.slice(0, 8).toUpperCase()
 
     const paxInserts = passengers.map(p => ({
       booking_id:    bookingData.id,
@@ -313,9 +363,35 @@ if (hasLightChild) {
       setSubmitting(false); return
     }
 
-    const ref     = bookingData.id.slice(0, 8).toUpperCase()
+    // ── Create linked bookings for additional slots (multi-slot flights) ──────
+    for (let i = 1; i < slotsToBook.length; i++) {
+      const { data: extraBooking, error: extraErr } = await supabase.from('bookings')
+        .insert({
+          pilot_slot_id: slotsToBook[i].id, status: 'pending', source: 'public',
+          contact_name:  contact.name,       contact_phone: contact.phone,
+          notes:         `Lié à ${ref} — créneau ${i + 1}/${slotsToBook.length}`,
+        })
+        .select().single()
+
+      if (!extraErr && extraBooking) {
+        // Mirror passengers on the linked booking
+        const linkedPax = passengers.map(p => ({
+          booking_id:    extraBooking.id,
+          first_name:    p.first_name,
+          last_name:     p.last_name,
+          weight_kg:     parseInt(p.weight_kg),
+          age:           parseInt(p.age),
+          flight_type:   p.flight_type,
+          parental_auth: p.parental_auth,
+          price_eur:     calculatePrice(parseInt(p.age), p.flight_type) * 100,
+        }))
+        await supabase.from('passengers').insert(linkedPax)
+      }
+    }
+
     const dateStr = formatDateFR(selectedDate)
-    const time    = selectedSlot.slot_time?.slice(0, 5)
+    // For SMS: show all booked times
+    const time    = slotsToBook.map(s => s.slot_time?.slice(0, 5)).join(' + ')
     const paxList = passengers.map(p => `${p.first_name} ${p.last_name}`).join(', ')
 
     // ── SMS au client ────────────────────────────────────────────────────────
@@ -356,6 +432,7 @@ if (hasLightChild) {
         <p>Le moniteur va confirmer votre vol. Vous serez contacté au numéro indiqué.</p>
         <button className="btn-primary" onClick={() => {
           setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' }); setNotes('')
+          setSelectedSlots([]); setSuggestedSlot(null); setSelectedSlot(null)
         }}>Nouvelle réservation</button>
       </div>
     </div>
@@ -573,9 +650,23 @@ if (hasLightChild) {
               {errors.general && <p className="error-msg">{errors.general}</p>}
 
               {suggestedSlot ? (
-                <div className="slot-option recommended selected">
-                  <span className="slot-time-big">{suggestedSlot.slot_time?.slice(0, 5)}</span>
-                </div>
+                selectedSlots.length > 1 ? (
+                  // Multi-slot: show each consecutive slot as a card
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {selectedSlots.map((s, idx) => (
+                      <div key={s.id} className="slot-option recommended selected" style={{ flex: '1', minWidth: '80px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.7, marginBottom: '2px' }}>
+                          {idx === 0 ? '1er vol' : `${idx + 1}e vol`}
+                        </div>
+                        <span className="slot-time-big">{s.slot_time?.slice(0, 5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="slot-option recommended selected">
+                    <span className="slot-time-big">{suggestedSlot.slot_time?.slice(0, 5)}</span>
+                  </div>
+                )
               ) : (
                 !errors.general && <p className="info-msg">Aucun créneau disponible pour vos contraintes ce jour-là.</p>
               )}
