@@ -1540,11 +1540,16 @@ export default function Dashboard({ pilot }) {
                 <div className="modal-contact">
                   <strong>{selectedBooking.contact_name}</strong><br />
                   {selectedBooking.contact_phone && (
-                    <a
-                      href={`tel:${selectedBooking.contact_phone.replace(/\s+/g,'')}`}
-                      className="btn-whatsapp-contact">
-                      📞 {selectedBooking.contact_phone} — Appeler
-                    </a>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                      <a href={`tel:${selectedBooking.contact_phone.replace(/\s+/g,'')}`}
+                        style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#1d4ed8', color: 'white', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none' }}>
+                        📞 Appeler
+                      </a>
+                      <a href={`sms:${selectedBooking.contact_phone.replace(/\s+/g,'')}`}
+                        style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none' }}>
+                        💬 SMS
+                      </a>
+                    </div>
                   )}
                 </div>
                 <div className="modal-passengers">
