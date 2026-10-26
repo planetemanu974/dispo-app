@@ -1171,9 +1171,12 @@ export default function Dashboard({ pilot }) {
                                 {name}
                               </span>
                             )}
-                            {/* Row 3: pax count */}
+                            {/* Row 3: pax count OR "pas dispo" label */}
                             {pax !== null && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85 }}>{pax} pax</span>
+                            )}
+                            {!slot.is_available && activeBks.length === 0 && (
+                              <span style={{ fontSize:'0.58rem', fontWeight:700, padding:'0 4px', opacity:0.8, letterSpacing:'0.04em', textTransform:'uppercase' }}>pas dispo</span>
                             )}
                           </div>
                         )
