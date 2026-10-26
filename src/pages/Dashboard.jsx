@@ -1143,6 +1143,7 @@ export default function Dashboard({ pilot }) {
                                 openNewBooking(slot, date)
                               }
                             }}>
+                            {/* Time label */}
                             <span style={{ fontSize:'0.55rem', fontWeight:700, padding:'2px 4px 0', opacity:0.85 }}>
                               {slot.slot_time.slice(0, 5)}
                             </span>
@@ -1150,10 +1151,17 @@ export default function Dashboard({ pilot }) {
                             {pax !== null && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85 }}>{pax} pax</span>
                             )}
-                            {/* "+" button when there's capacity remaining — hidden on colleague/external slots */}
+                            {/* "+" button — top-right corner, always visible, never cut off */}
                             {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
                               <button
-                                style={{ marginTop:'auto', alignSelf:'flex-end', background:'rgba(255,255,255,0.3)', color:'white', border:'none', borderRadius:4, fontSize:'0.7rem', fontWeight:800, padding:'1px 5px', cursor:'pointer', lineHeight:1.4, margin:'2px' }}
+                                style={{
+                                  position:'absolute', top:3, right:3,
+                                  background:'rgba(255,255,255,0.35)', color:'white',
+                                  border:'1px solid rgba(255,255,255,0.5)', borderRadius:5,
+                                  fontSize:'0.68rem', fontWeight:900,
+                                  padding:'1px 5px', lineHeight:1.5,
+                                  cursor:'pointer', backdropFilter:'blur(2px)',
+                                }}
                                 onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
                                 title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
                                 +{remainingW}
