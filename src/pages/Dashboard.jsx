@@ -4,6 +4,7 @@ import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
 import Settings from './Settings'
 import History from './History'
+import AssignColleague from '../components/AssignColleague'
 import { useSettings } from '../contexts/SettingsContext'
 
 const TODAY = new Date().toISOString().split('T')[0]
@@ -170,6 +171,7 @@ export default function Dashboard({ pilot }) {
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
   const [showSettings, setShowSettings]       = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
+  const [showAssign, setShowAssign]           = useState(false) // AssignColleague drawer
 
   // PWA update detection — fires when a new service worker takes control
   const [updateReady, setUpdateReady] = useState(false)
@@ -890,7 +892,7 @@ export default function Dashboard({ pilot }) {
       {/* Page Paramètres — overlay plein écran */}
       {showSettings && (
         <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
-          <Settings onBack={() => setShowSettings(false)} />
+          <Settings onBack={() => setShowSettings(false)} pilot={pilot} />
         </div>
       )}
 
@@ -899,6 +901,18 @@ export default function Dashboard({ pilot }) {
         <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
           <History pilot={pilot} onBack={() => setShowHistory(false)} />
         </div>
+      )}
+
+      {/* AssignColleague drawer — shown over booking detail */}
+      {showAssign && selectedBooking && (
+        <AssignColleague
+          booking={selectedBooking}
+          pilot={pilot}
+          slotDate={selectedBooking.pilot_slots?.slot_date || selectedDate}
+          slotTime={selectedBooking.pilot_slots?.slot_time}
+          onClose={() => setShowAssign(false)}
+          onAssigned={() => { /* booking detail stays open, assignments reload inside */ }}
+        />
       )}
 
       {/* ColleaguePanel — déclenché uniquement depuis le menu */}
@@ -1419,6 +1433,14 @@ export default function Dashboard({ pilot }) {
                 )}
                 {(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') && (
                   <div className="booking-manage-actions">
+                    {/* Assign colleague — shown when booking has multiple passengers or pilot wants help */}
+                    <button
+                      className="btn-edit"
+                      onClick={() => setShowAssign(true)}
+                      style={{ background: 'rgba(29,78,216,0.15)', borderColor: 'rgba(29,78,216,0.4)', color: '#93c5fd' }}
+                    >
+                      🧑‍✈️ Appeler un collègue en renfort
+                    </button>
                     <button className="btn-edit" onClick={enterEditMode}>✏️ Modifier la reservation</button>
                     <button className="btn-cancel-booking" onClick={() => handleCancel(selectedBooking.id)}>
                       🗑 Annuler cette reservation

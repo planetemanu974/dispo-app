@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import { useSettings } from '../contexts/SettingsContext'
+import ColleagueManager from '../components/ColleagueManager'
 
 // --------------- Inline styles ---------------
 const s = {
@@ -344,10 +345,11 @@ function TabAppearance({ settings, saveSettings }) {
 const TABS = [
   { id: 'slots',      label: '🕐 Créneaux' },
   { id: 'flights',    label: '🪂 Vols & tarifs' },
+  { id: 'colleagues', label: '👥 Collègues' },
   { id: 'appearance', label: '🎨 Apparence' },
 ]
 
-export default function Settings({ onBack }) {
+export default function Settings({ onBack, pilot }) {
   const { settings, saveSettings } = useSettings()
   const [activeTab, setActiveTab] = useState('slots')
 
@@ -383,6 +385,7 @@ export default function Settings({ onBack }) {
       <div style={s.body}>
         {activeTab === 'slots'      && <TabSlots      settings={settings} saveSettings={saveSettings} />}
         {activeTab === 'flights'    && <TabFlights    settings={settings} saveSettings={saveSettings} />}
+        {activeTab === 'colleagues' && pilot && <ColleagueManager pilot={pilot} />}
         {activeTab === 'appearance' && <TabAppearance settings={settings} saveSettings={saveSettings} />}
       </div>
     </div>
