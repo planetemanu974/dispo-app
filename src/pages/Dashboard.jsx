@@ -436,6 +436,53 @@ export default function Dashboard({ pilot }) {
       })
     }
 
+    // ── Multi-slot: reserve consecutive slots for flights with blocks_slots > 1 ──
+    const maxBlocks = nbForm.passengers.reduce((max, p) => {
+      if (!p.firstName.trim()) return max
+      const ft = flightTypes.find(f => f.id === p.flightType)
+      return Math.max(max, ft?.blocks_slots ?? 1)
+    }, 1)
+
+    if (maxBlocks > 1) {
+      // Fetch next (maxBlocks - 1) pilot slots on same day after selected slot
+      const { data: nextSlots } = await supabase
+        .from('pilot_slots')
+        .select('id, slot_time')
+        .eq('pilot_id', pilot.id)
+        .eq('slot_date', newBookingSlot.date)
+        .gt('slot_time', newBookingSlot.slot.slot_time)
+        .order('slot_time', { ascending: true })
+        .limit(maxBlocks - 1)
+
+      for (let i = 0; i < (nextSlots || []).length; i++) {
+        const extraSlot = nextSlots[i]
+        const { data: extraBk } = await supabase.from('bookings').insert({
+          pilot_slot_id: extraSlot.id,
+          contact_name:  nbForm.contactName.trim(),
+          contact_phone: nbForm.contactPhone.trim(),
+          notes:         `Lié à ${ref} — créneau ${i + 2}/${maxBlocks}`,
+          status:        'confirmed',
+          source:        'manual',
+          booking_ref:   ref + '-' + (i + 2),
+        }).select().single()
+
+        if (extraBk) {
+          for (const p of nbForm.passengers) {
+            if (!p.firstName.trim()) continue
+            await supabase.from('passengers').insert({
+              booking_id:  extraBk.id,
+              first_name:  p.firstName.trim(),
+              last_name:   p.lastName.trim(),
+              weight_kg:   parseInt(p.weight)  || 0,
+              age:         parseInt(p.age)     || 0,
+              flight_type: p.flightType,
+              price_eur:   flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
+            })
+          }
+        }
+      }
+    }
+
     const savedDate = newBookingSlot.date
     setNbSaving(false)
     setNewBookingSlot(null)
@@ -1221,7 +1268,11 @@ export default function Dashboard({ pilot }) {
                 )}
                 {selectedBooking.status === 'confirmed' && (
                   <div className="booking-whatsapp-actions">
-                    <div className="booking-confirmed-label">✓ Vol confirme — SMS envoye au client</div>
+                    <div className="booking-confirmed-label">
+                      ✓ Vol confirmé
+                      {selectedBooking.source !== 'manual' && ' — SMS envoyé au client'}
+                      {selectedBooking.source === 'manual' && ' (réservation manuelle)'}
+                    </div>
                   </div>
                 )}
                 {selectedBooking.status === 'refused' && (
