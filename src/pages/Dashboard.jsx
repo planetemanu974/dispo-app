@@ -286,24 +286,25 @@ export default function Dashboard({ pilot }) {
       bookingsData = data || []
     }
 
-    // Fetch colleague assignments (pending + refused) for slot colour indicators
+    // Fetch colleague assignments (all statuses) for slot colour indicators
     const bookingIds = bookingsData.map(b => b.id)
-    let pendingAssignmentBookingIds = new Set()  // orange  — waiting for reply
-    let refusedAssignmentBookingIds = new Set()  // red     — refused, needs replacement
+    let pendingAssignmentBookingIds  = new Set()  // orange — waiting for reply
+    let refusedAssignmentBookingIds  = new Set()  // red    — refused, no replacement
+    let acceptedAssignmentBookingIds = new Set()  // green  — colleague confirmed
     if (bookingIds.length > 0) {
       const { data: assignData } = await supabase
         .from('booking_assignments')
         .select('booking_id, status')
         .in('booking_id', bookingIds)
-        .in('status', ['pending', 'refused'])
       ;(assignData || []).forEach(a => {
         if (a.status === 'pending')  pendingAssignmentBookingIds.add(a.booking_id)
         if (a.status === 'refused')  refusedAssignmentBookingIds.add(a.booking_id)
+        if (a.status === 'accepted') acceptedAssignmentBookingIds.add(a.booking_id)
       })
-      // A booking with a "refused" but also a "pending" stays orange (replacement in progress)
-      // Only mark as refused-only when there's no pending replacement
+      // A booking with "refused" but also "pending" stays orange (replacement in progress)
       refusedAssignmentBookingIds.forEach(id => {
-        if (pendingAssignmentBookingIds.has(id)) refusedAssignmentBookingIds.delete(id)
+        if (pendingAssignmentBookingIds.has(id) || acceptedAssignmentBookingIds.has(id))
+          refusedAssignmentBookingIds.delete(id)
       })
     }
 
@@ -321,8 +322,9 @@ export default function Dashboard({ pilot }) {
     // Attach assignment flags to each booking for slot colour logic
     Object.values(byDate).forEach(({ bookings }) => {
       bookings.forEach(b => {
-        b._hasPendingAssignment = pendingAssignmentBookingIds.has(b.id)
-        b._hasRefusedAssignment = refusedAssignmentBookingIds.has(b.id)
+        b._hasPendingAssignment  = pendingAssignmentBookingIds.has(b.id)
+        b._hasRefusedAssignment  = refusedAssignmentBookingIds.has(b.id)
+        b._hasAcceptedAssignment = acceptedAssignmentBookingIds.has(b.id)
       })
     })
 
@@ -1099,17 +1101,21 @@ export default function Dashboard({ pilot }) {
                         const endTime       = slotEndTime(slot.slot_time)
 
                         // Slot colours (priority order):
-                        // 🔴 Red    = colleague refused, still need a replacement
+                        // 🔴 Red    = needs a colleague (>1 pax, no assignment) OR colleague refused
                         // 🟠 Orange = waiting for colleague reply (pending)
                         // 🟢 Green  = confirmed
                         // 🟡 Yellow = booking pending pilot confirmation
                         // ⬜ Grey   = slot unavailable
                         // 🔵 Blue   = available slot (no booking)
-                        const hasPendingAssignment = activeBks.some(b => b._hasPendingAssignment)
-                        const hasRefusedAssignment = activeBks.some(b => b._hasRefusedAssignment)
+                        const hasPendingAssignment  = activeBks.some(b => b._hasPendingAssignment)
+                        const hasRefusedAssignment  = activeBks.some(b => b._hasRefusedAssignment)
+                        const hasAcceptedAssignment = activeBks.some(b => b._hasAcceptedAssignment)
+                        // Needs a colleague when total pax > 1 (tandem: 1 pilot per passenger)
+                        // Not needed if a colleague already accepted
+                        const needsColleague = totalPaxW > 1 && !hasAcceptedAssignment && !hasPendingAssignment
                         let wBg, wColor, wBorder
-                        if (hasRefusedAssignment) {
-                          wBg = '#dc2626'; wColor = 'white'; wBorder = '#991b1b' // red = refused, needs replacement
+                        if (hasRefusedAssignment || needsColleague) {
+                          wBg = '#dc2626'; wColor = 'white'; wBorder = '#991b1b' // red = needs replacement / no colleague yet
                         } else if (hasPendingAssignment) {
                           wBg = '#ea580c'; wColor = 'white'; wBorder = '#9a3412' // orange = waiting for reply
                         } else if (activeBks.some(b => b.status === 'confirmed')) {
@@ -1166,7 +1172,7 @@ export default function Dashboard({ pilot }) {
             <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
             <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
             <span className="legend-item"><span className="legend-dot" style={{ background:'#ea580c' }} />Collègue ?</span>
-            <span className="legend-item"><span className="legend-dot" style={{ background:'#dc2626' }} />Refusé !</span>
+            <span className="legend-item"><span className="legend-dot" style={{ background:'#dc2626' }} />Pilote manquant</span>
           </div>
         </div>
       )}
