@@ -666,24 +666,20 @@ if (hasLightChild) {
                   {!isChild && (() => { const ft = flightTypes.find(f => f.id === p.flight_type); return ft?.blocks_slots > 1 ? <span className="info-msg">⚠️ Ce vol occupe {ft.blocks_slots} créneaux consécutifs.</span> : null })()}
                 </div>
 
-                {/* Autorisation parentale — compacte, visible dès is_marmaille ou age < 18 */}
+                {/* Autorisation parentale — une seule ligne compacte */}
                 {needsAuth && (
-                  <div className="field checkbox-field" style={{
-                    background: p.parental_auth ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)',
-                    border: `1px solid ${p.parental_auth ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.3)'}`,
-                    borderRadius: 8, padding: '8px 12px',
+                  <label style={{
+                    display:'flex', alignItems:'center', gap:8, cursor:'pointer',
+                    padding:'6px 10px', borderRadius:6, fontSize:13,
+                    background: p.parental_auth ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)',
+                    border: `1px solid ${p.parental_auth ? 'rgba(34,197,94,.35)' : 'rgba(239,68,68,.35)'}`,
                   }}>
-                    <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', margin:0 }}>
-                      <input type="checkbox" checked={p.parental_auth}
-                        onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)}
-                        style={{ flexShrink:0 }} />
-                      <span style={{ fontSize:13 }}>
-                        <strong>Autorisation parentale confirmée</strong>
-                        <span style={{ opacity:.65, fontWeight:400 }}> — obligatoire pour les &lt;18 ans</span>
-                      </span>
-                    </label>
-                    {errors[`${i}_parental`] && <span className="error-msg">{errors[`${i}_parental`]}</span>}
-                  </div>
+                    <input type="checkbox" checked={p.parental_auth}
+                      onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)}
+                      style={{ flexShrink:0, margin:0 }} />
+                    <span><strong>Autorisation parentale</strong><span style={{ opacity:.65, fontWeight:400 }}> — obligatoire &lt;18 ans</span></span>
+                    {errors[`${i}_parental`] && <span className="error-msg" style={{ marginLeft:4 }}>{errors[`${i}_parental`]}</span>}
+                  </label>
                 )}
               </div>
             )
