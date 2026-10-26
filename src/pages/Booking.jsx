@@ -65,6 +65,7 @@ export default function Booking() {
   const [slotTogether, setSlotTogether]   = useState(null)   // 8h00 slot
   const [slotAdultOnly, setSlotAdultOnly] = useState(null)   // first non-8h00 slot
   const [selectedSlots, setSelectedSlots] = useState([])    // consecutive slots for multi-slot flights
+  const [splitMode, setSplitMode]         = useState(false)  // true when Option 2 chosen: two bookings at once
   const [submitting, setSubmitting]       = useState(false)
   const [bookingRef, setBookingRef]       = useState(null)
 
@@ -337,10 +338,12 @@ if (hasLightChild) {
     setConflictMode(null)
   }
 
-  // Choisir option 2 : deux réservations séparées
-  function chooseSplit() {
-    setConflictMode('split_message')
-    setSelectedSlot(null)
+  // Choisir option 2 : confirmer les deux créneaux en une seule soumission
+  function chooseSplitConfirm() {
+    setSplitMode(true)
+    setConflictMode(null)
+    setSelectedSlot(slotTogether)   // unlocks the OTP / submit button
+    setSlotInfo(null)
   }
 
   // ── OTP: send code to client phone ─────────────────────────────────────────
@@ -392,7 +395,97 @@ if (hasLightChild) {
     }
   }
 
+  // ── Split booking: create two separate bookings (8h + late slot) ──────────
+  async function submitSplitBooking() {
+    setSubmitting(true)
+    const time8    = slotTogether?.slot_time?.slice(0, 5) || '08:00'
+    const timeLate = slotAdultOnly?.slot_time?.slice(0, 5) || '—'
+
+    // Compute slot assignments (same logic as the UI preview)
+    const assign = passengers.map(p => {
+      if (p.is_marmaille) return time8
+      if (p.flight_type === 'performance') return timeLate
+      return parseInt(p.weight_kg) < 70 ? time8 : timeLate
+    })
+    // Safety: ensure child has an adult companion at 08:00
+    const hasChild    = passengers.some(p => p.is_marmaille)
+    const hasAdultAt8 = assign.some((s, i) => s === time8 && !passengers[i].is_marmaille)
+    if (hasChild && !hasAdultAt8) {
+      const firstDiscoIdx = passengers.findIndex(p => !p.is_marmaille && p.flight_type !== 'performance')
+      if (firstDiscoIdx >= 0) assign[firstDiscoIdx] = time8
+    }
+    const pax8h   = passengers.filter((_, i) => assign[i] === time8)
+    const paxLate = passengers.filter((_, i) => assign[i] === timeLate)
+
+    // ── Booking 1 : 8h00 ─────────────────────────────────────────────────────
+    const { data: b1, error: e1 } = await supabase.from('bookings')
+      .insert({ pilot_slot_id: slotTogether.id, status: 'pending', source: 'public',
+                contact_name: contact.name, contact_phone: contact.phone, notes: notes || null })
+      .select().single()
+    if (e1) { setErrors({ submit: 'Erreur réservation 8h00. Réessayez.' }); setSubmitting(false); return }
+
+    const ref = b1.id.slice(0, 8).toUpperCase()
+    await supabase.from('passengers').insert(pax8h.map(p => ({
+      booking_id: b1.id, first_name: p.first_name, last_name: p.last_name,
+      weight_kg: parseInt(p.weight_kg), age: parseInt(p.age),
+      flight_type: p.flight_type, parental_auth: p.parental_auth,
+      price_eur: calculatePrice(parseInt(p.age), p.flight_type) * 100,
+    })))
+
+    // ── Booking 2 : créneau tardif ────────────────────────────────────────────
+    const { data: b2, error: e2 } = await supabase.from('bookings')
+      .insert({ pilot_slot_id: slotAdultOnly.id, status: 'pending', source: 'public',
+                contact_name: contact.name, contact_phone: contact.phone,
+                notes: `Lié à ${ref}` })
+      .select().single()
+    if (e2) { setErrors({ submit: 'Erreur réservation créneau tardif. Réessayez.' }); setSubmitting(false); return }
+
+    await supabase.from('passengers').insert(paxLate.map(p => ({
+      booking_id: b2.id, first_name: p.first_name, last_name: p.last_name,
+      weight_kg: parseInt(p.weight_kg), age: parseInt(p.age),
+      flight_type: p.flight_type, parental_auth: p.parental_auth,
+      price_eur: calculatePrice(parseInt(p.age), p.flight_type) * 100,
+    })))
+
+    const dateStr = formatDateFR(selectedDate)
+
+    // ── SMS au client ─────────────────────────────────────────────────────────
+    if (contact.phone) {
+      const names8h   = pax8h.map(p => p.first_name || 'passager').join(', ')
+      const namesLate = paxLate.map(p => p.first_name || 'passager').join(', ')
+      const clientMsg =
+        `Bonjour ${contact.name}, votre demande est enregistrée !\n` +
+        `📅 ${dateStr}\n` +
+        `🕗 ${time8} : ${names8h}\n` +
+        `🕗 ${timeLate} : ${namesLate}\n` +
+        `Réf : ${ref}\n` +
+        `Le moniteur vous confirmera vos vols par SMS.\n` +
+        `L'equipe Planete Parapente`
+      await sendSMS(contact.phone, clientMsg)
+    }
+
+    // ── SMS au pilote ─────────────────────────────────────────────────────────
+    const names8h   = pax8h.map(p => p.first_name || 'passager').join(', ')
+    const namesLate = paxLate.map(p => p.first_name || 'passager').join(', ')
+    const pilotMsg =
+      `🪂 Réservation 2 créneaux\n` +
+      `Client : ${contact.name} — ${contact.phone}\n` +
+      `📅 ${dateStr}\n` +
+      `🕗 ${time8} : ${names8h}\n` +
+      `🕗 ${timeLate} : ${namesLate}\n` +
+      `Réf : ${ref}` +
+      (notes ? `\nNote : ${notes}` : '')
+    await sendSMS('PILOT', pilotMsg)
+
+    setBookingRef(ref)
+    setStep(4)
+    setSubmitting(false)
+  }
+
   async function submitBooking() {
+    // Delegate to split booking flow when Option 2 was chosen
+    if (splitMode) { await submitSplitBooking(); return }
+
     // Use multi-slot array when available, otherwise single slot
     const slotsToBook = selectedSlots.length > 1 ? selectedSlots : (selectedSlot ? [selectedSlot] : [])
     if (slotsToBook.length === 0) return
@@ -501,6 +594,7 @@ if (hasLightChild) {
         <button className="btn-primary" onClick={() => {
           setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' }); setNotes('')
           setSelectedSlots([]); setSuggestedSlot(null); setSelectedSlot(null)
+          setSplitMode(false); setConflictMode(null)
           setTotalCount(1); setChildCount(0); setDiscoveryCount(1); setPerformanceCount(0)
         }}>Nouvelle réservation</button>
       </div>
@@ -843,7 +937,7 @@ if (hasLightChild) {
                     )
                   })()}
                   {slotAdultOnly
-                    ? <button className="btn-secondary" onClick={chooseSplit}>Réserver en deux fois</button>
+                    ? <button className="btn-secondary" onClick={chooseSplitConfirm}>Confirmer les deux créneaux →</button>
                     : <p className="error-msg">Aucun créneau disponible ce jour-là.</p>}
                 </div>
               </div>
@@ -871,16 +965,6 @@ if (hasLightChild) {
             </div>
           )}
 
-          {/* ── Message après choix option 2 ── */}
-          {conflictMode === 'split_message' && (
-            <div className="info-msg">
-              <p>Réservez d'abord le vol de l'enfant (8h00), puis revenez faire une nouvelle réservation pour l'adulte.</p>
-              <button className="btn-primary" onClick={() => {
-                setStep(1); setPassengers([emptyPassenger()]); setContact({ name: '', phone: '' })
-                setConflictMode(null)
-              }}>Nouvelle réservation →</button>
-            </div>
-          )}
 
           {/* ── Créneau normal ── */}
           {!conflictMode && (
@@ -888,7 +972,40 @@ if (hasLightChild) {
               {slotInfo && <p className="info-msg">{slotInfo}</p>}
               {errors.general && <p className="error-msg">{errors.general}</p>}
 
-              {suggestedSlot ? (
+              {/* ── Split booking summary (Option 2 chosen) ── */}
+              {splitMode && slotTogether && slotAdultOnly ? (() => {
+                const time8    = slotTogether.slot_time?.slice(0, 5) || '08:00'
+                const timeLate = slotAdultOnly.slot_time?.slice(0, 5) || '—'
+                const assign   = passengers.map(p => {
+                  if (p.is_marmaille) return time8
+                  if (p.flight_type === 'performance') return timeLate
+                  return parseInt(p.weight_kg) < 70 ? time8 : timeLate
+                })
+                // Safety: ensure child has an adult at 08:00
+                const hasChild    = passengers.some(p => p.is_marmaille)
+                const hasAdultAt8 = assign.some((s, i) => s === time8 && !passengers[i].is_marmaille)
+                if (hasChild && !hasAdultAt8) {
+                  const firstDiscoIdx = passengers.findIndex(p => !p.is_marmaille && p.flight_type !== 'performance')
+                  if (firstDiscoIdx >= 0) assign[firstDiscoIdx] = time8
+                }
+                const pax8h   = passengers.filter((_, i) => assign[i] === time8)
+                const paxLate = passengers.filter((_, i) => assign[i] === timeLate)
+                return (
+                  <div style={{ background:'rgba(99,102,241,.08)', border:'1px solid rgba(99,102,241,.25)', borderRadius:10, padding:'12px 14px', marginBottom:8 }}>
+                    <p style={{ margin:'0 0 10px', fontSize:13, color:'#a5b4fc', fontWeight:600 }}>✅ Deux créneaux réservés simultanément</p>
+                    <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                      <div style={{ flex:1, minWidth:110, background:'rgba(99,102,241,.12)', borderRadius:8, padding:'8px 12px' }}>
+                        <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🕗 {time8}</div>
+                        {pax8h.map((p, i) => <div key={i} style={{ fontSize:13, opacity:.85 }}>{p.is_marmaille ? '🟡' : '🔵'} {p.first_name || `Passager`}</div>)}
+                      </div>
+                      <div style={{ flex:1, minWidth:110, background:'rgba(99,102,241,.12)', borderRadius:8, padding:'8px 12px' }}>
+                        <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🕗 {timeLate}</div>
+                        {paxLate.map((p, i) => <div key={i} style={{ fontSize:13, opacity:.85 }}>{p.is_marmaille ? '🟡' : '🔵'} {p.first_name || `Passager`}</div>)}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })() : suggestedSlot ? (
                 selectedSlots.length > 1 ? (
                   // Multi-slot: show each consecutive slot as a card
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -912,14 +1029,14 @@ if (hasLightChild) {
 
               {errors.submit && <p className="error-msg">{errors.submit}</p>}
 
-              {selectedSlot && !otpStep && (
+              {(selectedSlot || splitMode) && !otpStep && (
                 <button className="btn-primary" onClick={requestOtp}>
-                  Valider ma réservation →
+                  {splitMode ? 'Valider les deux créneaux →' : 'Valider ma réservation →'}
                 </button>
               )}
 
               {/* ── OTP verification block ── */}
-              {selectedSlot && otpStep && (
+              {(selectedSlot || splitMode) && otpStep && (
                 <div className="otp-block">
                   {otpStep === 'sending' && (
                     <p className="info-msg">📲 Envoi du code par SMS…</p>
