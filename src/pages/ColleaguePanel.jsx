@@ -658,10 +658,10 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
             {invoiceError && <p style={{ ...s.error, marginTop: 8 }}>{invoiceError}</p>}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-              <button type="button" onClick={() => setInvoiceColleague(null)} style={s.btnGrey}>Annuler</button>
-              <button type="submit" name="action" value="save" disabled={invoiceSaving} style={s.btnGreen}>{invoiceSaving ? 'Génération…' : '📥 Enregistrer'}</button>
+              <button type="submit" name="action" value="save" disabled={invoiceSaving} style={{ ...s.btnGreen, flex: 1 }}>{invoiceSaving ? 'Génération…' : '📥 Enregistrer'}</button>
               <button type="submit" name="action" value="send" disabled={invoiceSaving} style={{ ...s.btnGreen, background: '#0369a1', flex: 1 }}>📧 Envoyer</button>
             </div>
+            <button type="button" onClick={() => setInvoiceColleague(null)} style={{ ...s.btnGrey, width: '100%', marginTop: 8 }}>Annuler</button>
           </form>
         </ModalOverlay>
       )}
