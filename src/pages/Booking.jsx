@@ -88,8 +88,7 @@ async function loadSlots(date) {
       const age    = parseInt(p.age, 10)
       const weight = parseInt(p.weight_kg, 10)
 
-      if (!p.first_name.trim()) { newErrors[`${i}_first_name`] = 'Prénom requis'; valid = false }
-      if (!p.last_name.trim())  { newErrors[`${i}_last_name`]  = 'Nom requis';    valid = false }
+      // First name and last name are optional (contact info is enough)
       if (!weight || weight <= 0) { newErrors[`${i}_weight`] = 'Poids requis';   valid = false }
       if (!age    || age    < 0)  { newErrors[`${i}_age`]    = 'Âge requis';     valid = false }
 
@@ -347,7 +346,7 @@ if (hasLightChild) {
       <header className="booking-header">
         <img src="/logo-icon.png" alt="Dispo Pas Dispo" style={{ height: 48, marginBottom: 10 }} />
         <h1>Réserver un vol</h1>
-        <p>Planète Parapente Réunion — Saint-Leu</p>
+        <p>Planete Parapente - Saint-Leu</p>
       </header>
 
       {/* Step 1 */}
@@ -452,7 +451,7 @@ if (hasLightChild) {
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Allergie, mobilité réduite, occasion spéciale, message pour le moniteur…"
+                placeholder="Mobilité réduite, occasion spéciale, message pour le moniteur…"
                 rows={3}
                 style={{ width: '100%', resize: 'vertical' }}
               />
