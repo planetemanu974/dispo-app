@@ -645,12 +645,15 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
 
           {invoiceGmailUrl ? (
             /* ── Écran succès : PDF téléchargé, lien Gmail à cliquer ── */
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 15, marginBottom: 6 }}>✅ PDF téléchargé !</p>
-              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>
-                Cliquez sur le bouton ci-dessous pour ouvrir Gmail avec le mail pré-rempli,<br/>
-                puis glissez le PDF en pièce jointe.
-              </p>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 14, textAlign: 'center' }}>✅ PDF téléchargé !</p>
+              <div style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.7 }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Étapes</p>
+                <p style={{ margin: '2px 0' }}>1️⃣ Cliquez <strong>"Ouvrir Gmail"</strong> ci-dessous</p>
+                <p style={{ margin: '2px 0' }}>2️⃣ Dans Gmail, cliquez le trombone 📎</p>
+                <p style={{ margin: '2px 0' }}>3️⃣ Cherchez le PDF dans <strong>Téléchargements</strong></p>
+                <p style={{ margin: '2px 0' }}>4️⃣ Envoyez le mail</p>
+              </div>
               <a href={invoiceGmailUrl} target="_blank" rel="noopener noreferrer"
                 style={{ ...s.btnGreen, background: '#c5221f', display: 'block', textAlign: 'center', textDecoration: 'none', padding: '12px 0', borderRadius: 8, fontSize: 15, fontWeight: 700 }}>
                 📧 Ouvrir Gmail →
