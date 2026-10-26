@@ -158,6 +158,15 @@ async function loadSlots(date) {
       if (!weight || weight <= 0) { newErrors[`${i}_weight`] = 'Poids requis';   valid = false }
       if (!age    || age    < 0)  { newErrors[`${i}_age`]    = 'Âge requis';     valid = false }
 
+      // Marmaille weight check — insurance minimum 18 kg
+      if (p.is_marmaille && weight) {
+        const minW = AGE_LIMITS.MIN_WEIGHT_KG ?? 18
+        if (weight < minW) {
+          newErrors[`${i}_weight`] = `Pour des raisons d'assurance, nous ne faisons voler les enfants qu'à partir de ${minW} kg.`
+          valid = false
+        }
+      }
+
       // Marmaille age range check (blocks submission if age out of range)
       if (p.is_marmaille && age) {
         const minAge = childFlightType?.min_age ?? 6
@@ -641,8 +650,19 @@ if (hasLightChild) {
 
                 <div className="field-row">
                   <div className="field"><label>Poids (kg)</label>
-                    <input type="number" min="10" max="100" value={p.weight_kg}
+                    <input type="number" min="1" max="100" value={p.weight_kg}
                       onChange={e => updatePassenger(i, 'weight_kg', e.target.value)} />
+                    {/* Inline warning for marmaille under insurance weight minimum */}
+                    {p.is_marmaille && p.weight_kg !== '' && (() => {
+                      const w = parseInt(p.weight_kg, 10)
+                      const minW = AGE_LIMITS.MIN_WEIGHT_KG ?? 18
+                      if (!isNaN(w) && w < minW) return (
+                        <span className="error-msg" style={{ display:'block', marginTop:4 }}>
+                          ⚠️ Pour des raisons d'assurance, nous ne faisons voler les enfants qu'à partir de {minW} kg.
+                        </span>
+                      )
+                      return null
+                    })()}
                     {errors[`${i}_weight`] && <span className="error-msg">{errors[`${i}_weight`]}</span>}
                   </div>
                   <div className="field"><label>Âge</label>
