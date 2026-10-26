@@ -9,6 +9,9 @@ const emptyPassenger = () => ({
   flight_type: 'discovery', parental_auth: false,
 })
 
+// Safe integer parse: returns fallback when value is empty / NaN (avoids NULL on NOT-NULL DB columns)
+const safeInt = (v, fallback = 0) => { const n = parseInt(v, 10); return isNaN(n) ? fallback : n }
+
 function isFirstSlot(slot_time) {
   return slot_time?.startsWith('08:')
 }
@@ -425,12 +428,15 @@ if (hasLightChild) {
     if (e1) { setErrors({ submit: 'Erreur réservation 8h00. Réessayez.' }); setSubmitting(false); return }
 
     const ref = b1.id.slice(0, 8).toUpperCase()
-    await supabase.from('passengers').insert(pax8h.map(p => ({
+    const { error: e1pax } = await supabase.from('passengers').insert(pax8h.map(p => ({
       booking_id: b1.id, first_name: p.first_name, last_name: p.last_name,
-      weight_kg: parseInt(p.weight_kg), age: parseInt(p.age),
-      flight_type: p.flight_type, parental_auth: p.parental_auth,
-      price_eur: calculatePrice(parseInt(p.age), p.flight_type) * 100,
+      // safeInt avoids NaN→null on NOT-NULL columns (adults have no age field, perf has no weight)
+      weight_kg: safeInt(p.weight_kg, 0),
+      age:       safeInt(p.age, p.is_marmaille ? 12 : 30),
+      flight_type: p.flight_type, parental_auth: p.parental_auth || false,
+      price_eur: calculatePrice(safeInt(p.age, 30), p.flight_type) * 100,
     })))
+    if (e1pax) { setErrors({ submit: `Erreur passagers 8h : ${e1pax.message}` }); setSubmitting(false); return }
 
     // ── Booking 2 : créneau tardif ────────────────────────────────────────────
     const { data: b2, error: e2 } = await supabase.from('bookings')
@@ -440,12 +446,14 @@ if (hasLightChild) {
       .select().single()
     if (e2) { setErrors({ submit: 'Erreur réservation créneau tardif. Réessayez.' }); setSubmitting(false); return }
 
-    await supabase.from('passengers').insert(paxLate.map(p => ({
+    const { error: e2pax } = await supabase.from('passengers').insert(paxLate.map(p => ({
       booking_id: b2.id, first_name: p.first_name, last_name: p.last_name,
-      weight_kg: parseInt(p.weight_kg), age: parseInt(p.age),
-      flight_type: p.flight_type, parental_auth: p.parental_auth,
-      price_eur: calculatePrice(parseInt(p.age), p.flight_type) * 100,
+      weight_kg: safeInt(p.weight_kg, 0),
+      age:       safeInt(p.age, p.is_marmaille ? 12 : 30),
+      flight_type: p.flight_type, parental_auth: p.parental_auth || false,
+      price_eur: calculatePrice(safeInt(p.age, 30), p.flight_type) * 100,
     })))
+    if (e2pax) { setErrors({ submit: `Erreur passagers créneau tardif : ${e2pax.message}` }); setSubmitting(false); return }
 
     const dateStr = formatDateFR(selectedDate)
 
@@ -511,16 +519,16 @@ if (hasLightChild) {
       booking_id:    bookingData.id,
       first_name:    p.first_name,
       last_name:     p.last_name,
-      weight_kg:     parseInt(p.weight_kg),
-      age:           parseInt(p.age),
+      weight_kg:     safeInt(p.weight_kg, 0),
+      age:           safeInt(p.age, p.is_marmaille ? 12 : 30),
       flight_type:   p.flight_type,
-      parental_auth: p.parental_auth,
-      price_eur:     calculatePrice(parseInt(p.age), p.flight_type) * 100,
+      parental_auth: p.parental_auth || false,
+      price_eur:     calculatePrice(safeInt(p.age, 30), p.flight_type) * 100,
     }))
 
     const { error: paxError } = await supabase.from('passengers').insert(paxInserts)
     if (paxError) {
-      setErrors({ submit: 'Erreur passagers.' })
+      setErrors({ submit: `Erreur passagers : ${paxError.message}` })
       setSubmitting(false); return
     }
 
@@ -540,11 +548,11 @@ if (hasLightChild) {
           booking_id:    extraBooking.id,
           first_name:    p.first_name,
           last_name:     p.last_name,
-          weight_kg:     parseInt(p.weight_kg),
-          age:           parseInt(p.age),
+          weight_kg:     safeInt(p.weight_kg, 0),
+          age:           safeInt(p.age, p.is_marmaille ? 12 : 30),
           flight_type:   p.flight_type,
-          parental_auth: p.parental_auth,
-          price_eur:     calculatePrice(parseInt(p.age), p.flight_type) * 100,
+          parental_auth: p.parental_auth || false,
+          price_eur:     calculatePrice(safeInt(p.age, 30), p.flight_type) * 100,
         }))
         await supabase.from('passengers').insert(linkedPax)
       }
