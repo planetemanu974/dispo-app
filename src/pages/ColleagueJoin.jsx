@@ -94,125 +94,97 @@ export default function ColleagueJoin() {
 
   if (loading) return (
     <Wrapper>
-      <Card>
-        <Emoji>🪂</Emoji>
-        <p style={s.info}>Vérification du lien…</p>
-      </Card>
+      <Logo />
+      <p style={s.info}>Vérification du lien…</p>
     </Wrapper>
   )
 
   if (done) return (
     <Wrapper>
-      <Card>
-        <Emoji>✅</Emoji>
-        <h2 style={s.title}>Compte créé !</h2>
-        <p style={s.info}>Redirection vers le planning…</p>
-      </Card>
+      <Logo />
+      <p style={{ ...s.info, color: '#4ade80' }}>✅ Compte créé ! Redirection…</p>
     </Wrapper>
   )
 
   if (error && !info) return (
     <Wrapper>
-      <Card>
-        <Emoji>❌</Emoji>
-        <p style={{ ...s.error, textAlign: 'center', marginTop: 8 }}>{error}</p>
-      </Card>
+      <Logo />
+      <p style={{ ...s.error, textAlign: 'center', marginTop: 8 }}>{error}</p>
     </Wrapper>
   )
 
   return (
     <Wrapper>
-      <Card>
-        <Emoji>🪂</Emoji>
-        <h2 style={s.title}>Manu Dispo</h2>
-        <p style={s.info}>
-          Bienvenue <strong>{info?.name}</strong> !<br />
-          Choisissez un code secret pour accéder<br />au planning de disponibilités.
-        </p>
+      <Logo />
 
-        <form onSubmit={handleSubmit}>
-          <Field label="Votre nom d'utilisateur">
-            <input
-              type="text"
-              readOnly
-              value={info?.name ?? ''}
-              style={{ ...s.input, background: '#f1f5f9', color: '#64748b', cursor: 'default' }}
-            />
-          </Field>
+      <p style={s.info}>
+        Bienvenue <strong style={{ color: '#f1f5f9' }}>{info?.name}</strong> !<br />
+        Choisissez un code secret pour accéder au planning.
+      </p>
 
-          <Field label="Code secret">
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              style={s.input}
-              placeholder="4 caractères minimum"
-              autoFocus
-              required
-            />
-          </Field>
+      <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Nom en lecture seule */}
+        <input
+          type="text"
+          readOnly
+          value={info?.name ?? ''}
+          style={{ ...s.input, color: '#64748b', cursor: 'default' }}
+        />
 
-          <Field label="Confirmer le code secret">
-            <input
-              type="password"
-              value={confirm}
-              onChange={e => setConfirm(e.target.value)}
-              style={s.input}
-              placeholder="Répétez le code secret"
-              required
-            />
-          </Field>
+        {/* Code secret */}
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          style={s.input}
+          placeholder="Code secret (4 caractères minimum)"
+          autoFocus
+          required
+        />
 
-          {error && <p style={s.error}>{error}</p>}
+        {/* Confirmation */}
+        <input
+          type="password"
+          value={confirm}
+          onChange={e => setConfirm(e.target.value)}
+          style={s.input}
+          placeholder="Confirmer le code secret"
+          required
+        />
 
-          <button type="submit" disabled={saving} style={s.btn}>
-            {saving ? 'Création en cours…' : 'Créer mon accès →'}
-          </button>
-        </form>
-      </Card>
+        {error && <p style={s.error}>{error}</p>}
+
+        <button type="submit" disabled={saving} style={s.btn}>
+          {saving ? 'Création en cours…' : 'Créer mon accès →'}
+        </button>
+      </form>
     </Wrapper>
   )
 }
 
-// ── Petits composants utilitaires ─────────────────────────────────────────
+// ── Logo centré (identique à la page Login) ───────────────────────────────
+function Logo() {
+  return (
+    <img
+      src="/logo-text.png"
+      alt="Dispo Pas Dispo"
+      style={{ width: '100%', maxWidth: 320, marginBottom: 32, display: 'block' }}
+    />
+  )
+}
+
+// ── Wrapper page entière — même fond noir que Login ───────────────────────
 function Wrapper({ children }) {
   return (
     <div style={{
       minHeight: '100dvh',
+      background: '#000',
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
-      padding: '16px',
+      padding: '24px 20px',
     }}>
-      {children}
-    </div>
-  )
-}
-
-function Card({ children }) {
-  return (
-    <div style={{
-      background: '#fff',
-      borderRadius: 20,
-      padding: '32px 24px',
-      maxWidth: 380,
-      width: '100%',
-      boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
-    }}>
-      {children}
-    </div>
-  )
-}
-
-function Emoji({ children }) {
-  return <div style={{ fontSize: 52, textAlign: 'center', marginBottom: 4 }}>{children}</div>
-}
-
-function Field({ label, children }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={s.label}>{label}</label>
       {children}
     </div>
   )
@@ -220,58 +192,47 @@ function Field({ label, children }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────
 const s = {
-  title: {
-    textAlign: 'center',
-    margin: '4px 0 8px',
-    fontSize: 22,
-    fontWeight: 700,
-    color: '#0f172a',
-  },
   info: {
     textAlign: 'center',
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 14,
     lineHeight: 1.6,
     marginBottom: 20,
-  },
-  label: {
-    display: 'block',
-    fontSize: 12,
-    fontWeight: 600,
-    color: '#374151',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    marginBottom: 6,
+    maxWidth: 320,
   },
   input: {
     width: '100%',
-    padding: '10px 12px',
-    border: '1.5px solid #d1d5db',
-    borderRadius: 8,
-    fontSize: 15,
+    background: '#111',
+    border: '1px solid #333',
+    borderRadius: 10,
+    color: '#f1f5f9',
+    fontSize: 16,
+    padding: '13px 16px',
     outline: 'none',
-    boxSizing: 'border-box',
     fontFamily: 'inherit',
+    boxSizing: 'border-box',
   },
   error: {
-    color: '#dc2626',
+    color: '#f87171',
     fontSize: 13,
-    marginBottom: 10,
-    background: '#fef2f2',
-    padding: '8px 10px',
-    borderRadius: 6,
+    background: '#1a0505',
+    border: '1px solid #7f1d1d',
+    padding: '8px 12px',
+    borderRadius: 8,
+    margin: 0,
   },
   btn: {
     width: '100%',
-    padding: '13px',
-    background: '#16a34a',
-    color: '#fff',
+    padding: '13px 16px',
+    background: '#fff',
+    color: '#000',
     border: 'none',
     borderRadius: 10,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 700,
     cursor: 'pointer',
-    marginTop: 8,
+    marginTop: 4,
+    fontFamily: 'inherit',
     letterSpacing: '0.02em',
   },
 }
