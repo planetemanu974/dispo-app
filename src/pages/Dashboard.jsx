@@ -489,17 +489,21 @@ export default function Dashboard({ pilot }) {
     if (!slot.is_available) return   // can't book an unavailable slot
     setNewBookingSlot({ slot, date })
     setNbForm({
-      contactName:  '',
-      contactPhone: '',
-      notes:        '',
-      passengers:   [{ firstName: '', lastName: '', weight: '', age: '', flightType: 'discovery' }],
+      contactFirstName: '',
+      contactLastName:  '',
+      contactPhone:     '',
+      notes:            '',
+      // cat: 'under75' | 'under14' | '75to100'
+      // vol: flight type id from settings (e.g. 'discovery', 'performance')
+      passengers: [{ firstName: '', lastName: '', cat: 'under75', vol: flightTypes[0]?.id || 'discovery' }],
     })
   }
 
   // ── submitNewBooking ──────────────────────────────────────────────────────
   async function submitNewBooking() {
     if (!nbForm || !newBookingSlot) return
-    if (!nbForm.contactName.trim()) { alert('Nom du contact requis'); return }
+    const contactName = `${nbForm.contactFirstName.trim()} ${nbForm.contactLastName.trim()}`.trim()
+    if (!contactName) { alert('Nom du contact requis'); return }
     if (!nbForm.contactPhone.trim()) { alert('Téléphone requis'); return }
         // Block bookings on past slots
     const slotDateTime = new Date(`${newBookingSlot.slot.slot_date}T${newBookingSlot.slot.slot_time}`)
@@ -510,7 +514,7 @@ export default function Dashboard({ pilot }) {
 
     const { data: bk, error: bkErr } = await supabase.from('bookings').insert({
       pilot_slot_id: newBookingSlot.slot.id,
-      contact_name:  nbForm.contactName.trim(),
+      contact_name:  contactName,
       contact_phone: nbForm.contactPhone.trim(),
       notes:         nbForm.notes.trim() || null,
       status:        'confirmed',
@@ -520,22 +524,19 @@ export default function Dashboard({ pilot }) {
 
     if (bkErr || !bk) { alert('Erreur lors de la création'); setNbSaving(false); return }
 
-    // Insert passengers — name is optional; a row is skipped only if ALL fields are empty
-    // (flight type is always set, so we always insert at least the first row)
+    // Insert passengers — always insert at least the first row
     for (const p of nbForm.passengers) {
-      const hasData = p.firstName.trim() || p.lastName.trim() || p.weight || p.age
-      // Keep the row if anything was filled, OR if it's the only/first passenger
       const isFirstRow = nbForm.passengers.indexOf(p) === 0
-      if (!hasData && !isFirstRow) continue
+      const { weight_kg, age, parental_auth } = catToDb(p.cat)
       const { error: paxErr } = await supabase.from('passengers').insert({
         booking_id:    bk.id,
         first_name:    p.firstName.trim() || '',
         last_name:     p.lastName.trim()  || '',
-        weight_kg:     parseInt(p.weight) || 0,
-        age:           parseInt(p.age)    || 0,
-        flight_type:   p.flightType,
-        price_eur:     flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
-        parental_auth: (parseInt(p.age) || 0) < 18,
+        weight_kg,
+        age,
+        flight_type:   p.vol,
+        price_eur:     flightTypes.find(f => f.id === p.vol)?.price_eur ?? 90,
+        parental_auth,
       })
       if (paxErr) {
         console.error('[submitNewBooking] passenger insert error:', paxErr)
@@ -545,7 +546,7 @@ export default function Dashboard({ pilot }) {
 
     // ── Multi-slot: blocks_slots depends on flight type, not on passenger name ──
     const maxBlocks = nbForm.passengers.reduce((max, p) => {
-      const ft = flightTypes.find(f => f.id === p.flightType)
+      const ft = flightTypes.find(f => f.id === p.vol)
       return Math.max(max, ft?.blocks_slots ?? 1)
     }, 1)
 
@@ -571,7 +572,7 @@ export default function Dashboard({ pilot }) {
           const extraSlot = nextSlots[i]
           const { data: extraBk } = await supabase.from('bookings').insert({
             pilot_slot_id: extraSlot.id,
-            contact_name:  nbForm.contactName.trim(),
+            contact_name:  contactName,
             contact_phone: nbForm.contactPhone.trim(),
             notes:         `Lié à ${ref} — créneau ${i + 2}/${maxBlocks}`,
             status:        'confirmed',
@@ -581,18 +582,16 @@ export default function Dashboard({ pilot }) {
 
           if (extraBk) {
             for (const p of nbForm.passengers) {
-              const hasData = p.firstName.trim() || p.lastName.trim() || p.weight || p.age
-              const isFirstRow = nbForm.passengers.indexOf(p) === 0
-              if (!hasData && !isFirstRow) continue
+              const { weight_kg: xWkg, age: xAge, parental_auth: xPA } = catToDb(p.cat)
               const { error: xPaxErr } = await supabase.from('passengers').insert({
                 booking_id:    extraBk.id,
                 first_name:    p.firstName.trim() || '',
                 last_name:     p.lastName.trim()  || '',
-                weight_kg:     parseInt(p.weight) || 0,
-                age:           parseInt(p.age)    || 0,
-                flight_type:   p.flightType,
-                price_eur:     flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
-                parental_auth: (parseInt(p.age) || 0) < 18,
+                weight_kg:     xWkg,
+                age:           xAge,
+                flight_type:   p.vol,
+                price_eur:     flightTypes.find(f => f.id === p.vol)?.price_eur ?? 90,
+                parental_auth: xPA,
               })
               if (xPaxErr) {
                 console.error('[multi-slot] extra passenger insert error:', xPaxErr)
@@ -611,8 +610,7 @@ export default function Dashboard({ pilot }) {
       const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
         weekday: 'long', day: 'numeric', month: 'long'
       })
-      const activePax = nbForm.passengers.filter(p => p.firstName.trim())
-      const paxLabel  = activePax.length > 1 ? `${activePax.length} personnes` : '1 personne'
+      const paxLabel  = nbForm.passengers.length > 1 ? `${nbForm.passengers.length} personnes` : '1 personne'
       const smsMsg =
         `Bonjour, votre vol parapente est confirme pour le ${dateLabel} a ${slotTime} pour ${paxLabel}. ` +
         `RDV plage a cote de Kelonia, navette Planete Parapente. ` +
@@ -641,7 +639,7 @@ export default function Dashboard({ pilot }) {
     // Audit log — booking created manually
     logActivity(pilot.id, 'booking_created', 'booking', bk.id, {
       booking_ref:   ref,
-      contact_name:  nbForm.contactName.trim(),
+      contact_name:  contactName,
       contact_phone: nbForm.contactPhone.trim(),
       slot_date:     newBookingSlot.slot.slot_date || newBookingSlot.date,
       slot_time:     newBookingSlot.slot.slot_time,
@@ -673,6 +671,24 @@ export default function Dashboard({ pilot }) {
   }, {})
 
   const flightTypeLabel = id => flightTypes.find(f => f.id === id)?.label ?? id
+
+  // Weight category helpers (used in booking form + passenger detail display)
+  const WEIGHT_CATS = [
+    { id: 'under75',  label: '< 75 kg'   },
+    { id: 'under14',  label: '< 14 ans'  },
+    { id: '75to100',  label: '75-100 kg' },
+  ]
+  const catLabel = (weightKg, age) => {
+    if (age > 0 && age < 15)   return '< 14 ans'
+    if (weightKg >= 75)        return '75-100 kg'
+    return '< 75 kg'
+  }
+  // Map category id → DB values for weight_kg, age, parental_auth
+  const catToDb = (cat) => {
+    if (cat === 'under14')  return { weight_kg: 0,  age: 12, parental_auth: true  }
+    if (cat === '75to100')  return { weight_kg: 85, age: 30, parental_auth: false }
+    return                         { weight_kg: 65, age: 30, parental_auth: false } // under75
+  }
 
   // ── handleCancel ──────────────────────────────────────────────────────────
   async function handleCancel(bookingId) {
@@ -1397,66 +1413,93 @@ export default function Dashboard({ pilot }) {
               &nbsp;· {newBookingSlot.slot.slot_time.slice(0,5)} – {slotEndTime(newBookingSlot.slot.slot_time)}
             </div>
 
-            {/* Contact */}
+            {/* Contact — prénom + nom séparés */}
             <div className="edit-section">
-              <label className="edit-label">Nom du contact *</label>
-              <input className="edit-input" placeholder="Ex: Martin Dupont" value={nbForm.contactName}
-                onChange={e => setNbForm(f => ({ ...f, contactName: e.target.value }))} />
+              <div className="field-row" style={{ display:'flex', gap:8 }}>
+                <div style={{ flex:1 }}>
+                  <label className="edit-label">Prénom *</label>
+                  <input className="edit-input" placeholder="Marie" value={nbForm.contactFirstName}
+                    onChange={e => setNbForm(f => ({ ...f, contactFirstName: e.target.value }))} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <label className="edit-label">Nom *</label>
+                  <input className="edit-input" placeholder="Dupont" value={nbForm.contactLastName}
+                    onChange={e => setNbForm(f => ({ ...f, contactLastName: e.target.value }))} />
+                </div>
+              </div>
               <label className="edit-label">Téléphone *</label>
               <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
                 onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
             </div>
 
-            {/* Passengers */}
+            {/* Passengers — catégorie + vol par personne */}
             <div className="edit-section">
               <div className="edit-section-title">Passagers</div>
-              {nbForm.passengers.map((p, i) => (
-                <div key={i} className="modal-pax-card" style={{ position:'relative' }}>
-                  <div className="modal-pax-name" style={{ marginBottom:8 }}>Passager {i + 1}</div>
-                  {nbForm.passengers.length > 1 && (
-                    <button className="btn-ghost-small" style={{ position:'absolute', top:8, right:8 }}
-                      onClick={() => setNbForm(f => ({ ...f, passengers: f.passengers.filter((_, idx) => idx !== i) }))}>✕</button>
-                  )}
-                  <div className="field-row" style={{ display:'flex', gap:8 }}>
-                    <div style={{ flex:1 }}>
-                      <label className="edit-label">Prénom</label>
-                      <input className="edit-input" placeholder="Prénom" value={p.firstName}
-                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, firstName:e.target.value} : px) }))} />
+              {nbForm.passengers.map((p, i) => {
+                const isChild = p.cat === 'under14'
+                const updatePax = (fields) => setNbForm(f => ({
+                  ...f,
+                  passengers: f.passengers.map((px, idx) => idx === i ? { ...px, ...fields } : px)
+                }))
+                return (
+                  <div key={i} className="modal-pax-card" style={{ position:'relative' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                      <div className="modal-pax-name">Passager {i + 1}</div>
+                      {nbForm.passengers.length > 1 && (
+                        <button className="btn-ghost-small"
+                          onClick={() => setNbForm(f => ({ ...f, passengers: f.passengers.filter((_, idx) => idx !== i) }))}>✕</button>
+                      )}
                     </div>
-                    <div style={{ flex:1 }}>
-                      <label className="edit-label">Nom</label>
-                      <input className="edit-input" placeholder="Nom" value={p.lastName}
-                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, lastName:e.target.value} : px) }))} />
+                    {/* Prénom + Nom optionnels */}
+                    <div className="field-row" style={{ display:'flex', gap:8, marginBottom:8 }}>
+                      <div style={{ flex:1 }}>
+                        <label className="edit-label">Prénom <span style={{opacity:.5,fontWeight:400}}>(opt.)</span></label>
+                        <input className="edit-input" placeholder="Prénom" value={p.firstName}
+                          onChange={e => updatePax({ firstName: e.target.value })} />
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <label className="edit-label">Nom <span style={{opacity:.5,fontWeight:400}}>(opt.)</span></label>
+                        <input className="edit-input" placeholder="Nom" value={p.lastName}
+                          onChange={e => updatePax({ lastName: e.target.value })} />
+                      </div>
                     </div>
+                    {/* Catégorie + Vol */}
+                    <div className="field-row" style={{ display:'flex', gap:8 }}>
+                      <div style={{ flex:1 }}>
+                        <label className="edit-label">Catégorie</label>
+                        <select className="edit-input" value={p.cat}
+                          onChange={e => {
+                            const newCat = e.target.value
+                            // Under-14 → force discovery flight
+                            const newVol = newCat === 'under14' ? (flightTypes.find(f => f.id === 'discovery')?.id || flightTypes[0]?.id || 'discovery') : p.vol
+                            updatePax({ cat: newCat, vol: newVol })
+                          }}>
+                          {WEIGHT_CATS.map(c => (
+                            <option key={c.id} value={c.id}>{c.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <label className="edit-label">Vol souhaité</label>
+                        <select className="edit-input" value={p.vol} disabled={isChild}
+                          onChange={e => updatePax({ vol: e.target.value })}>
+                          {flightTypes.map(ft => (
+                            <option key={ft.id} value={ft.id}>{ft.label} ({ft.price_eur} €)</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {isChild && (
+                      <div style={{ marginTop:6, fontSize:'0.75rem', color:'#f59e0b', background:'rgba(245,158,11,.1)', borderRadius:6, padding:'4px 8px' }}>
+                        ⚠ Moins de 14 ans — Découverte obligatoire · créneau 08:00
+                      </div>
+                    )}
                   </div>
-                  <div className="field-row" style={{ display:'flex', gap:8 }}>
-                    <div style={{ flex:1 }}>
-                      <label className="edit-label">Poids (kg)</label>
-                      <input className="edit-input" type="number" min="10" max="120" placeholder="Ex: 70" value={p.weight}
-                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, weight:e.target.value} : px) }))} />
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <label className="edit-label">Âge</label>
-                      <input className="edit-input" type="number" min="6" max="99" placeholder="Ex: 35" value={p.age}
-                        onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, age:e.target.value} : px) }))} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="edit-label">Type de vol</label>
-                    <select className="edit-input" value={p.flightType}
-                      onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, flightType:e.target.value} : px) }))}>
-                      {flightTypes.map(ft => (
-                        <option key={ft.id} value={ft.id}>
-                          {ft.label} ({ft.price_eur} €)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
-              {nbForm.passengers.length < 4 && (
+                )
+              })}
+              {nbForm.passengers.length < 6 && (
                 <button className="btn-secondary" style={{ width:'100%', marginTop:8 }}
-                  onClick={() => setNbForm(f => ({ ...f, passengers: [...f.passengers, { firstName:'', lastName:'', weight:'', age:'', flightType:'discovery' }] }))}>
+                  onClick={() => setNbForm(f => ({ ...f, passengers: [...f.passengers, { firstName:'', lastName:'', cat:'under75', vol: flightTypes[0]?.id || 'discovery' }] }))}>
                   + Ajouter un passager
                 </button>
               )}
@@ -1519,7 +1562,7 @@ export default function Dashboard({ pilot }) {
                       <div style={{ marginTop: 4 }}>
                         {bk.passengers.map((p, i) => (
                           <div key={p.id || i} style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                            🪂 {p.first_name} {p.last_name} — {p.weight_kg} kg, {p.age} ans
+                            🪂 {p.first_name || p.last_name ? `${p.first_name} ${p.last_name} — ` : ''}{catLabel(p.weight_kg, p.age)} · {flightTypeLabel(p.flight_type)}
                           </div>
                         ))}
                       </div>
@@ -1570,9 +1613,12 @@ export default function Dashboard({ pilot }) {
                 <div className="modal-passengers">
                   {selectedBooking.passengers?.map((p, i) => (
                     <div key={p.id} className="modal-pax-card">
-                      <div className="modal-pax-name">Passager {i + 1} — {p.first_name} {p.last_name}</div>
+                      <div className="modal-pax-name">
+                        Passager {i + 1}{(p.first_name || p.last_name) ? ` — ${p.first_name} ${p.last_name}`.trimEnd() : ''}
+                      </div>
                       <div className="modal-pax-details">
-                        ⚖️ {p.weight_kg} kg &nbsp;|&nbsp; 🎂 {p.age} ans &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
+                        👤 {catLabel(p.weight_kg, p.age)} &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
+                        {p.parental_auth && <span style={{marginLeft:6,color:'#f59e0b'}}>· autorisation parentale</span>}
                       </div>
                     </div>
                   ))}
