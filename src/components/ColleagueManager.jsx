@@ -11,6 +11,7 @@ export default function ColleagueManager({ pilot }) {
   const [adding,     setAdding]     = useState(false)
   const [form,       setForm]       = useState({ name: '', phone: '', notes: '' })
   const [saving,     setSaving]     = useState(false)
+  const [saveError,  setSaveError]  = useState('')
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -29,16 +30,32 @@ export default function ColleagueManager({ pilot }) {
     e.preventDefault()
     if (!form.name.trim() || !form.phone.trim()) return
     setSaving(true)
-    const { error } = await supabase.from('colleagues').insert({
+    setSaveError('')
+
+    // Debug: log pilot context
+    console.log('[ColleagueManager] pilot:', pilot)
+
+    if (!pilot?.id) {
+      setSaveError('Erreur : profil pilote non chargé. Rechargez la page.')
+      setSaving(false)
+      return
+    }
+
+    const { data, error } = await supabase.from('colleagues').insert({
       pilot_id: pilot.id,
       name:     form.name.trim(),
       phone:    form.phone.trim(),
       notes:    form.notes.trim(),
-    })
+    }).select()
+
+    console.log('[ColleagueManager] insert result:', { data, error })
+
     if (!error) {
       setForm({ name: '', phone: '', notes: '' })
       setAdding(false)
       load()
+    } else {
+      setSaveError(`Erreur : ${error.message || JSON.stringify(error)}`)
     }
     setSaving(false)
   }
@@ -88,6 +105,11 @@ export default function ColleagueManager({ pilot }) {
             <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               placeholder="ex : biplace lourd OK, disponible matin" style={inputStyle} />
           </div>
+          {saveError && (
+            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '8px 12px', marginBottom: 10, color: '#fca5a5', fontSize: '0.82rem' }}>
+              {saveError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="submit" disabled={saving}
               style={{ flex: 1, padding: '9px', background: '#16a34a', border: 'none', borderRadius: 8, color: 'white', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
