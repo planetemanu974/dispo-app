@@ -23,7 +23,7 @@ export const PRICES = {
 
 // 8h00 = discovery only, ≤ 75 kg; 9h15 and after = all passengers
 export function getSlotsForDate(/* date */) {
-  return ['08:00', '09:15', '10:30', '11:45', '13:00', '14:30']
+  return ['08:00', '09:15', '10:30', '11:45', '13:00', '14:15']
 }
 
 // Weight validation
