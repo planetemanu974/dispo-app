@@ -177,45 +177,32 @@ export default function ColleagueDispo() {
 
   // ── Rendu : formulaire de connexion ───────────────────────────────────
   if (!session) return (
-    <Screen>
-      <div style={s.loginCard}>
-        <div style={{ fontSize: 52, textAlign: 'center', marginBottom: 4 }}>🪂</div>
-        <h1 style={s.loginTitle}>Manu Dispo</h1>
-        <p style={s.loginSub}>Planning de disponibilités</p>
-
-        <form onSubmit={handleLogin}>
-          <div style={s.field}>
-            <label style={s.label}>Nom d'utilisateur</label>
-            <input
-              type="text"
-              value={loginName}
-              onChange={e => setLoginName(e.target.value)}
-              style={s.input}
-              placeholder="Votre nom"
-              autoFocus
-              required
-            />
-          </div>
-          <div style={s.field}>
-            <label style={s.label}>Code secret</label>
-            <input
-              type="password"
-              value={loginPwd}
-              onChange={e => setLoginPwd(e.target.value)}
-              style={s.input}
-              placeholder="Code secret"
-              required
-            />
-          </div>
-
-          {loginError && <p style={s.error}>{loginError}</p>}
-
-          <button type="submit" disabled={loginSaving} style={s.btnGreen}>
-            {loginSaving ? 'Connexion…' : 'Accéder au planning →'}
-          </button>
-        </form>
-      </div>
-    </Screen>
+    <div style={{ minHeight: '100dvh', background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+      <img src="/logo-text.png" alt="Dispo Pas Dispo" style={{ width: '100%', maxWidth: 320, marginBottom: 40, display: 'block' }} />
+      <form onSubmit={handleLogin} style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <input
+          type="text"
+          value={loginName}
+          onChange={e => setLoginName(e.target.value)}
+          style={s.inputDark}
+          placeholder="Nom d'utilisateur"
+          autoFocus
+          required
+        />
+        <input
+          type="password"
+          value={loginPwd}
+          onChange={e => setLoginPwd(e.target.value)}
+          style={s.inputDark}
+          placeholder="Code secret"
+          required
+        />
+        {loginError && <p style={{ color: '#f87171', fontSize: 14, margin: 0, textAlign: 'center' }}>{loginError}</p>}
+        <button type="submit" disabled={loginSaving} style={s.btnWhite}>
+          {loginSaving ? 'Connexion…' : 'Accéder au planning →'}
+        </button>
+      </form>
+    </div>
   )
 
   // ── Rendu : calendrier ────────────────────────────────────────────────
@@ -245,11 +232,11 @@ export default function ColleagueDispo() {
     <Screen>
       {/* ── Header ── */}
       <div style={s.header}>
-        <div>
-          <div style={s.headerTitle}>🪂 Manu Dispo</div>
-          <div style={s.headerSub}>{session.name}</div>
+        <img src="/logo-text.png" alt="Dispo Pas Dispo" style={{ height: 36, display: 'block' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>{session.name}</span>
+          <button onClick={handleLogout} style={s.logoutBtn}>Déconnexion</button>
         </div>
-        <button onClick={handleLogout} style={s.logoutBtn}>Déconnexion</button>
       </div>
 
       {/* ── Légende ── */}
@@ -287,7 +274,10 @@ export default function ColleagueDispo() {
                 {daySlots.length === 0 ? (
                   <div style={s.noSlot}>—</div>
                 ) : (
-                  daySlots.map(slot => {
+                  daySlots
+                    // Masquer les créneaux occupés par d'autres (sans lien avec ce collègue)
+                    .filter(slot => !slot.is_booked || slot.my_request_status)
+                    .map(slot => {
                     const canRequest = slot.is_available && !slot.is_booked
                       && !slot.my_request_status && !isPast
 
@@ -619,6 +609,32 @@ const s = {
     fontSize: 14,
     fontWeight: 600,
     cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  // ─ Login page dark inputs (same as Login.jsx) ─
+  inputDark: {
+    width: '100%',
+    background: '#111',
+    border: '1px solid #333',
+    borderRadius: 10,
+    color: '#f1f5f9',
+    fontSize: 16,
+    padding: '13px 16px',
+    outline: 'none',
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  },
+  btnWhite: {
+    width: '100%',
+    background: '#fff',
+    color: '#000',
+    border: 'none',
+    borderRadius: 10,
+    fontSize: 16,
+    fontWeight: 700,
+    padding: '13px 16px',
+    cursor: 'pointer',
+    marginTop: 4,
     fontFamily: 'inherit',
   },
 }
