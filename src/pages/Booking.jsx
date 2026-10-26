@@ -704,7 +704,7 @@ if (hasLightChild) {
                 <div className="field">
                   <label>Type de vol</label>
                   {isChild ? (
-                    // Marmaille — vol verrouillé, pas de sélection possible
+                    // Marmaille — locked amber block
                     <div style={{
                       padding:'8px 12px', borderRadius:8,
                       background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.35)',
@@ -714,20 +714,24 @@ if (hasLightChild) {
                       <span>🪂 {childFlightType.label} — {childFlightType.duration_min} min · {childFlightType.price_eur} €</span>
                       <span style={{ fontSize:11, fontWeight:500, opacity:.8 }}>🕗 Créneau 8h00 · {childFlightType.min_age}–{childFlightType.max_age} ans</span>
                     </div>
-                  ) : (
-                    <select value={p.flight_type}
-                      onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
-                      disabled={onlyFirst}>
-                      {adultFlightTypes.map(ft => (
-                        <option key={ft.id} value={ft.id}>
-                          {ft.label} — {ft.duration_min} min ({ft.price_eur} €)
-                          {ft.blocks_slots > 1 ? ` · ${ft.blocks_slots} créneaux` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
-                  {!isChild && (() => { const ft = flightTypes.find(f => f.id === p.flight_type); return ft?.blocks_slots > 1 ? <span className="info-msg">⚠️ Ce vol occupe {ft.blocks_slots} créneaux consécutifs.</span> : null })()}
+                  ) : (() => {
+                    // Adult — flight type locked (chosen by top dropdowns), displayed as read-only block
+                    const ft = flightTypes.find(f => f.id === p.flight_type)
+                    if (!ft) return null
+                    return (
+                      <div style={{
+                        padding:'8px 12px', borderRadius:8,
+                        background:'rgba(99,102,241,.1)', border:'1px solid rgba(99,102,241,.3)',
+                        color:'#a5b4fc', fontWeight:600, fontSize:14,
+                        display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:4,
+                      }}>
+                        <span>🪂 {ft.label} — {ft.duration_min} min · {ft.price_eur} €</span>
+                        {ft.blocks_slots > 1 && (
+                          <span style={{ fontSize:11, fontWeight:500, opacity:.8 }}>⚠️ {ft.blocks_slots} créneaux consécutifs</span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Autorisation parentale — une seule ligne compacte */}
