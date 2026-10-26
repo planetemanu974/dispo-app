@@ -8,8 +8,16 @@ import { supabase } from '../lib/supabase'
 const DAYS_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 const MONTHS_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
+// Format local YYYY-MM-DD sans conversion UTC (fix fuseau horaire UTC+4)
+function toLocalDateStr(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function today() {
-  return new Date().toISOString().split('T')[0]
+  return toLocalDateStr(new Date())
 }
 
 // Lundi de la semaine contenant dateStr
@@ -18,7 +26,7 @@ function getWeekStart(dateStr) {
   const day = d.getDay()
   const diff = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diff)
-  return d.toISOString().split('T')[0]
+  return toLocalDateStr(d)
 }
 
 // Génère un tableau de N dates à partir de startDate
@@ -26,7 +34,7 @@ function getDays(startDate, n) {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date(startDate + 'T00:00:00')
     d.setDate(d.getDate() + i)
-    return d.toISOString().split('T')[0]
+    return toLocalDateStr(d)
   })
 }
 
@@ -219,12 +227,12 @@ export default function ColleagueDispo() {
   function prevWeek() {
     const d = new Date(weekStart + 'T00:00:00')
     d.setDate(d.getDate() - 7)
-    setWeekStart(d.toISOString().split('T')[0])
+    setWeekStart(toLocalDateStr(d))
   }
   function nextWeek() {
     const d = new Date(weekStart + 'T00:00:00')
     d.setDate(d.getDate() + 7)
-    setWeekStart(d.toISOString().split('T')[0])
+    setWeekStart(toLocalDateStr(d))
   }
   const canPrev = weekStart > today()
 

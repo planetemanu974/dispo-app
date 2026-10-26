@@ -7,14 +7,24 @@ import History from './History'
 import AssignColleague from '../components/AssignColleague'
 import { useSettings } from '../contexts/SettingsContext'
 
-const TODAY = new Date().toISOString().split('T')[0]
+// ── Format a Date object as YYYY-MM-DD using LOCAL time (not UTC)
+// Fixes timezone bug: toISOString() returns UTC, which shifts the date
+// by -1 day in UTC+4 (La Réunion) when the local time is before midnight UTC.
+function toLocalDateStr(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const TODAY = toLocalDateStr(new Date())
 
 // ── Helper: generate array of YYYY-MM-DD for N days from a start date
 function getDayRange(startDate, count) {
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(startDate + 'T00:00:00')
     d.setDate(d.getDate() + i)
-    return d.toISOString().split('T')[0]
+    return toLocalDateStr(d)
   })
 }
 
@@ -24,7 +34,7 @@ function getWeekStart(dateStr) {
   const day = d.getDay() // 0=Sun
   const diff = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diff)
-  return d.toISOString().split('T')[0]
+  return toLocalDateStr(d)
 }
 
 // ── sendSMS: calls the Supabase Edge Function ──────────────────────────────
@@ -787,14 +797,14 @@ export default function Dashboard({ pilot }) {
   function changeDate(delta) {
     const d = new Date((selectedDate || TODAY) + 'T00:00:00')
     d.setDate(d.getDate() + delta)
-    setSelectedDate(d.toISOString().split('T')[0])
+    setSelectedDate(toLocalDateStr(d))
   }
 
   function changeWeek(delta) {
     // Always jump by 7 days to stay Monday-anchored
     const d = new Date(weekStart + 'T00:00:00')
     d.setDate(d.getDate() + delta * 7)
-    setWeekStart(d.toISOString().split('T')[0])
+    setWeekStart(toLocalDateStr(d))
   }
 
   // 14-day strip: always anchored to TODAY
