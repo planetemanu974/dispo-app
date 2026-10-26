@@ -364,6 +364,19 @@ if (hasLightChild) {
         <section className="booking-section">
           <h2>2. Passagers</h2>
 
+          {/* Contact block — shown first */}
+          <div className="passenger-card">
+            <div className="passenger-header">Contact</div>
+            <div className="field-row">
+              <div className="field"><label>Nom</label>
+                <input value={contact.name} onChange={e => setContact(c => ({ ...c, name: e.target.value }))} />
+              </div>
+              <div className="field"><label>Téléphone</label>
+                <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+
           {passengers.map((p, i) => {
             const age       = parseInt(p.age, 10)
             const isChild   = !isNaN(age) && age <= AGE_LIMITS.CHILD_MAX_AGE
@@ -435,17 +448,8 @@ if (hasLightChild) {
           )}
 
           <div className="passenger-card">
-            <div className="passenger-header">Contact</div>
-            <div className="field-row">
-              <div className="field"><label>Nom</label>
-                <input value={contact.name} onChange={e => setContact(c => ({ ...c, name: e.target.value }))} />
-              </div>
-              <div className="field"><label>Téléphone</label>
-                <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
-              </div>
-            </div>
+            <div className="passenger-header">Notes (optionnel)</div>
             <div className="field">
-              <label>Demande spéciale ou information complémentaire</label>
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
