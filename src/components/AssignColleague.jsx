@@ -1,20 +1,28 @@
 // AssignColleague.jsx — Modal to assign one colleague to a booking.
-// Shown inside the booking detail panel when the pilot wants to call for help.
-// Sends an SMS to the colleague with a link they can use to accept or refuse.
+// Opens the native SMS app so the pilot sends the message from their own phone number.
+// The colleague replies directly to the pilot by SMS — full trace on both sides.
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-async function sendSMS(to, message) {
-  try {
-    const { data, error } = await supabase.functions.invoke('send-sms', {
-      body: { to, message },
-    })
-    if (error) console.error('[AssignColleague] SMS error:', error)
-    return { data, error }
-  } catch (err) {
-    return { error: err }
-  }
+// Normalise phone to E.164 for sms: links (+262XXXXXXXXX)
+function toE164(raw) {
+  if (!raw) return ''
+  const digits = raw.replace(/[\s\-().]/g, '')
+  if (digits.startsWith('+')) return digits
+  if (digits.startsWith('00')) return '+' + digits.slice(2)
+  if (digits.startsWith('0')) return '+262' + digits.slice(1)
+  return '+262' + digits
+}
+
+// Open the native SMS app with a pre-filled message (no Twilio — sends from pilot's own number)
+function openSMSApp(phone, message) {
+  const e164 = toE164(phone)
+  const encoded = encodeURIComponent(message)
+  // sms: URI — works on iOS and Android in a PWA/mobile browser
+  const link = document.createElement('a')
+  link.href = `sms:${e164}?body=${encoded}`
+  link.click()
 }
 
 // ── AssignColleague ───────────────────────────────────────────────────────────
@@ -83,7 +91,7 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
       return
     }
 
-    // SMS without link — colleague replies directly by text
+    // Build SMS message — sent from pilot's own phone via native SMS app
     const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
       weekday: 'long', day: 'numeric', month: 'long',
     })
@@ -93,11 +101,8 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
       `Dispo ${dateLabel} a ${timeLabel} pour ${smsName} ? ` +
       `Reponds "Ok dispo" ou "Non pas dispo".`
 
-    const { error: smsErr } = await sendSMS(colleague.phone, smsMsg)
-
-    if (smsErr) {
-      alert(`Mission créée mais le SMS n'a pas pu être envoyé à ${colleague.name}.\nNuméro : ${colleague.phone}`)
-    }
+    // Open native SMS app — colleague sees pilot's real phone number, replies directly
+    openSMSApp(colleague.phone, smsMsg)
 
     await loadData()
     setSending(null)
@@ -213,7 +218,7 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
                       color: 'white', fontSize: '0.8rem', fontWeight: 700, cursor: isSending ? 'wait' : 'pointer',
                       opacity: (sending && !isSending) ? 0.4 : 1,
                     }}>
-                    {isSending ? '…' : '📩 Envoyer'}
+                    {isSending ? '…' : '📱 Envoyer par SMS'}
                   </button>
                 ) : assign.status === 'pending' ? (<>
                   {/* Pilot marks manually after reading colleague's SMS reply */}
@@ -237,8 +242,9 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
 
         {/* Reminder */}
         <p style={{ marginTop: 12, fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>
-          Le collègue reçoit un SMS et répond directement par texto.<br />
-          Marquez manuellement sa réponse ici avec ✅ ou ❌.
+          L'app SMS s'ouvre avec le message pré-rempli.<br />
+          Envoyez depuis votre propre numéro — le collègue vous répond directement.<br />
+          Marquez sa réponse ici avec ✅ ou ❌.
         </p>
       </div>
     </div>
