@@ -280,7 +280,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
         invoice_number: finalN,
         invoice_date:   invoiceDate,
         designation:    invoiceDesig,
-        amount:         Number(invoiceAmount),
+        amount_eur:     Number(invoiceAmount),
       })
     if (error) { setInvoiceError('Erreur lors de la sauvegarde.'); setInvoiceSaving(false); return }
 
