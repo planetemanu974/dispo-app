@@ -638,7 +638,7 @@ export default function Dashboard({ pilot }) {
           <MenuLink icon="📅" label="Planning"      onClick={() => setMenuOpen(false)} />
           <MenuLink icon="👥" label="Collègues"     onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
           <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
-          <MenuLink icon="🧾" label="Factures"      disabled />
+          <MenuLink icon="🧾" label="Factures"      onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
           <MenuLink icon="📊" label="Comptabilité"  disabled />
           <MenuLink icon="☁️" label="Météo"         disabled />
         </nav>
