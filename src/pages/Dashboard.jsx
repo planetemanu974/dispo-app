@@ -387,6 +387,9 @@ export default function Dashboard({ pilot }) {
     if (!nbForm || !newBookingSlot) return
     if (!nbForm.contactName.trim()) { alert('Nom du contact requis'); return }
     if (!nbForm.contactPhone.trim()) { alert('Téléphone requis'); return }
+        // Block bookings on past slots
+    const slotDateTime = new Date(`${newBookingSlot.slot.slot_date}T${newBookingSlot.slot.slot_time}`)
+    if (slotDateTime < new Date()) { alert('Ce créneau est déjà passé.'); return } 
     setNbSaving(true)
 
     const ref = 'MAN-' + Date.now().toString(36).toUpperCase().slice(-6)
