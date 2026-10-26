@@ -263,6 +263,14 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   }
 
   // ── Re-télécharger une facture existante ─────────────────────────────────
+  async function deleteInvoice(inv) {
+    if (!window.confirm(`Supprimer la facture N° ${inv.invoice_number} (${Number(inv.amount_eur).toFixed(2)} €) ?`)) return
+    const { error } = await supabase.from('colleague_invoices').delete().eq('id', inv.id)
+    if (error) { alert('Erreur lors de la suppression.'); return }
+    // Refresh history
+    setHistory(h => ({ ...h, invoices: h.invoices.filter(i => i.id !== inv.id) }))
+  }
+
   async function redownloadInvoice(inv, action = 'save') {
     const JsPDF = await loadJsPDF()
     const doc = generateInvoicePDF({
@@ -596,6 +604,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
                           <span style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{Number(inv.amount_eur).toFixed(2)} €</span>
                           <button onClick={() => redownloadInvoice(inv, 'save')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📥 PDF</button>
                           <button onClick={() => redownloadInvoice(inv, 'send')} style={{ fontSize: 11, padding: '4px 8px', background: '#1e3a5f', color: '#7dd3fc', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
+                          <button onClick={() => deleteInvoice(inv)} style={{ fontSize: 11, padding: '4px 8px', background: '#3b0a0a', color: '#fca5a5', border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit' }}>🗑️</button>
                         </div>
                       </div>
                     ))
