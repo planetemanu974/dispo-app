@@ -806,14 +806,29 @@ if (hasLightChild) {
                 </div>
 
                 <div className={`conflict-card ${!slotAdultOnly ? 'disabled' : ''}`}>
-                  <h3>Option 2 — Deux vols séparés</h3>
-                  <p>
-                    Enfant à 8h00 (découverte).<br />
-                    Adulte à {slotAdultOnly?.slot_time?.slice(0, 5) || '—'} (performance).
-                  </p>
+                  <h3>Option 2 — Deux créneaux</h3>
+                  <div style={{ margin:'8px 0', fontSize:13, lineHeight:1.7 }}>
+                    {passengers.map((p, idx) => {
+                      const ft = flightTypes.find(f => f.id === p.flight_type)
+                      const slot = p.is_marmaille || p.flight_type !== 'performance'
+                        ? '08:00'
+                        : slotAdultOnly?.slot_time?.slice(0, 5) || '—'
+                      return (
+                        <div key={idx} style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
+                          <span style={{ opacity:.8 }}>
+                            {p.is_marmaille ? '🟡' : '🔵'} Passager {idx + 1}
+                            {p.first_name ? ` — ${p.first_name}` : ''}
+                          </span>
+                          <span style={{ fontWeight:600, whiteSpace:'nowrap' }}>
+                            🕗 {slot}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
                   {slotAdultOnly
                     ? <button className="btn-secondary" onClick={chooseSplit}>Réserver en deux fois</button>
-                    : <p className="error-msg">Aucun créneau disponible pour l'adulte ce jour-là.</p>}
+                    : <p className="error-msg">Aucun créneau disponible ce jour-là.</p>}
                 </div>
               </div>
             </div>
