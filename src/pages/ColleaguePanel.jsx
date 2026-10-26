@@ -1,4 +1,4 @@
-// ColleaguePanel.jsx — Panneau de gestion des collègues (pour le pilote)
+// ColleaguePanel.jsx — Panneau de gestion des collègues (pour le pilote) v2
 // Inclus dans Dashboard.jsx via : <ColleaguePanel pilot={pilot} />
 // Fonctions : inviter une structure, voir/gérer les demandes, éditer fiche, émettre des factures
 import { useState, useEffect, useCallback, useRef } from 'react'
