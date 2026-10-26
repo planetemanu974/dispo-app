@@ -548,7 +548,12 @@ if (hasLightChild) {
 
           {/* ── Quick-fill: 4 compact dropdowns ─────────────────────────────── */}
           <div className="passenger-card">
-            <div className="passenger-header">Votre groupe</div>
+            <div className="passenger-header" style={{ flexDirection:'column', alignItems:'flex-start', gap:4 }}>
+              <span>Votre groupe</span>
+              <span style={{ fontSize:12, fontWeight:400, opacity:.75 }}>
+                Les vols sont réservés aux personnes de plus de 18 kg et moins de 100 kg <span style={{ opacity:.7 }}>(régis par nos assurances)</span>
+              </span>
+            </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
 
               {/* Personnes */}
