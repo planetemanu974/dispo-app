@@ -286,7 +286,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
         const subject = encodeURIComponent(`Facture ${inv.invoice_number}`)
         const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${inv.invoice_number}.\n\nCordialement`)
         doc.save(filename)
-        if (email) window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
+        // Open Gmail compose with pre-filled fields; user attaches the downloaded PDF manually
+        const gmailUrl = `https://mail.google.com/mail/?view=cm${email ? `&to=${encodeURIComponent(email)}` : ''}&su=${subject}&body=${body}`
+        window.open(gmailUrl, '_blank')
       }
     } else {
       doc.save(filename)
@@ -364,9 +366,10 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
           if (shareErr.name !== 'AbortError') doc.save(filename)
         }
       } else if (emailTo) {
-        // Desktop with email: download PDF + open mailto pre-filled
+        // Desktop with email: download PDF + open Gmail compose in new tab
         doc.save(filename)
-        window.location.href = `mailto:${emailTo}?subject=${subject}&body=${body}`
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${body}`
+        window.open(gmailUrl, '_blank')
       } else {
         // Desktop without email: just download and tell user to add email
         doc.save(filename)
