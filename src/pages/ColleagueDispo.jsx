@@ -53,7 +53,7 @@ export default function ColleagueDispo() {
   const [loginSaving, setLoginSaving] = useState(false)
 
   // Calendrier
-  const [weekStart, setWeekStart]   = useState(() => getWeekStart(today()))
+  const [weekStart, setWeekStart]   = useState(() => today())
   const [slots, setSlots]           = useState([])     // []{ slot_id, slot_date, slot_time, is_available, is_booked, my_request_status }
   const [calLoading, setCalLoading] = useState(false)
 
@@ -242,7 +242,6 @@ export default function ColleagueDispo() {
       {/* ── Légende ── */}
       <div style={s.legend}>
         <span style={s.dot('#16a34a')} /> Disponible
-        <span style={s.dot('#dc2626')} /> Non dispo
         <span style={s.dot('#f59e0b')} /> Demandé
         <span style={s.dot('#6366f1')} /> Confirmé
       </div>
@@ -265,8 +264,11 @@ export default function ColleagueDispo() {
             const daySlots = slotsByDay[date] || []
             const isPast   = date < today()
 
+            // Ne pas afficher les jours passés
+            if (isPast) return null
+
             return (
-              <div key={date} style={{ ...s.dayCard, opacity: isPast ? 0.5 : 1 }}>
+              <div key={date} style={s.dayCard}>
                 {/* En-tête du jour */}
                 <div style={s.dayHeader}>{formatDate(date)}</div>
 
@@ -275,11 +277,14 @@ export default function ColleagueDispo() {
                   <div style={s.noSlot}>—</div>
                 ) : (
                   daySlots
-                    // Masquer les créneaux occupés par d'autres (sans lien avec ce collègue)
-                    .filter(slot => !slot.is_booked || slot.my_request_status)
+                    // Ne montrer que les créneaux disponibles (pas dispo masqués)
+                    // + les créneaux déjà demandés/confirmés par ce collègue
+                    .filter(slot =>
+                      (slot.is_available && !slot.is_booked) || slot.my_request_status
+                    )
                     .map(slot => {
                     const canRequest = slot.is_available && !slot.is_booked
-                      && !slot.my_request_status && !isPast
+                      && !slot.my_request_status
 
                     const { bg, label } = slotAppearance(slot)
 
@@ -292,7 +297,6 @@ export default function ColleagueDispo() {
                           ...s.slotBtn,
                           background: bg,
                           cursor: canRequest ? 'pointer' : 'default',
-                          opacity: isPast ? 0.6 : 1,
                         }}
                       >
                         <span style={{ fontWeight: 700, fontSize: 14 }}>
