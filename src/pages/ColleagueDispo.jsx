@@ -263,63 +263,89 @@ export default function ColleagueDispo() {
         <button onClick={nextWeek} style={s.navBtn}>›</button>
       </div>
 
-      {/* ── Grille hebdomadaire ── */}
+      {/* ── Grille hebdomadaire (lignes fixes par horaire) ── */}
       {calLoading ? (
         <p style={{ textAlign: 'center', color: '#94a3b8', padding: 24 }}>Chargement…</p>
-      ) : (
-        <div style={s.grid}>
-          {days.map(date => {
-            const daySlots = slotsByDay[date] || []
-            const isPast   = date < today()
+      ) : (() => {
+        // Jours visibles (aujourd'hui + futur uniquement)
+        const visibleDays = days.filter(d => d >= today())
 
-            // Ne pas afficher les jours passés
-            if (isPast) return null
+        // Collecter tous les horaires distincts toutes colonnes confondues,
+        // triés chronologiquement — ce sont les lignes fixes de la grille
+        const allTimes = [...new Set(
+          slots.map(sl => sl.slot_time.slice(0, 5))
+        )].sort()
 
-            return (
-              <div key={date} style={s.dayCard}>
-                {/* En-tête du jour */}
-                <div style={s.dayHeader}>{formatDate(date)}</div>
+        // Index rapide : slotsByDay[date][HH:MM] → slot object
+        const slotIndex = {}
+        slots.forEach(sl => {
+          const d = sl.slot_date
+          const t = sl.slot_time.slice(0, 5)
+          if (!slotIndex[d]) slotIndex[d] = {}
+          slotIndex[d][t] = sl
+        })
 
-                {/* Créneaux */}
-                {daySlots.length === 0 ? (
-                  <div style={s.noSlot}>—</div>
-                ) : (
-                  daySlots
-                    // Ne montrer que les créneaux disponibles (pas dispo masqués)
-                    // + les créneaux déjà demandés/confirmés par ce collègue
-                    .filter(slot =>
-                      (slot.is_available && !slot.is_booked) || slot.my_request_status
-                    )
-                    .map(slot => {
-                    const canRequest = slot.is_available && !slot.is_booked
-                      && !slot.my_request_status
+        return (
+          <div style={{ overflowX: 'auto', padding: '0 8px' }}>
+            {/* Table : 1re colonne = heure, puis 1 colonne par jour */}
+            <table style={{ borderCollapse: 'separate', borderSpacing: '4px', width: '100%', tableLayout: 'fixed' }}>
+              <thead>
+                <tr>
+                  {/* Cellule vide coin supérieur gauche */}
+                  <th style={{ width: 36 }} />
+                  {visibleDays.map(date => (
+                    <th key={date} style={{ ...s.dayHeader, padding: '4px 2px 6px', fontWeight: 700 }}>
+                      {formatDate(date)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allTimes.map(time => (
+                  <tr key={time}>
+                    {/* Colonne heure */}
+                    <td style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textAlign: 'right', paddingRight: 6, whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                      {time}
+                    </td>
+                    {/* Une cellule par jour */}
+                    {visibleDays.map(date => {
+                      const slot = slotIndex[date]?.[time]
 
-                    const { bg, label } = slotAppearance(slot)
+                      // Cellule vide : pas de créneau ce jour à cette heure
+                      if (!slot) return <td key={date} />
 
-                    return (
-                      <button
-                        key={slot.slot_id}
-                        onClick={() => canRequest && openRequest(slot)}
-                        disabled={!canRequest}
-                        style={{
-                          ...s.slotBtn,
-                          background: bg,
-                          cursor: canRequest ? 'pointer' : 'default',
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>
-                          {formatTime(slot.slot_time)}
-                        </span>
-                        <span style={{ fontSize: 11, marginTop: 2 }}>{label}</span>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+                      // Créneau caché (pas dispo ou occupé sans relation avec ce collègue)
+                      const visible = (slot.is_available && !slot.is_booked) || slot.my_request_status
+                      if (!visible) return <td key={date} />
+
+                      const canRequest = slot.is_available && !slot.is_booked && !slot.my_request_status
+                      const { bg, label } = slotAppearance(slot)
+
+                      return (
+                        <td key={date} style={{ padding: 0 }}>
+                          <button
+                            onClick={() => canRequest && openRequest(slot)}
+                            disabled={!canRequest}
+                            style={{
+                              ...s.slotBtn,
+                              background: bg,
+                              cursor: canRequest ? 'pointer' : 'default',
+                              width: '100%',
+                            }}
+                          >
+                            <span style={{ fontWeight: 700, fontSize: 13 }}>{time}</span>
+                            <span style={{ fontSize: 10, marginTop: 1 }}>{label}</span>
+                          </button>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
 
       {/* ── Modal demande ── */}
       {requestSlot && (
