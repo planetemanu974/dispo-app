@@ -157,6 +157,7 @@ export default function Dashboard({ pilot }) {
   const [pendingAll, setPendingAll]           = useState([])
   const [loading, setLoading]                 = useState(true)
   const [selectedBooking, setSelectedBooking] = useState(null)
+  const [selectedSlotBookings, setSelectedSlotBookings] = useState([]) // all bookings for a clicked slot (multi-pax)
   const [bookingAssignments, setBookingAssignments] = useState([]) // assignments for selected booking
   const [editMode, setEditMode]               = useState(false)
   const [editData, setEditData]               = useState(null)
@@ -1133,7 +1134,10 @@ export default function Dashboard({ pilot }) {
                             className={status}
                             style={{ position:'absolute', left:4, right:4, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
-                              if (firstActive) {
+                              if (activeBks.length > 1) {
+                                // Multiple bookings on this slot — show selector
+                                setSelectedSlotBookings(activeBks)
+                              } else if (firstActive) {
                                 setSelectedBooking(firstActive)
                               } else {
                                 openNewBooking(slot, date)
@@ -1290,7 +1294,15 @@ export default function Dashboard({ pilot }) {
                     return (
                       <div key={slot.id}
                         style={{ position:'absolute', left:6, right:6, top, height, borderRadius:8, background:bg, borderLeft:`4px solid ${border}`, color, display:'flex', alignItems:'stretch', overflow:'hidden', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}
-                        onClick={() => activeBooking ? setSelectedBooking(activeBooking) : openNewBooking(slot, selectedDate)}>
+                        onClick={() => {
+                          if (activeBks.length > 1) {
+                            setSelectedSlotBookings(activeBks)
+                          } else if (activeBooking) {
+                            setSelectedBooking(activeBooking)
+                          } else {
+                            openNewBooking(slot, selectedDate)
+                          }
+                        }}>
 
                         {/* Main info */}
                         <div style={{ flex:1, padding:'6px 10px', display:'flex', flexDirection:'column', justifyContent:'center', gap:2 }}>
@@ -1435,6 +1447,66 @@ export default function Dashboard({ pilot }) {
               </button>
               <button className="btn-refuse" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>Annuler</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Slot multi-booking selector (when a slot has several bookings) ── */}
+      {selectedSlotBookings.length > 0 && (
+        <div className="modal-overlay" onClick={() => setSelectedSlotBookings([])}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Réservations du créneau</h2>
+              <button className="btn-ghost" onClick={() => setSelectedSlotBookings([])}>✕</button>
+            </div>
+            <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: '#64748b' }}>
+              {selectedSlotBookings.length} réservations sur ce créneau. Choisissez-en une pour voir les détails.
+            </p>
+            {selectedSlotBookings.map((bk, idx) => {
+              const paxCount = bk.passengers?.length || 0
+              const statusColors = {
+                pending:   { bg: '#78350f', color: '#fde68a', label: '⏳ En attente' },
+                confirmed: { bg: '#14532d', color: '#86efac', label: '✅ Confirmé' },
+                refused:   { bg: '#450a0a', color: '#fca5a5', label: '❌ Refusé' },
+              }
+              const sc = statusColors[bk.status] || statusColors.pending
+              return (
+                <div key={bk.id}
+                  onClick={() => { setSelectedSlotBookings([]); setSelectedBooking(bk) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '12px 14px', marginBottom: 8, borderRadius: 10,
+                    background: '#0f172a', border: '1px solid #334155',
+                    cursor: 'pointer', gap: 12,
+                  }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#e2e8f0', marginBottom: 3 }}>
+                      {bk.contact_name || '—'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                      📞 {bk.contact_phone || '—'}
+                    </div>
+                    {bk.passengers?.length > 0 && (
+                      <div style={{ marginTop: 4 }}>
+                        {bk.passengers.map((p, i) => (
+                          <div key={p.id || i} style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                            🪂 {p.first_name} {p.last_name} — {p.weight_kg} kg, {p.age} ans
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <span style={{ padding: '3px 8px', borderRadius: 6, background: sc.bg, color: sc.color, fontSize: '0.72rem', fontWeight: 700 }}>
+                      {sc.label}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                      {paxCount} pax →
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
