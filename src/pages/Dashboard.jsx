@@ -1539,13 +1539,11 @@ export default function Dashboard({ pilot }) {
               <>
                 <div className="modal-contact">
                   <strong>{selectedBooking.contact_name}</strong><br />
-                  📞 {selectedBooking.contact_phone}
                   {selectedBooking.contact_phone && (
                     <a
-                      href={`https://wa.me/${(selectedBooking.contact_phone).replace(/\s+/g,'').replace(/^0/,'262')}`}
-                      target="_blank" rel="noreferrer"
+                      href={`tel:${selectedBooking.contact_phone.replace(/\s+/g,'')}`}
                       className="btn-whatsapp-contact">
-                      💬 Contacter sur WhatsApp
+                      📞 {selectedBooking.contact_phone} — Appeler
                     </a>
                   )}
                 </div>
