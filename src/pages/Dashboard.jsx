@@ -488,14 +488,16 @@ export default function Dashboard({ pilot }) {
   function openNewBooking(slot, date) {
     if (!slot.is_available) return   // can't book an unavailable slot
     setNewBookingSlot({ slot, date })
+    const emptyPax = () => ({ firstName: '', lastName: '', cat: 'under75', vol: flightTypes[0]?.id || 'discovery' })
     setNbForm({
       contactFirstName: '',
       contactLastName:  '',
       contactPhone:     '',
+      paxCount:         1,   // drives the passenger rows count
       notes:            '',
       // cat: 'under75' | 'under14' | '75to100'
       // vol: flight type id from settings (e.g. 'discovery', 'performance')
-      passengers: [{ firstName: '', lastName: '', cat: 'under75', vol: flightTypes[0]?.id || 'discovery' }],
+      passengers: [emptyPax()],
     })
   }
 
@@ -1430,6 +1432,30 @@ export default function Dashboard({ pilot }) {
               <label className="edit-label">Téléphone *</label>
               <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
                 onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
+
+              {/* Pax count — instantly spawns the right number of rows */}
+              <label className="edit-label">Nombre de personnes</label>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <button style={{ width:38, height:38, borderRadius:8, border:'1px solid #334155', background:'#0f172a', color:'#e2e8f0', fontSize:20, cursor:'pointer', flexShrink:0 }}
+                  onClick={() => setNbForm(f => {
+                    const n = Math.max(1, f.paxCount - 1)
+                    const emptyPax = () => ({ firstName:'', lastName:'', cat:'under75', vol: flightTypes[0]?.id||'discovery' })
+                    const pax = n > f.passengers.length
+                      ? [...f.passengers, ...Array(n - f.passengers.length).fill(null).map(emptyPax)]
+                      : f.passengers.slice(0, n)
+                    return { ...f, paxCount: n, passengers: pax }
+                  })}>−</button>
+                <div style={{ flex:1, textAlign:'center', fontSize:22, fontWeight:800, color:'#f1f5f9' }}>{nbForm.paxCount}</div>
+                <button style={{ width:38, height:38, borderRadius:8, border:'1px solid #334155', background:'#0f172a', color:'#e2e8f0', fontSize:20, cursor:'pointer', flexShrink:0 }}
+                  onClick={() => setNbForm(f => {
+                    const n = Math.min(6, f.paxCount + 1)
+                    const emptyPax = () => ({ firstName:'', lastName:'', cat:'under75', vol: flightTypes[0]?.id||'discovery' })
+                    const pax = n > f.passengers.length
+                      ? [...f.passengers, ...Array(n - f.passengers.length).fill(null).map(emptyPax)]
+                      : f.passengers.slice(0, n)
+                    return { ...f, paxCount: n, passengers: pax }
+                  })}>＋</button>
+              </div>
             </div>
 
             {/* Passengers — catégorie + vol par personne */}
