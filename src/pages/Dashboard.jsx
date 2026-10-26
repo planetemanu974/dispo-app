@@ -157,6 +157,7 @@ export default function Dashboard({ pilot }) {
   const [pendingAll, setPendingAll]           = useState([])
   const [loading, setLoading]                 = useState(true)
   const [selectedBooking, setSelectedBooking] = useState(null)
+  const [bookingAssignments, setBookingAssignments] = useState([]) // assignments for selected booking
   const [editMode, setEditMode]               = useState(false)
   const [editData, setEditData]               = useState(null)
   const [editSlots, setEditSlots]             = useState([])
@@ -247,6 +248,17 @@ export default function Dashboard({ pilot }) {
       loadPlanning(selectedDate)
     }
   }, [selectedDate, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch assignments when a booking is selected ───────────────────────────
+  useEffect(() => {
+    if (!selectedBooking) { setBookingAssignments([]); return }
+    supabase
+      .from('booking_assignments')
+      .select('*, colleagues(name, phone)')
+      .eq('booking_id', selectedBooking.id)
+      .order('created_at')
+      .then(({ data }) => setBookingAssignments(data || []))
+  }, [selectedBooking?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── loadWeek ───────────────────────────────────────────────────────────────
   async function loadWeek(start) {
@@ -928,7 +940,18 @@ export default function Dashboard({ pilot }) {
           slotDate={selectedBooking.pilot_slots?.slot_date || selectedDate}
           slotTime={selectedBooking.pilot_slots?.slot_time}
           onClose={() => setShowAssign(false)}
-          onAssigned={() => { /* booking detail stays open, assignments reload inside */ }}
+          onAssigned={() => {
+            // Reload assignments shown in the booking detail panel
+            if (selectedBooking) {
+              supabase
+                .from('booking_assignments')
+                .select('*, colleagues(name, phone)')
+                .eq('booking_id', selectedBooking.id)
+                .order('created_at')
+                .then(({ data }) => setBookingAssignments(data || []))
+            }
+            loadWeek(weekStart)
+          }}
         />
       )}
 
@@ -1430,6 +1453,38 @@ export default function Dashboard({ pilot }) {
                   </div>
                 )}
                 <div className="modal-ref">Ref. {selectedBooking.booking_ref || selectedBooking.id?.slice(0, 8).toUpperCase()}</div>
+
+                {/* ── Colleague assignments ── */}
+                {bookingAssignments.length > 0 && (
+                  <div style={{ margin: '12px 0', padding: '12px', background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
+                      🧑‍✈️ Collègues demandés
+                    </div>
+                    {bookingAssignments.map(a => {
+                      const statusMap = {
+                        pending:  { icon: '⏳', color: '#f59e0b', label: 'En attente' },
+                        accepted: { icon: '✅', color: '#4ade80', label: 'Accepté' },
+                        refused:  { icon: '❌', color: '#f87171', label: 'Refusé' },
+                      }
+                      const st = statusMap[a.status] || statusMap.pending
+                      return (
+                        <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#e2e8f0' }}>
+                            {a.colleagues?.name || '—'}
+                          </span>
+                          <span style={{ fontSize: '0.8rem', color: st.color, fontWeight: 600 }}>
+                            {st.icon} {st.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                    <button
+                      onClick={() => setShowAssign(true)}
+                      style={{ marginTop: 8, width: '100%', padding: '7px', background: 'rgba(29,78,216,0.12)', border: '1px solid rgba(29,78,216,0.3)', borderRadius: 7, color: '#93c5fd', fontSize: '0.8rem', cursor: 'pointer' }}>
+                      Gérer les collègues →
+                    </button>
+                  </div>
+                )}
 
                 {selectedBooking.status === 'pending' && (
                   <div className="booking-actions">

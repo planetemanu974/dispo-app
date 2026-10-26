@@ -23,6 +23,7 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
   const [assignments,  setAssignments]  = useState([]) // existing assignments for this booking
   const [loading,      setLoading]      = useState(true)
   const [sending,      setSending]      = useState(null) // id of colleague being assigned
+  const [freshSmsName, setFreshSmsName] = useState('') // always up-to-date sms_name from DB
 
   useEffect(() => {
     loadData()
@@ -30,13 +31,17 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
 
   async function loadData() {
     setLoading(true)
-    const [{ data: cols }, { data: assigns }] = await Promise.all([
+    const [{ data: cols }, { data: assigns }, { data: freshPilot }] = await Promise.all([
       supabase.from('colleagues').select('*').eq('pilot_id', pilot.id).order('name'),
       supabase.from('booking_assignments').select('*, colleagues(name, phone)')
         .eq('booking_id', booking.id).order('created_at'),
+      supabase.from('pilots').select('sms_name, name').eq('id', pilot.id).single(),
     ])
     setColleagues(cols || [])
     setAssignments(assigns || [])
+    // Use fresh sms_name from DB — the prop may be stale if updated in Settings this session
+    const name = freshPilot?.sms_name?.trim() || freshPilot?.name || pilot.name || 'votre partenaire'
+    setFreshSmsName(name)
     setLoading(false)
   }
 
@@ -83,7 +88,7 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
       weekday: 'long', day: 'numeric', month: 'long',
     })
     const timeLabel = slotTime?.slice(0, 5) || ''
-    const smsName = pilot.sms_name?.trim() || pilot.name || 'votre partenaire'
+    const smsName = freshSmsName || pilot.sms_name?.trim() || pilot.name || 'votre partenaire'
     const smsMsg =
       `Dispo ${dateLabel} a ${timeLabel} pour ${smsName} ? ` +
       `Reponds "Ok dispo" ou "Non pas dispo".`

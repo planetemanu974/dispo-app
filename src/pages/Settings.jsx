@@ -344,41 +344,71 @@ function TabAppearance({ settings, saveSettings }) {
 // --------------- Tab: Profil (SMS name) ---------------
 
 function TabProfile({ pilot }) {
-  const [smsName, setSmsName] = useState(pilot?.sms_name || '')
-  const [saving,  setSaving]  = useState(false)
-  const [saved,   setSaved]   = useState(false)
-  const [error,   setError]   = useState('')
+  const [smsName,    setSmsName]    = useState(pilot?.sms_name || '')
+  const [savedName,  setSavedName]  = useState(pilot?.sms_name || '') // last confirmed DB value
+  const [saving,     setSaving]     = useState(false)
+  const [saved,      setSaved]      = useState(false)
+  const [error,      setError]      = useState('')
 
   async function handleSave(e) {
     e.preventDefault()
-    setSaving(true); setError('')
+    setSaving(true); setError(''); setSaved(false)
+    const trimmed = smsName.trim()
     const { error: err } = await supabase
-      .from('pilots').update({ sms_name: smsName.trim() }).eq('id', pilot.id)
-    if (err) { setError('Erreur lors de la sauvegarde.') }
-    else { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+      .from('pilots').update({ sms_name: trimmed }).eq('id', pilot.id)
+    if (err) {
+      setError(`Erreur lors de la sauvegarde : ${err.message}`)
+    } else {
+      setSaved(true)
+      setSavedName(trimmed) // remember what was confirmed in DB
+      setTimeout(() => setSaved(false), 3000)
+    }
     setSaving(false)
   }
+
+  const isDirty = smsName.trim() !== savedName
 
   return (
     <div>
       <p style={{ color: '#94a3b8', fontSize: 14, marginTop: 0 }}>
         Ce nom apparaît dans les SMS envoyés à vos collègues quand vous demandez un renfort.
       </p>
+
+      {/* Confirmation banner — visible 3 s after successful save */}
+      {saved && (
+        <div style={{ background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: '1.1rem' }}>✅</span>
+          <span style={{ color: '#4ade80', fontWeight: 600 }}>
+            Enregistré — le prochain SMS affichera «&nbsp;{savedName || pilot.name}&nbsp;»
+          </span>
+        </div>
+      )}
+
       <form onSubmit={handleSave}>
         <div style={{ marginBottom: 16 }}>
           <label style={s.label}>Nom affiché dans les SMS</label>
           <input style={s.input}
             value={smsName}
-            onChange={e => setSmsName(e.target.value)}
+            onChange={e => { setSmsName(e.target.value); setSaved(false) }}
             placeholder="ex : Planète Parapente, PPR..." />
           <p style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
-            Exemple de SMS : « Dispo lundi 27 oct à 10h30 pour <strong style={{ color: '#94a3b8' }}>{smsName || '…'}</strong> ? »
+            Aperçu SMS : « Dispo lundi 27 oct à 10h30 pour&nbsp;
+            <strong style={{ color: '#94a3b8' }}>{smsName.trim() || '…'}</strong>&nbsp;? »
           </p>
+          {savedName && !isDirty && (
+            <p style={{ fontSize: 12, color: '#22c55e', marginTop: 4 }}>
+              ✓ Nom actuel en base : <strong>{savedName}</strong>
+            </p>
+          )}
         </div>
         {error && <p style={{ color: '#f87171', fontSize: 13, marginBottom: 10 }}>{error}</p>}
-        <button type="submit" disabled={saving} style={{ ...s.btn, ...s.btnPrimary }}>
-          {saving ? 'Enregistrement…' : saved ? '✓ Enregistré' : 'Enregistrer'}
+        <button type="submit" disabled={saving || !isDirty}
+          style={{ ...s.btn, ...s.btnPrimary, opacity: (!isDirty || saving) ? 0.5 : 1 }}>
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
+        {!isDirty && !saving && savedName && (
+          <span style={{ fontSize: 12, color: '#64748b', marginLeft: 10 }}>Aucune modification</span>
+        )}
       </form>
     </div>
   )
