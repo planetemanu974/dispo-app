@@ -710,6 +710,7 @@ export default function Dashboard({ pilot }) {
     setEditData({
       contact_name:  selectedBooking.contact_name  || '',
       contact_phone: selectedBooking.contact_phone || '',
+      notes:         selectedBooking.notes         || '',
       slot_date:     slotDate,
       pilot_slot_id: selectedBooking.pilot_slot_id || '',
       passengers: (selectedBooking.passengers || []).map(p => ({ ...p })),
@@ -728,6 +729,7 @@ export default function Dashboard({ pilot }) {
     await supabase.from('bookings').update({
       contact_name:  editData.contact_name,
       contact_phone: editData.contact_phone,
+      notes:         editData.notes?.trim() || null,
       pilot_slot_id: editData.pilot_slot_id,
     }).eq('id', selectedBooking.id)
 
@@ -1564,7 +1566,7 @@ export default function Dashboard({ pilot }) {
                 </div>
                 {selectedBooking.notes && (
                   <div className="modal-notes">
-                    <div className="modal-notes-label">📝 Demande speciale</div>
+                    <div className="modal-notes-label">📝 Notes</div>
                     <div className="modal-notes-text">{selectedBooking.notes}</div>
                   </div>
                 )}
@@ -1729,6 +1731,15 @@ export default function Dashboard({ pilot }) {
                       + Ajouter un passager
                     </button>
                   )}
+                </div>
+                {/* Notes */}
+                <div className="edit-section">
+                  <label className="edit-label">📝 Notes (optionnel)</label>
+                  <textarea className="edit-input" rows={3}
+                    placeholder="Habite à Saint-Pierre, aura du retard, nous attend au décollage..."
+                    value={editData.notes}
+                    onChange={e => setEditData(d => ({ ...d, notes: e.target.value }))}
+                    style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: '0.85rem' }} />
                 </div>
                 <div className="booking-actions">
                   <button className="btn-confirm" onClick={handleSaveEdit}>✓ Enregistrer</button>
