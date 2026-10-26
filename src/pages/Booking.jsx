@@ -13,8 +13,9 @@ const emptyPassenger = () => ({
 // Use null as fallback for weight_kg (performance passengers have no weight — CHECK constraint allows NULL).
 // Use a numeric fallback for age (adults have no age field but column may be NOT NULL).
 const safeInt = (v, fallback = 0) => { const n = parseInt(v, 10); return isNaN(n) ? fallback : n }
-// Weight: if field is empty, send null (CHECK constraint allows NULL; 0 violates it)
-const safeWeight = (v) => { const n = parseInt(v, 10); return isNaN(n) || n === 0 ? null : n }
+// Weight: if field is empty (e.g. performance passengers), fall back to 70 kg.
+// DB column is NOT NULL and has a check constraint that rejects 0.
+const safeWeight = (v, fallback = 70) => { const n = parseInt(v, 10); return (isNaN(n) || n <= 0) ? fallback : n }
 
 function isFirstSlot(slot_time) {
   return slot_time?.startsWith('08:')
