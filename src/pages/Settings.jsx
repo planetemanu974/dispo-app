@@ -390,7 +390,7 @@ function TabProfile({ pilot }) {
           <input style={s.input}
             value={smsName}
             onChange={e => { setSmsName(e.target.value); setSaved(false) }}
-            placeholder="ex : Planète Parapente, PPR..." />
+            placeholder="ex : Planete Parapente, PPR..." />
           <p style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
             Aperçu SMS : « Dispo lundi 27 oct à 10h30 pour&nbsp;
             <strong style={{ color: '#94a3b8' }}>{smsName.trim() || '…'}</strong>&nbsp;? »

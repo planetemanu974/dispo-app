@@ -63,7 +63,7 @@ export default function ManuDispo() {
       <header className="booking-header">
         <span className="logo">🪂</span>
         <h1>Manu Dispo ?</h1>
-        <p>Planète Parapente Réunion — Saint-Leu</p>
+        <p>Planete Parapente Reunion — Saint-Leu</p>
       </header>
 
       {/* ── Date picker ── */}

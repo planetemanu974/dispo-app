@@ -242,7 +242,7 @@ if (hasLightChild) {
       <header className="booking-header">
         <span className="logo">🪂</span>
         <h1>Réserver un vol</h1>
-        <p>Planète Parapente Réunion — Saint-Leu</p>
+        <p>Planete Parapente Reunion — Saint-Leu</p>
       </header>
 
       {/* Step 1 */}
