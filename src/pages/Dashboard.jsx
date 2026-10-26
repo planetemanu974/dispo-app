@@ -39,6 +39,7 @@ async function sendSMS(to, message) {
 
 // ── Day column labels
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+const WEEK_DAYS_COUNT = 5  // show 5 days at a time for readability on mobile
 
 // ── Calendar grid constants (Google Calendar style)
 const HOUR_HEIGHT  = 80   // px per hour
@@ -209,7 +210,7 @@ export default function Dashboard({ pilot }) {
   // ── loadWeek ───────────────────────────────────────────────────────────────
   async function loadWeek(start) {
     setWeekLoading(true)
-    const days = getDayRange(start, 7)
+    const days = getDayRange(start, WEEK_DAYS_COUNT)
 
     await Promise.all(days.map(d => ensureSlots(d)))
 
@@ -548,7 +549,7 @@ export default function Dashboard({ pilot }) {
 
   function changeWeek(delta) {
     const d = new Date(weekStart + 'T00:00:00')
-    d.setDate(d.getDate() + delta * 7)
+    d.setDate(d.getDate() + delta * WEEK_DAYS_COUNT)
     setWeekStart(d.toISOString().split('T')[0])
   }
 
@@ -581,19 +582,19 @@ export default function Dashboard({ pilot }) {
     // Show first booking's client name + total pax
     const first    = active[0]
     const totalPax = active.reduce((n, b) => n + (b.passengers?.length || 0), 0)
-    const name     = first.source === 'colleague'
-      ? `Pour ${first.contact_name}`
-      : first.contact_name
+    // Short name for week view — first word only, no "Pour" prefix
+    const rawName  = first.contact_name || ''
+    const name     = rawName.split(' ')[0] || rawName
     return { name, pax: totalPax }
   }
 
-  const weekDays = getDayRange(weekStart, 7)
+  const weekDays = getDayRange(weekStart, WEEK_DAYS_COUNT)
 
-  // Week range label: "20 – 26 oct. 2026"
+  // Week range label: "20 – 24 oct. 2026"
   function weekRangeLabel() {
     const start = new Date(weekStart + 'T00:00:00')
     const end   = new Date(weekStart + 'T00:00:00')
-    end.setDate(end.getDate() + 6)
+    end.setDate(end.getDate() + WEEK_DAYS_COUNT - 1)
     const opts = { day: 'numeric' }
     const optsEnd = { day: 'numeric', month: 'short', year: 'numeric' }
     return `${start.toLocaleDateString('fr-FR', opts)} – ${end.toLocaleDateString('fr-FR', optsEnd)}`
