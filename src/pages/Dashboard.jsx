@@ -445,42 +445,67 @@ export default function Dashboard({ pilot }) {
 
     if (maxBlocks > 1) {
       // Fetch next (maxBlocks - 1) pilot slots on same day after selected slot
-      const { data: nextSlots } = await supabase
+      const slotDate = newBookingSlot.slot.slot_date || newBookingSlot.date
+      const { data: nextSlots, error: nextErr } = await supabase
         .from('pilot_slots')
         .select('id, slot_time')
         .eq('pilot_id', pilot.id)
-        .eq('slot_date', newBookingSlot.date)
+        .eq('slot_date', slotDate)
         .gt('slot_time', newBookingSlot.slot.slot_time)
         .order('slot_time', { ascending: true })
         .limit(maxBlocks - 1)
 
-      for (let i = 0; i < (nextSlots || []).length; i++) {
-        const extraSlot = nextSlots[i]
-        const { data: extraBk } = await supabase.from('bookings').insert({
-          pilot_slot_id: extraSlot.id,
-          contact_name:  nbForm.contactName.trim(),
-          contact_phone: nbForm.contactPhone.trim(),
-          notes:         `Lié à ${ref} — créneau ${i + 2}/${maxBlocks}`,
-          status:        'confirmed',
-          source:        'manual',
-          booking_ref:   ref + '-' + (i + 2),
-        }).select().single()
+      console.log('[multi-slot] maxBlocks:', maxBlocks, 'slotDate:', slotDate,
+        'slot_time:', newBookingSlot.slot.slot_time, 'nextSlots:', nextSlots, 'err:', nextErr)
 
-        if (extraBk) {
-          for (const p of nbForm.passengers) {
-            if (!p.firstName.trim()) continue
-            await supabase.from('passengers').insert({
-              booking_id:  extraBk.id,
-              first_name:  p.firstName.trim(),
-              last_name:   p.lastName.trim(),
-              weight_kg:   parseInt(p.weight)  || 0,
-              age:         parseInt(p.age)     || 0,
-              flight_type: p.flightType,
-              price_eur:   flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
-            })
+      if (!nextSlots || nextSlots.length < maxBlocks - 1) {
+        alert(`⚠️ Ce vol nécessite ${maxBlocks} créneaux consécutifs, mais le créneau suivant n'existe pas dans ton planning. Crée d'abord tous les créneaux nécessaires pour cette journée.`)
+      } else {
+        for (let i = 0; i < nextSlots.length; i++) {
+          const extraSlot = nextSlots[i]
+          const { data: extraBk } = await supabase.from('bookings').insert({
+            pilot_slot_id: extraSlot.id,
+            contact_name:  nbForm.contactName.trim(),
+            contact_phone: nbForm.contactPhone.trim(),
+            notes:         `Lié à ${ref} — créneau ${i + 2}/${maxBlocks}`,
+            status:        'confirmed',
+            source:        'manual',
+            booking_ref:   ref + '-' + (i + 2),
+          }).select().single()
+
+          if (extraBk) {
+            for (const p of nbForm.passengers) {
+              if (!p.firstName.trim()) continue
+              await supabase.from('passengers').insert({
+                booking_id:  extraBk.id,
+                first_name:  p.firstName.trim(),
+                last_name:   p.lastName.trim(),
+                weight_kg:   parseInt(p.weight)  || 0,
+                age:         parseInt(p.age)     || 0,
+                flight_type: p.flightType,
+                price_eur:   flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
+              })
+            }
           }
         }
       }
+    }
+
+    // ── Send confirmation SMS to client ──────────────────────────────────────
+    if (nbForm.contactPhone.trim()) {
+      const slotDate = newBookingSlot.slot.slot_date || newBookingSlot.date
+      const slotTime = newBookingSlot.slot.slot_time?.slice(0, 5) || ''
+      const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long'
+      })
+      const activePax = nbForm.passengers.filter(p => p.firstName.trim())
+      const paxLabel  = activePax.length > 1 ? `${activePax.length} personnes` : '1 personne'
+      const smsMsg =
+        `Bonjour, votre vol parapente est confirme pour le ${dateLabel} a ${slotTime} pour ${paxLabel}. ` +
+        `RDV plage a cote de Kelonia, navette Planete Parapente. ` +
+        `Chaussures fermees obligatoires. Paiement especes/cheque. ` +
+        `Manu 0692719749`
+      await sendSMS(nbForm.contactPhone.trim(), smsMsg)
     }
 
     const savedDate = newBookingSlot.date
