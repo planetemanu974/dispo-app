@@ -425,15 +425,17 @@ export default function Dashboard({ pilot }) {
     // Insert passengers (skip empty entries)
     for (const p of nbForm.passengers) {
       if (!p.firstName.trim()) continue
-      await supabase.from('passengers').insert({
-        booking_id:  bk.id,
-        first_name:  p.firstName.trim(),
-        last_name:   p.lastName.trim(),
-        weight_kg:   parseInt(p.weight)  || 0,
-        age:         parseInt(p.age)     || 0,
-        flight_type: p.flightType,
-        price_eur:   flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
+      const { error: paxErr } = await supabase.from('passengers').insert({
+        booking_id:    bk.id,
+        first_name:    p.firstName.trim(),
+        last_name:     p.lastName.trim(),
+        weight_kg:     parseInt(p.weight)  || 0,
+        age:           parseInt(p.age)     || 0,
+        flight_type:   p.flightType,
+        price_eur:     flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
+        parental_auth: (parseInt(p.age) || 0) < 18,
       })
+      if (paxErr) console.error('[submitNewBooking] passenger insert error:', paxErr)
     }
 
     // ── Multi-slot: reserve consecutive slots for flights with blocks_slots > 1 ──
@@ -476,15 +478,17 @@ export default function Dashboard({ pilot }) {
           if (extraBk) {
             for (const p of nbForm.passengers) {
               if (!p.firstName.trim()) continue
-              await supabase.from('passengers').insert({
-                booking_id:  extraBk.id,
-                first_name:  p.firstName.trim(),
-                last_name:   p.lastName.trim(),
-                weight_kg:   parseInt(p.weight)  || 0,
-                age:         parseInt(p.age)     || 0,
-                flight_type: p.flightType,
-                price_eur:   flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
+              const { error: xPaxErr } = await supabase.from('passengers').insert({
+                booking_id:    extraBk.id,
+                first_name:    p.firstName.trim(),
+                last_name:     p.lastName.trim(),
+                weight_kg:     parseInt(p.weight)  || 0,
+                age:           parseInt(p.age)     || 0,
+                flight_type:   p.flightType,
+                price_eur:     flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
+                parental_auth: (parseInt(p.age) || 0) < 18,
               })
+              if (xPaxErr) console.error('[multi-slot] extra passenger insert error:', xPaxErr)
             }
           }
         }
