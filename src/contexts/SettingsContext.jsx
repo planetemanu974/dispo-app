@@ -57,18 +57,36 @@ export function SettingsProvider({ children, userId }) {
 
   // Load settings from Supabase on mount / userId change
   useEffect(() => {
-    if (!userId) { setLoading(false); return }
-
     async function load() {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
+      let data = null
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 = no row found (first login) — not a real error
-        console.error('[settings] load error:', error)
+      if (userId) {
+        // Authenticated user: load their own settings
+        const { data: ownData, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('user_id', userId)
+          .single()
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('[settings] load error:', error)
+        }
+
+        if (ownData) {
+          data = ownData
+        } else {
+          // First login: insert default row
+          await supabase.from('settings').insert({ user_id: userId })
+        }
+      } else {
+        // Anonymous visitor (public booking page): load first available row
+        // Requires "settings_select_anon" policy in Supabase
+        const { data: publicData } = await supabase
+          .from('settings')
+          .select('*')
+          .limit(1)
+          .maybeSingle()
+        data = publicData
       }
 
       if (data) {
@@ -76,8 +94,6 @@ export function SettingsProvider({ children, userId }) {
         setSettings(merged)
         applyTheme(merged)
       } else {
-        // First login: insert default row
-        await supabase.from('settings').insert({ user_id: userId })
         applyTheme(DEFAULT_SETTINGS)
       }
 

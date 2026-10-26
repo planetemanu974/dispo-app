@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
 import Settings from './Settings'
+import { useSettings } from '../contexts/SettingsContext'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -117,6 +118,10 @@ function MenuLink({ icon, label, onClick, disabled, extra }) {
 }
 
 export default function Dashboard({ pilot }) {
+  // Dynamic settings — flight types, slots, school info
+  const { settings } = useSettings()
+  const flightTypes = settings.flight_types
+
   const [viewMode, setViewMode]               = useState('week')   // 'week' | 'day'
   const [weekStart, setWeekStart]             = useState(() => getWeekStart(TODAY))
   const [weekData, setWeekData]               = useState({})       // { [date]: { slots, bookings } }
@@ -427,7 +432,7 @@ export default function Dashboard({ pilot }) {
         weight_kg:   parseInt(p.weight)  || 0,
         age:         parseInt(p.age)     || 0,
         flight_type: p.flightType,
-        price_eur:   p.flightType === 'performance' ? 110 : 90,
+        price_eur:   flightTypes.find(f => f.id === p.flightType)?.price_eur ?? 90,
       })
     }
 
@@ -455,7 +460,7 @@ export default function Dashboard({ pilot }) {
     return acc
   }, {})
 
-  const flightTypeLabel = t => t === 'performance' ? 'Performance' : 'Decouverte'
+  const flightTypeLabel = id => flightTypes.find(f => f.id === id)?.label ?? id
 
   // ── handleCancel ──────────────────────────────────────────────────────────
   async function handleCancel(bookingId) {
@@ -1129,8 +1134,11 @@ export default function Dashboard({ pilot }) {
                     <label className="edit-label">Type de vol</label>
                     <select className="edit-input" value={p.flightType}
                       onChange={e => setNbForm(f => ({ ...f, passengers: f.passengers.map((px,idx) => idx===i ? {...px, flightType:e.target.value} : px) }))}>
-                      <option value="discovery">Découverte (90 €)</option>
-                      <option value="performance">Performance (110–120 €)</option>
+                      {flightTypes.map(ft => (
+                        <option key={ft.id} value={ft.id}>
+                          {ft.label} ({ft.price_eur} €)
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1303,8 +1311,11 @@ export default function Dashboard({ pilot }) {
                         <label className="edit-label">Type de vol</label>
                         <select className="edit-input" value={p.flight_type}
                           onChange={e => setEditData(d => ({ ...d, passengers: d.passengers.map((px, idx) => idx === i ? { ...px, flight_type: e.target.value } : px) }))}>
-                          <option value="discovery">Decouverte (90 €)</option>
-                          <option value="performance">Performance (110–120 €)</option>
+                          {flightTypes.map(ft => (
+                            <option key={ft.id} value={ft.id}>
+                              {ft.label} ({ft.price_eur} €)
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
