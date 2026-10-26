@@ -150,6 +150,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   const [invoiceSaving,    setInvoiceSaving]    = useState(false)
   const [invoiceError,     setInvoiceError]     = useState(null)
   const [invoiceGmailUrl,  setInvoiceGmailUrl]  = useState(null) // set after send → shows clickable link
+  const [gmailPopup,       setGmailPopup]       = useState(null) // {url, filename} — shown after history send
   const [invoiceNumber,    setInvoiceNumber]    = useState(null)
 
   // ── Chargement ────────────────────────────────────────────────────────────
@@ -277,20 +278,13 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     const filename = `facture_${prefix}_${seq || '1'}_${safe}.pdf`
 
     if (action === 'send') {
-      const pdfBlob = doc.output('blob')
-      const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' })
-      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        try { await navigator.share({ files: [pdfFile], title: `Facture ${inv.invoice_number}` }) }
-        catch (err) { if (err.name !== 'AbortError') doc.save(filename) }
-      } else {
-        const email   = detailColleague.email || ''
-        const subject = encodeURIComponent(`Facture ${inv.invoice_number}`)
-        const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${inv.invoice_number}.\n\nCordialement`)
-        doc.save(filename)
-        // Use anchor click instead of window.open to bypass async popup blocker
-        const gmailUrl = `https://mail.google.com/mail/?view=cm${email ? `&to=${encodeURIComponent(email)}` : ''}&su=${subject}&body=${body}`
-        const a = document.createElement('a'); a.href = gmailUrl; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      }
+      // Download PDF then show clickable Gmail link (same approach as new invoice modal)
+      const email   = detailColleague.email || ''
+      const subject = encodeURIComponent(`Facture ${inv.invoice_number}`)
+      const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${inv.invoice_number}.\n\nCordialement`)
+      doc.save(filename)
+      const gmailUrl = `https://mail.google.com/mail/?view=cm${email ? `&to=${encodeURIComponent(email)}` : ''}&su=${subject}&body=${body}`
+      setGmailPopup({ url: gmailUrl, filename })
     } else {
       doc.save(filename)
     }
@@ -636,6 +630,26 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       )}
 
       {/* ── Modal : facture ───────────────────────────────────────────────── */}
+      {/* ── Popup Gmail pour renvoi depuis historique ─────────────────────── */}
+      {gmailPopup && (
+        <ModalOverlay onClose={() => setGmailPopup(null)}>
+          <h3 style={{ ...s.modalTitle, marginBottom: 14 }}>📧 Envoyer la facture</h3>
+          <div style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.7 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Étapes</p>
+            <p style={{ margin: '2px 0' }}>1️⃣ Cliquez <strong>"Ouvrir Gmail"</strong> ci-dessous</p>
+            <p style={{ margin: '2px 0' }}>2️⃣ Dans Gmail, cliquez le trombone 📎</p>
+            <p style={{ margin: '2px 0' }}>3️⃣ Cherchez le PDF dans <strong>Téléchargements</strong></p>
+            <p style={{ margin: '2px 0' }}>4️⃣ Envoyez le mail</p>
+          </div>
+          <a href={gmailPopup.url} target="_blank" rel="noopener noreferrer"
+            style={{ ...s.btnGreen, background: '#c5221f', display: 'block', textAlign: 'center', textDecoration: 'none', padding: '12px 0', borderRadius: 8, fontSize: 15, fontWeight: 700 }}>
+            📧 Ouvrir Gmail →
+          </a>
+          <button type="button" onClick={() => setGmailPopup(null)}
+            style={{ ...s.btnGrey, width: '100%', marginTop: 10 }}>Fermer</button>
+        </ModalOverlay>
+      )}
+
       {invoiceColleague && (
         <ModalOverlay onClose={() => { setInvoiceColleague(null); setInvoiceGmailUrl(null) }}>
           <h3 style={{ ...s.modalTitle, marginBottom: 4 }}>🧾 Facture <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>v4</span></h3>
