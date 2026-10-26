@@ -488,15 +488,16 @@ export default function Dashboard({ pilot }) {
   function openNewBooking(slot, date) {
     if (!slot.is_available) return   // can't book an unavailable slot
     setNewBookingSlot({ slot, date })
-    const emptyPax = () => ({ firstName: '', lastName: '', cat: 'under75', vol: flightTypes[0]?.id || 'discovery' })
+    const emptyPax = (cat, vol) => ({ firstName: '', lastName: '', cat: cat || 'under75', vol: vol || flightTypes[0]?.id || 'discovery' })
     setNbForm({
       contactFirstName: '',
       contactLastName:  '',
       contactPhone:     '',
-      paxCount:         1,   // drives the passenger rows count
+      totalCount:       1,   // total persons
+      childCount:       0,   // marmailles (< 14 ans)
+      discoveryCount:   1,   // vols découverte
+      performanceCount: 0,   // vols performance
       notes:            '',
-      // cat: 'under75' | 'under14' | '75to100'
-      // vol: flight type id from settings (e.g. 'discovery', 'performance')
       passengers: [emptyPax()],
     })
   }
@@ -1433,28 +1434,101 @@ export default function Dashboard({ pilot }) {
               <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
                 onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
 
-              {/* Pax count — instantly spawns the right number of rows */}
-              <label className="edit-label">Nombre de personnes</label>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <button style={{ width:38, height:38, borderRadius:8, border:'1px solid #334155', background:'#0f172a', color:'#e2e8f0', fontSize:20, cursor:'pointer', flexShrink:0 }}
-                  onClick={() => setNbForm(f => {
-                    const n = Math.max(1, f.paxCount - 1)
-                    const emptyPax = () => ({ firstName:'', lastName:'', cat:'under75', vol: flightTypes[0]?.id||'discovery' })
-                    const pax = n > f.passengers.length
-                      ? [...f.passengers, ...Array(n - f.passengers.length).fill(null).map(emptyPax)]
-                      : f.passengers.slice(0, n)
-                    return { ...f, paxCount: n, passengers: pax }
-                  })}>−</button>
-                <div style={{ flex:1, textAlign:'center', fontSize:22, fontWeight:800, color:'#f1f5f9' }}>{nbForm.paxCount}</div>
-                <button style={{ width:38, height:38, borderRadius:8, border:'1px solid #334155', background:'#0f172a', color:'#e2e8f0', fontSize:20, cursor:'pointer', flexShrink:0 }}
-                  onClick={() => setNbForm(f => {
-                    const n = Math.min(6, f.paxCount + 1)
-                    const emptyPax = () => ({ firstName:'', lastName:'', cat:'under75', vol: flightTypes[0]?.id||'discovery' })
-                    const pax = n > f.passengers.length
-                      ? [...f.passengers, ...Array(n - f.passengers.length).fill(null).map(emptyPax)]
-                      : f.passengers.slice(0, n)
-                    return { ...f, paxCount: n, passengers: pax }
-                  })}>＋</button>
+              {/* Quick-fill: 4 compact dropdowns — auto-builds passenger rows */}
+              <label className="edit-label">Répartition des vols</label>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:4 }}>
+                {/* Personnes */}
+                <div>
+                  <label className="edit-label" style={{fontSize:11,marginBottom:2}}>Personnes</label>
+                  <select className="edit-input" style={{padding:'6px 8px'}} value={nbForm.totalCount}
+                    onChange={e => {
+                      const total    = parseInt(e.target.value)
+                      const children = Math.min(nbForm.childCount, total)
+                      const free     = total - children
+                      const disco    = Math.min(nbForm.discoveryCount,   free)
+                      const perf     = Math.min(nbForm.performanceCount, free - disco)
+                      const rows     = []
+                      for (let i = 0; i < total; i++) {
+                        const prev = nbForm.passengers[i] || {}
+                        if (i < children)               rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under14', vol: 'discovery' })
+                        else if (i < children + disco)  rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: 'discovery' })
+                        else if (i < children + disco + perf) rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75', vol: 'performance' })
+                        else                            rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: flightTypes[0]?.id||'discovery' })
+                      }
+                      setNbForm(f => ({ ...f, totalCount: total, childCount: children, discoveryCount: disco, performanceCount: perf, passengers: rows }))
+                    }}>
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                {/* Marmailles */}
+                <div>
+                  <label className="edit-label" style={{fontSize:11,marginBottom:2}}>Marmailles</label>
+                  <select className="edit-input" style={{padding:'6px 8px'}} value={nbForm.childCount}
+                    onChange={e => {
+                      const children = parseInt(e.target.value)
+                      const free     = nbForm.totalCount - children
+                      const disco    = Math.min(nbForm.discoveryCount,   free)
+                      const perf     = Math.min(nbForm.performanceCount, free - disco)
+                      const rows     = []
+                      for (let i = 0; i < nbForm.totalCount; i++) {
+                        const prev = nbForm.passengers[i] || {}
+                        if (i < children)               rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under14', vol: 'discovery' })
+                        else if (i < children + disco)  rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: 'discovery' })
+                        else if (i < children + disco + perf) rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75', vol: 'performance' })
+                        else                            rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: flightTypes[0]?.id||'discovery' })
+                      }
+                      setNbForm(f => ({ ...f, childCount: children, discoveryCount: disco, performanceCount: perf, passengers: rows }))
+                    }}>
+                    {Array.from({ length: nbForm.totalCount + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                {/* Découverte */}
+                <div>
+                  <label className="edit-label" style={{fontSize:11,marginBottom:2}}>Découverte</label>
+                  <select className="edit-input" style={{padding:'6px 8px'}} value={nbForm.discoveryCount}
+                    onChange={e => {
+                      const disco    = parseInt(e.target.value)
+                      const free     = nbForm.totalCount - nbForm.childCount
+                      const perf     = Math.min(nbForm.performanceCount, free - disco)
+                      const rows     = []
+                      for (let i = 0; i < nbForm.totalCount; i++) {
+                        const prev = nbForm.passengers[i] || {}
+                        const c = nbForm.childCount
+                        if (i < c)              rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under14', vol: 'discovery' })
+                        else if (i < c + disco) rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: 'discovery' })
+                        else if (i < c + disco + perf) rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75', vol: 'performance' })
+                        else                    rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: flightTypes[0]?.id||'discovery' })
+                      }
+                      setNbForm(f => ({ ...f, discoveryCount: disco, performanceCount: perf, passengers: rows }))
+                    }}>
+                    {Array.from({ length: nbForm.totalCount - nbForm.childCount + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                {/* Performance */}
+                <div>
+                  <label className="edit-label" style={{fontSize:11,marginBottom:2}}>Performance</label>
+                  <select className="edit-input" style={{padding:'6px 8px'}} value={nbForm.performanceCount}
+                    onChange={e => {
+                      const perf  = parseInt(e.target.value)
+                      const free  = nbForm.totalCount - nbForm.childCount
+                      const disco = Math.min(nbForm.discoveryCount, free - perf)
+                      const rows  = []
+                      for (let i = 0; i < nbForm.totalCount; i++) {
+                        const prev = nbForm.passengers[i] || {}
+                        const c = nbForm.childCount
+                        if (i < c)               rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under14', vol: 'discovery' })
+                        else if (i < c + disco)  rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: 'discovery' })
+                        else if (i < c + disco + perf) rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75', vol: 'performance' })
+                        else                     rows.push({ firstName: prev.firstName||'', lastName: prev.lastName||'', cat:'under75',  vol: flightTypes[0]?.id||'discovery' })
+                      }
+                      setNbForm(f => ({ ...f, performanceCount: perf, discoveryCount: disco, passengers: rows }))
+                    }}>
+                    {Array.from({ length: nbForm.totalCount - nbForm.childCount + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
 
