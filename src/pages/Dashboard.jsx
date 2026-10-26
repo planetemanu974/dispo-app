@@ -141,6 +141,15 @@ export default function Dashboard({ pilot }) {
   const [menuOpen, setMenuOpen]               = useState(false)
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
 
+  // PWA update detection — fires when a new service worker takes control
+  const [updateReady, setUpdateReady] = useState(false)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      setUpdateReady(true)
+    })
+  }, [])
+
   // 14-day planning strip state
   const [planning, setPlanning]               = useState({})
   const [planningLoading, setPlanningLoading] = useState(false)
@@ -643,7 +652,16 @@ export default function Dashboard({ pilot }) {
           <MenuLink icon="☁️" label="Météo"         disabled />
         </nav>
 
-        <div style={{ padding:'0 16px 16px' }}>
+        <div style={{ padding:'0 16px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+          {/* Bouton mise à jour — visible uniquement quand une nouvelle version est prête */}
+          {updateReady && (
+            <button
+              onClick={() => window.location.reload()}
+              style={{ width:'100%', padding:'10px', background:'rgba(234,179,8,0.15)', border:'1px solid rgba(234,179,8,0.4)', borderRadius:8, color:'#fde047', fontSize:'0.88rem', cursor:'pointer', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}
+            >
+              🔄 Mettre à jour l'app
+            </button>
+          )}
           <button onClick={() => supabase.auth.signOut()}
             style={{ width:'100%', padding:'10px', background:'rgba(239,68,68,0.15)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, color:'#fca5a5', fontSize:'0.88rem', cursor:'pointer', fontWeight:600 }}>
             Déconnexion
@@ -653,10 +671,13 @@ export default function Dashboard({ pilot }) {
 
       {/* ── Header ── logo (= menu) à gauche, toggle vue au centre */}
       <header style={{ display:'flex', alignItems:'center', padding:'6px 12px', borderBottom:'1px solid #e2e8f0', background:'white', position:'sticky', top:0, zIndex:10, gap:10 }}>
-        {/* Bouton logo → ouvre le menu */}
+        {/* Bouton logo → ouvre le menu (badge jaune si mise à jour dispo) */}
         <button onClick={() => setMenuOpen(true)}
-          style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0 }}>
+          style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0, position:'relative' }}>
           <img src="/logo.png" alt="Menu" style={{ height:36, display:'block' }} />
+          {updateReady && (
+            <span style={{ position:'absolute', top:0, right:0, width:10, height:10, background:'#eab308', borderRadius:'50%', border:'2px solid white' }} />
+          )}
         </button>
 
         {/* Toggle Semaine / Jour — prend l'espace restant */}
