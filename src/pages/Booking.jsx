@@ -642,14 +642,13 @@ if (hasLightChild) {
                   {isChild ? (
                     // Marmaille — vol verrouillé, pas de sélection possible
                     <div style={{
-                      padding:'10px 12px', borderRadius:8,
+                      padding:'8px 12px', borderRadius:8,
                       background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.35)',
                       color:'#fbbf24', fontWeight:600, fontSize:14,
+                      display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:4,
                     }}>
-                      🪂 {childFlightType.label} — {childFlightType.duration_min} min · {childFlightType.price_eur} €
-                      <span style={{ display:'block', fontSize:11, fontWeight:400, opacity:.75, marginTop:2 }}>
-                        Réservé aux {childFlightType.min_age}–{childFlightType.max_age} ans — non modifiable
-                      </span>
+                      <span>🪂 {childFlightType.label} — {childFlightType.duration_min} min · {childFlightType.price_eur} €</span>
+                      <span style={{ fontSize:11, fontWeight:500, opacity:.8 }}>🕗 Créneau 8h00 · {childFlightType.min_age}–{childFlightType.max_age} ans</span>
                     </div>
                   ) : (
                     <select value={p.flight_type}
@@ -667,22 +666,20 @@ if (hasLightChild) {
                   {!isChild && (() => { const ft = flightTypes.find(f => f.id === p.flight_type); return ft?.blocks_slots > 1 ? <span className="info-msg">⚠️ Ce vol occupe {ft.blocks_slots} créneaux consécutifs.</span> : null })()}
                 </div>
 
-                {/* Autorisation parentale — visible dès qu'un passager est marqué marmaille */}
+                {/* Autorisation parentale — compacte, visible dès is_marmaille ou age < 18 */}
                 {needsAuth && (
                   <div className="field checkbox-field" style={{
                     background: p.parental_auth ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)',
                     border: `1px solid ${p.parental_auth ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.3)'}`,
-                    borderRadius: 8, padding: '10px 12px',
+                    borderRadius: 8, padding: '8px 12px',
                   }}>
-                    <label style={{ display:'flex', alignItems:'flex-start', gap:8, cursor:'pointer' }}>
+                    <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', margin:0 }}>
                       <input type="checkbox" checked={p.parental_auth}
                         onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)}
-                        style={{ marginTop:2, flexShrink:0 }} />
-                      <span>
+                        style={{ flexShrink:0 }} />
+                      <span style={{ fontSize:13 }}>
                         <strong>Autorisation parentale confirmée</strong>
-                        <span style={{ display:'block', fontSize:12, opacity:.7, marginTop:2 }}>
-                          Obligatoire pour les moins de 18 ans
-                        </span>
+                        <span style={{ opacity:.65, fontWeight:400 }}> — obligatoire pour les &lt;18 ans</span>
                       </span>
                     </label>
                     {errors[`${i}_parental`] && <span className="error-msg">{errors[`${i}_parental`]}</span>}
