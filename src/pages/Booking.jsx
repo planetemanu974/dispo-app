@@ -9,8 +9,12 @@ const emptyPassenger = () => ({
   flight_type: 'discovery', parental_auth: false,
 })
 
-// Safe integer parse: returns fallback when value is empty / NaN (avoids NULL on NOT-NULL DB columns)
+// Safe integer parse: returns fallback when value is empty / NaN.
+// Use null as fallback for weight_kg (performance passengers have no weight — CHECK constraint allows NULL).
+// Use a numeric fallback for age (adults have no age field but column may be NOT NULL).
 const safeInt = (v, fallback = 0) => { const n = parseInt(v, 10); return isNaN(n) ? fallback : n }
+// Weight: if field is empty, send null (CHECK constraint allows NULL; 0 violates it)
+const safeWeight = (v) => { const n = parseInt(v, 10); return isNaN(n) || n === 0 ? null : n }
 
 function isFirstSlot(slot_time) {
   return slot_time?.startsWith('08:')
@@ -431,7 +435,7 @@ if (hasLightChild) {
     const { error: e1pax } = await supabase.from('passengers').insert(pax8h.map(p => ({
       booking_id: b1.id, first_name: p.first_name, last_name: p.last_name,
       // safeInt avoids NaN→null on NOT-NULL columns (adults have no age field, perf has no weight)
-      weight_kg: safeInt(p.weight_kg, 0),
+      weight_kg: safeWeight(p.weight_kg),
       age:       safeInt(p.age, p.is_marmaille ? 12 : 30),
       flight_type: p.flight_type, parental_auth: p.parental_auth || false,
       price_eur: calculatePrice(safeInt(p.age, 30), p.flight_type) * 100,
@@ -448,7 +452,7 @@ if (hasLightChild) {
 
     const { error: e2pax } = await supabase.from('passengers').insert(paxLate.map(p => ({
       booking_id: b2.id, first_name: p.first_name, last_name: p.last_name,
-      weight_kg: safeInt(p.weight_kg, 0),
+      weight_kg: safeWeight(p.weight_kg),
       age:       safeInt(p.age, p.is_marmaille ? 12 : 30),
       flight_type: p.flight_type, parental_auth: p.parental_auth || false,
       price_eur: calculatePrice(safeInt(p.age, 30), p.flight_type) * 100,
@@ -519,7 +523,7 @@ if (hasLightChild) {
       booking_id:    bookingData.id,
       first_name:    p.first_name,
       last_name:     p.last_name,
-      weight_kg:     safeInt(p.weight_kg, 0),
+      weight_kg:     safeWeight(p.weight_kg),
       age:           safeInt(p.age, p.is_marmaille ? 12 : 30),
       flight_type:   p.flight_type,
       parental_auth: p.parental_auth || false,
@@ -548,7 +552,7 @@ if (hasLightChild) {
           booking_id:    extraBooking.id,
           first_name:    p.first_name,
           last_name:     p.last_name,
-          weight_kg:     safeInt(p.weight_kg, 0),
+          weight_kg:     safeWeight(p.weight_kg),
           age:           safeInt(p.age, p.is_marmaille ? 12 : 30),
           flight_type:   p.flight_type,
           parental_auth: p.parental_auth || false,
