@@ -42,7 +42,7 @@ const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const WEEK_DAYS_COUNT = 5  // show 5 days at a time for readability on mobile
 
 // ── Calendar grid constants (Google Calendar style)
-const HOUR_HEIGHT  = 80   // px per hour
+const HOUR_HEIGHT  = 56   // px per hour
 const GRID_START_H = 8    // axis starts at 08:00
 const GRID_END_H   = 15   // axis ends at 15:00
 const SLOT_DURATION_MIN = 75  // default slot duration in minutes
