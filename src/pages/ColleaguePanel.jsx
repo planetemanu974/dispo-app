@@ -149,6 +149,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   const [invoiceDesig,     setInvoiceDesig]     = useState('Prestation biplace')
   const [invoiceSaving,    setInvoiceSaving]    = useState(false)
   const [invoiceError,     setInvoiceError]     = useState(null)
+  const [invoiceGmailUrl,  setInvoiceGmailUrl]  = useState(null) // set after send → shows clickable link
   const [invoiceNumber,    setInvoiceNumber]    = useState(null)
 
   // ── Chargement ────────────────────────────────────────────────────────────
@@ -350,7 +351,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     const filename = `facture_${prefix}_${seq}_${safe}.pdf`
 
     if (action === 'send') {
-      // Send action: download PDF + open Gmail compose in a new tab
+      // Send action: download PDF, then show a clickable Gmail link in the modal
+      // (programmatic window.open is blocked by Chrome in async functions)
       const subject = encodeURIComponent(`Facture ${finalN}`)
       const body    = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint ma facture n° ${finalN}.\n\nCordialement`)
       const emailTo = invoiceColleague.email || ''
@@ -358,18 +360,16 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
       doc.save(filename)
       if (emailTo) {
         const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${body}`
-        const a = document.createElement('a'); a.href = gmailUrl; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        setInvoiceGmailUrl(gmailUrl) // display link in modal for user to click directly
       } else {
         setInvoiceError('Aucun email enregistré pour ce collègue. PDF téléchargé — ajoutez son email dans sa fiche.')
-        setInvoiceSaving(false)
-        return
       }
     } else {
-      // Default: download PDF
+      // Default: download PDF and close modal
       doc.save(filename)
+      setInvoiceColleague(null)
     }
 
-    setInvoiceColleague(null)
     setInvoiceSaving(false)
   }
 
@@ -637,40 +637,58 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
 
       {/* ── Modal : facture ───────────────────────────────────────────────── */}
       {invoiceColleague && (
-        <ModalOverlay onClose={() => setInvoiceColleague(null)}>
+        <ModalOverlay onClose={() => { setInvoiceColleague(null); setInvoiceGmailUrl(null) }}>
           <h3 style={{ ...s.modalTitle, marginBottom: 4 }}>🧾 Facture</h3>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 12 }}>
             {invoiceColleague.name} · N° {invoiceNumber || '…'}
           </p>
 
-          <form onSubmit={handleGenerateInvoice}>
-            <label style={s.label}>Montant (€)</label>
-            <input type="number" value={invoiceAmount} onChange={e => setInvoiceAmount(e.target.value)}
-              style={{ ...s.input, fontSize: 22, fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}
-              placeholder="0" min="1" step="1" autoFocus required />
-
-            <label style={{ ...s.label, marginTop: 12 }}>Désignation</label>
-            <input type="text" value={invoiceDesig} onChange={e => setInvoiceDesig(e.target.value)} style={s.input} required />
-
-            <label style={{ ...s.label, marginTop: 12 }}>Date de la facture</label>
-            <input type="date" value={invoiceDate}
-              onChange={e => {
-                setInvoiceDate(e.target.value)
-                const prefix = invoiceDatePrefix(e.target.value)
-                supabase.from('colleague_invoices').select('id', { count: 'exact', head: true })
-                  .eq('pilot_id', pilot.id).ilike('invoice_number', `${prefix}/%`)
-                  .then(({ count }) => setInvoiceNumber(`${prefix}/${(count || 0) + 1}`))
-              }}
-              style={s.input} required />
-
-            {invoiceError && <p style={{ ...s.error, marginTop: 8 }}>{invoiceError}</p>}
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-              <button type="submit" name="action" value="save" disabled={invoiceSaving} style={{ ...s.btnGreen, flex: 1 }}>{invoiceSaving ? 'Génération…' : '📥 Enregistrer'}</button>
-              <button type="submit" name="action" value="send" disabled={invoiceSaving} style={{ ...s.btnGreen, background: '#0369a1', flex: 1 }}>📧 Envoyer</button>
+          {invoiceGmailUrl ? (
+            /* ── Écran succès : PDF téléchargé, lien Gmail à cliquer ── */
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 15, marginBottom: 6 }}>✅ PDF téléchargé !</p>
+              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>
+                Cliquez sur le bouton ci-dessous pour ouvrir Gmail avec le mail pré-rempli,<br/>
+                puis glissez le PDF en pièce jointe.
+              </p>
+              <a href={invoiceGmailUrl} target="_blank" rel="noopener noreferrer"
+                style={{ ...s.btnGreen, background: '#c5221f', display: 'block', textAlign: 'center', textDecoration: 'none', padding: '12px 0', borderRadius: 8, fontSize: 15, fontWeight: 700 }}>
+                📧 Ouvrir Gmail →
+              </a>
+              <button type="button" onClick={() => { setInvoiceColleague(null); setInvoiceGmailUrl(null) }}
+                style={{ ...s.btnGrey, width: '100%', marginTop: 10 }}>Fermer</button>
             </div>
-            <button type="button" onClick={() => setInvoiceColleague(null)} style={{ ...s.btnGrey, width: '100%', marginTop: 8 }}>Annuler</button>
-          </form>
+          ) : (
+            /* ── Formulaire de saisie ── */
+            <form onSubmit={handleGenerateInvoice}>
+              <label style={s.label}>Montant (€)</label>
+              <input type="number" value={invoiceAmount} onChange={e => setInvoiceAmount(e.target.value)}
+                style={{ ...s.input, fontSize: 22, fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}
+                placeholder="0" min="1" step="1" autoFocus required />
+
+              <label style={{ ...s.label, marginTop: 12 }}>Désignation</label>
+              <input type="text" value={invoiceDesig} onChange={e => setInvoiceDesig(e.target.value)} style={s.input} required />
+
+              <label style={{ ...s.label, marginTop: 12 }}>Date de la facture</label>
+              <input type="date" value={invoiceDate}
+                onChange={e => {
+                  setInvoiceDate(e.target.value)
+                  const prefix = invoiceDatePrefix(e.target.value)
+                  supabase.from('colleague_invoices').select('id', { count: 'exact', head: true })
+                    .eq('pilot_id', pilot.id).ilike('invoice_number', `${prefix}/%`)
+                    .then(({ count }) => setInvoiceNumber(`${prefix}/${(count || 0) + 1}`))
+                }}
+                style={s.input} required />
+
+              {invoiceError && <p style={{ ...s.error, marginTop: 8 }}>{invoiceError}</p>}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+                <button type="submit" name="action" value="save" disabled={invoiceSaving} style={{ ...s.btnGreen, flex: 1 }}>{invoiceSaving ? 'Génération…' : '📥 Enregistrer'}</button>
+                <button type="submit" name="action" value="send" disabled={invoiceSaving} style={{ ...s.btnGreen, background: '#0369a1', flex: 1 }}>📧 Envoyer</button>
+              </div>
+              <button type="button" onClick={() => setInvoiceColleague(null)} style={{ ...s.btnGrey, width: '100%', marginTop: 8 }}>Annuler</button>
+            </form>
+          )}
         </ModalOverlay>
       )}
     </>
