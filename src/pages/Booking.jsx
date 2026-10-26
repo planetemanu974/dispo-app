@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { validateWeight, validateAge, calculatePrice, suggestSlots, AGE_LIMITS, WEIGHT_LIMITS } from '../utils/rules'
+import { useSettings, DEFAULT_SETTINGS } from '../contexts/SettingsContext'
 
 const TODAY = new Date().toISOString().split('T')[0]
 const emptyPassenger = () => ({
@@ -35,6 +36,16 @@ async function sendSMS(to, message) {
 }
 
 export default function Booking() {
+  // Settings context — provides dynamic flight types (falls back to defaults if outside provider)
+  let settingsCtx
+  try { settingsCtx = useSettings() } catch { settingsCtx = null }
+  const flightTypes = settingsCtx?.settings?.flight_types ?? DEFAULT_SETTINGS.flight_types
+
+  // Child flight type = first type that has a max_age defined
+  const childFlightType = flightTypes.find(f => f.max_age !== null) ?? flightTypes[0]
+  // Adult flight types = those without max_age restriction (or above child threshold)
+  const adultFlightTypes = flightTypes.filter(f => f.max_age === null)
+
   const [step, setStep]                   = useState(2)
   const [selectedDate, setSelectedDate]   = useState(TODAY)
   const [slots, setSlots]                 = useState([])
@@ -75,10 +86,12 @@ async function loadSlots(date) {
       const updated = { ...p, [field]: value }
       if (field === 'age') {
         const age = parseInt(value, 10)
-        // Auto-assign marmaille for children ≤ 14, reset to discovery for adults
+        // Auto-assign child flight type when age ≤ max_age of child type, reset to first adult type
         if (!isNaN(age)) {
-          if (age <= AGE_LIMITS.CHILD_MAX_AGE) updated.flight_type = 'marmaille'
-          else if (updated.flight_type === 'marmaille') updated.flight_type = 'discovery'
+          const childFT = flightTypes.find(f => f.max_age !== null)
+          const adultFT = flightTypes.find(f => f.max_age === null)
+          if (childFT && age <= childFT.max_age) updated.flight_type = childFT.id
+          else if (childFT && updated.flight_type === childFT.id && adultFT) updated.flight_type = adultFT.id
         }
       }
       return updated
@@ -430,15 +443,24 @@ if (hasLightChild) {
                     onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
                     disabled={isChild || onlyFirst}>
                     {isChild
-                      ? <option value="marmaille">Vol marmaille — 20 min (80 €)</option>
-                      : <>
-                          <option value="discovery">Découverte — 20 min (90 €)</option>
-                          <option value="performance">Performance — 30/40 min (110–120 €)</option>
-                        </>
+                      ? <option value={childFlightType.id}>
+                          {childFlightType.label} — {childFlightType.duration_min} min ({childFlightType.price_eur} €)
+                        </option>
+                      : adultFlightTypes.map(ft => (
+                          <option key={ft.id} value={ft.id}>
+                            {ft.label} — {ft.duration_min} min ({ft.price_eur} €)
+                            {ft.blocks_slots > 1 ? ` · ${ft.blocks_slots} créneaux` : ''}
+                          </option>
+                        ))
                     }
                   </select>
-                  {isChild && <span className="info-msg">Tarif marmaille (6–14 ans) — vol découverte 20 min.</span>}
+                  {isChild && (
+                    <span className="info-msg">
+                      Tarif {childFlightType.label} ({childFlightType.min_age}–{childFlightType.max_age} ans) — {childFlightType.duration_min} min.
+                    </span>
+                  )}
                   {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
+                  {!isChild && (() => { const ft = flightTypes.find(f => f.id === p.flight_type); return ft?.blocks_slots > 1 ? <span className="info-msg">⚠️ Ce vol occupe {ft.blocks_slots} créneaux consécutifs.</span> : null })()}
                 </div>
 
                 {parseInt(p.age) < 18 && p.age !== '' && (

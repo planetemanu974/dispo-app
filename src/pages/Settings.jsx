@@ -101,7 +101,7 @@ function TabFlights({ settings, saveSettings }) {
   const [types, setTypes] = useState(settings.flight_types.map(f => ({ ...f })))
   const [saved, setSaved] = useState(false)
   const [newFlight, setNewFlight] = useState({
-    id: '', label: '', duration_min: 20, price_eur: 90, min_age: 6, max_age: '', max_weight_kg: 100,
+    id: '', label: '', duration_min: 20, price_eur: 90, min_age: 6, max_age: '', max_weight_kg: 100, blocks_slots: 1,
   })
   const [showAdd, setShowAdd] = useState(false)
 
@@ -117,11 +117,12 @@ function TabFlights({ settings, saveSettings }) {
     // Parse numeric fields
     const cleaned = types.map(f => ({
       ...f,
-      duration_min:  parseInt(f.duration_min) || 20,
-      price_eur:     parseFloat(f.price_eur)  || 0,
-      min_age:       parseInt(f.min_age)      || 0,
+      duration_min:  parseInt(f.duration_min)  || 20,
+      price_eur:     parseFloat(f.price_eur)   || 0,
+      min_age:       parseInt(f.min_age)       || 0,
       max_age:       f.max_age === '' || f.max_age === null ? null : parseInt(f.max_age),
       max_weight_kg: parseInt(f.max_weight_kg) || 100,
+      blocks_slots:  parseInt(f.blocks_slots)  || 1,
     }))
     const ok = await saveSettings({ flight_types: cleaned })
     if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2000) }
@@ -139,8 +140,9 @@ function TabFlights({ settings, saveSettings }) {
       min_age:       parseInt(newFlight.min_age)      || 0,
       max_age:       newFlight.max_age === '' ? null : parseInt(newFlight.max_age),
       max_weight_kg: parseInt(newFlight.max_weight_kg) || 100,
+      blocks_slots:  parseInt(newFlight.blocks_slots)  || 1,
     }])
-    setNewFlight({ id: '', label: '', duration_min: 20, price_eur: 90, min_age: 6, max_age: '', max_weight_kg: 100 })
+    setNewFlight({ id: '', label: '', duration_min: 20, price_eur: 90, min_age: 6, max_age: '', max_weight_kg: 100, blocks_slots: 1 })
     setShowAdd(false)
   }
 
@@ -189,6 +191,12 @@ function TabFlights({ settings, saveSettings }) {
               <input style={s.input} type="number" min="0" value={f.max_weight_kg}
                 onChange={e => updateType(f.id, 'max_weight_kg', e.target.value)} />
             </div>
+            <div>
+              <label style={{ ...s.label, marginBottom: 4 }}>Créneaux bloqués</label>
+              <input style={s.input} type="number" min="1" max="4" value={f.blocks_slots ?? 1}
+                onChange={e => updateType(f.id, 'blocks_slots', e.target.value)} />
+              <p style={s.warn}>Nb de créneaux consécutifs réservés (1 = standard)</p>
+            </div>
           </div>
         </div>
       ))}
@@ -230,6 +238,12 @@ function TabFlights({ settings, saveSettings }) {
                 <label style={{ ...s.label, marginBottom: 4 }}>Âge max. (optionnel)</label>
                 <input style={s.input} type="number" placeholder="aucune limite" value={newFlight.max_age}
                   onChange={e => setNewFlight(p => ({ ...p, max_age: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ ...s.label, marginBottom: 4 }}>Créneaux bloqués</label>
+                <input style={s.input} type="number" min="1" max="4" value={newFlight.blocks_slots}
+                  onChange={e => setNewFlight(p => ({ ...p, blocks_slots: e.target.value }))} />
+                <p style={s.warn}>1 = standard, 2 = journée découverte…</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
