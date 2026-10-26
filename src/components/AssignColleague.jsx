@@ -250,42 +250,48 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
           )
         })}
 
-        {/* Desktop fallback — sms: URI doesn't work on computers */}
-        {desktopSms && (
-          <div style={{ marginTop: 16, padding: 14, background: '#0f172a', borderRadius: 10, border: '1px solid #f59e0b' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              📋 Envoyez ce SMS depuis votre téléphone
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 2 }}>Destinataire</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <code style={{ flex: 1, background: '#1e293b', color: '#e2e8f0', padding: '6px 10px', borderRadius: 6, fontSize: '0.88rem', fontFamily: 'monospace' }}>
-                  {desktopSms.phone}
-                </code>
-                <button onClick={() => navigator.clipboard?.writeText(desktopSms.phone)}
-                  style={{ padding: '5px 10px', background: '#1e3a5f', border: 'none', borderRadius: 6, color: '#93c5fd', fontSize: '0.75rem', cursor: 'pointer' }}>
-                  Copier
-                </button>
+        {/* Desktop fallback — sms: URI doesn't work on computers, show QR code instead */}
+        {desktopSms && (() => {
+          const smsUri = `sms:${desktopSms.e164}?body=${encodeURIComponent(desktopSms.message)}`
+          const qrUrl  = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(smsUri)}&size=220x220&margin=12&color=e2e8f0&bgcolor=0f172a`
+          return (
+            <div style={{ marginTop: 16, padding: 16, background: '#0f172a', borderRadius: 10, border: '1px solid #f59e0b', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                📱 Scannez avec votre téléphone
               </div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 2 }}>Message</div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ flex: 1, background: '#1e293b', color: '#e2e8f0', padding: '8px 10px', borderRadius: 6, fontSize: '0.82rem', lineHeight: 1.5 }}>
-                  {desktopSms.message}
+
+              {/* QR code — encodes the sms: URI directly */}
+              <img
+                src={qrUrl}
+                alt="QR Code SMS"
+                style={{ width: 220, height: 220, borderRadius: 8, display: 'block', margin: '0 auto 12px' }}
+              />
+
+              <p style={{ margin: '0 0 4px', fontSize: '0.82rem', color: '#94a3b8' }}>
+                Flashez le code → l'app SMS s'ouvre sur votre iPhone
+              </p>
+              <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: '#475569' }}>
+                Le message est déjà pré-rempli. Appuyez sur Envoyer.
+              </p>
+
+              {/* Fallback text in case QR doesn't load */}
+              <details style={{ textAlign: 'left', marginBottom: 10 }}>
+                <summary style={{ fontSize: '0.72rem', color: '#475569', cursor: 'pointer' }}>
+                  Afficher le numéro et le message
+                </summary>
+                <div style={{ marginTop: 8, fontSize: '0.8rem', color: '#94a3b8', background: '#1e293b', padding: 10, borderRadius: 6, lineHeight: 1.6 }}>
+                  <strong>À :</strong> {desktopSms.phone}<br />
+                  <strong>Message :</strong> {desktopSms.message}
                 </div>
-                <button onClick={() => navigator.clipboard?.writeText(desktopSms.message)}
-                  style={{ padding: '5px 10px', background: '#1e3a5f', border: 'none', borderRadius: 6, color: '#93c5fd', fontSize: '0.75rem', cursor: 'pointer', flexShrink: 0 }}>
-                  Copier
-                </button>
-              </div>
+              </details>
+
+              <button onClick={() => setDesktopSms(null)}
+                style={{ width: '100%', padding: '7px', background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', fontSize: '0.75rem', cursor: 'pointer' }}>
+                Fermer
+              </button>
             </div>
-            <button onClick={() => setDesktopSms(null)}
-              style={{ marginTop: 10, width: '100%', padding: '6px', background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', fontSize: '0.75rem', cursor: 'pointer' }}>
-              Fermer
-            </button>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Reminder */}
         <p style={{ marginTop: 12, fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>
