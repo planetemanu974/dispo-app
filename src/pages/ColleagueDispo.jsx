@@ -65,6 +65,10 @@ export default function ColleagueDispo() {
   const [slots, setSlots]           = useState([])     // []{ slot_id, slot_date, slot_time, is_available, is_booked, my_request_status }
   const [calLoading, setCalLoading] = useState(false)
 
+  // Historique des demandes
+  const [history, setHistory]         = useState([])
+  const [histLoading, setHistLoading] = useState(false)
+
   // Modal de demande
   const [requestSlot, setRequestSlot] = useState(null) // slot sélectionné
   const [note, setNote]               = useState('')
@@ -83,6 +87,21 @@ export default function ColleagueDispo() {
     } catch { /* ignore */ }
     setAuthLoading(false)
   }, [])
+
+  // ── Charger l'historique des demandes ────────────────────────────────
+  const loadHistory = useCallback(async (colSession) => {
+    if (!colSession) return
+    setHistLoading(true)
+    const { data } = await supabase.rpc('get_colleague_history', {
+      p_colleague_id: colSession.colleague_id,
+    })
+    setHistory(data || [])
+    setHistLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (session) loadHistory(session)
+  }, [session, loadHistory])
 
   // ── Charger les créneaux quand session ou semaine change ──────────────
   const loadSlots = useCallback(async (colSession, start) => {
@@ -172,6 +191,9 @@ export default function ColleagueDispo() {
         ? { ...s, my_request_status: 'pending' }
         : s
     ))
+
+    // Recharger l'historique pour inclure la nouvelle demande
+    loadHistory(session)
 
     setTimeout(() => setRequestSlot(null), 2000)
   }
@@ -347,6 +369,63 @@ export default function ColleagueDispo() {
         )
       })()}
 
+      {/* ── Historique des demandes ── */}
+      <div style={{ padding: '24px 16px 8px' }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>
+          Historique de vos demandes
+        </h2>
+
+        {histLoading ? (
+          <p style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: '12px 0' }}>Chargement…</p>
+        ) : history.length === 0 ? (
+          <p style={{ color: '#334155', fontSize: 13, textAlign: 'center', padding: '12px 0' }}>
+            Aucune demande pour l'instant.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {history.map(req => {
+              const { bg, label } = historyAppearance(req.status)
+              return (
+                <div key={req.request_id} style={{
+                  background: '#1e293b',
+                  borderRadius: 10,
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}>
+                  {/* Date + heure */}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
+                      {formatDate(req.slot_date)}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                      🕐 {formatTime(req.slot_time)}
+                      {req.note ? <span style={{ marginLeft: 8, fontStyle: 'italic' }}>« {req.note} »</span> : null}
+                    </div>
+                  </div>
+                  {/* Badge statut */}
+                  <span style={{
+                    background: bg,
+                    color: '#fff',
+                    borderRadius: 20,
+                    padding: '4px 12px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}>
+                    {label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* ── Modal demande ── */}
       {requestSlot && (
         <div style={s.overlay} onClick={e => e.target === e.currentTarget && setRequestSlot(null)}>
@@ -411,6 +490,13 @@ function slotAppearance(slot) {
   if (!slot.is_available)                    return { bg: '#dc2626', label: 'Non dispo' }
   if (slot.is_booked)                        return { bg: '#94a3b8', label: 'Occupé' }
   return { bg: '#16a34a', label: 'Disponible' }
+}
+
+// ── Couleur et libellé d'une entrée historique ────────────────────────────
+function historyAppearance(status) {
+  if (status === 'accepted') return { bg: '#6366f1', label: 'Confirmé ✓' }
+  if (status === 'refused')  return { bg: '#dc2626', label: 'Refusé' }
+  return { bg: '#f59e0b', label: 'En attente' }
 }
 
 // ── Composant enveloppant ─────────────────────────────────────────────────
