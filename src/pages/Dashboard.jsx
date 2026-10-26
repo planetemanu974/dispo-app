@@ -286,16 +286,25 @@ export default function Dashboard({ pilot }) {
       bookingsData = data || []
     }
 
-    // Fetch pending colleague assignments for these bookings (for orange slot indicator)
+    // Fetch colleague assignments (pending + refused) for slot colour indicators
     const bookingIds = bookingsData.map(b => b.id)
-    let pendingAssignmentBookingIds = new Set()
+    let pendingAssignmentBookingIds = new Set()  // orange  — waiting for reply
+    let refusedAssignmentBookingIds = new Set()  // red     — refused, needs replacement
     if (bookingIds.length > 0) {
       const { data: assignData } = await supabase
         .from('booking_assignments')
-        .select('booking_id')
+        .select('booking_id, status')
         .in('booking_id', bookingIds)
-        .eq('status', 'pending')
-      ;(assignData || []).forEach(a => pendingAssignmentBookingIds.add(a.booking_id))
+        .in('status', ['pending', 'refused'])
+      ;(assignData || []).forEach(a => {
+        if (a.status === 'pending')  pendingAssignmentBookingIds.add(a.booking_id)
+        if (a.status === 'refused')  refusedAssignmentBookingIds.add(a.booking_id)
+      })
+      // A booking with a "refused" but also a "pending" stays orange (replacement in progress)
+      // Only mark as refused-only when there's no pending replacement
+      refusedAssignmentBookingIds.forEach(id => {
+        if (pendingAssignmentBookingIds.has(id)) refusedAssignmentBookingIds.delete(id)
+      })
     }
 
     // Organise by date
@@ -309,9 +318,12 @@ export default function Dashboard({ pilot }) {
       if (d && byDate[d]) byDate[d].bookings.push(b)
     })
 
-    // Attach pending-assignment flag to each booking
+    // Attach assignment flags to each booking for slot colour logic
     Object.values(byDate).forEach(({ bookings }) => {
-      bookings.forEach(b => { b._hasPendingAssignment = pendingAssignmentBookingIds.has(b.id) })
+      bookings.forEach(b => {
+        b._hasPendingAssignment = pendingAssignmentBookingIds.has(b.id)
+        b._hasRefusedAssignment = refusedAssignmentBookingIds.has(b.id)
+      })
     })
 
     setWeekData(byDate)
@@ -1086,12 +1098,20 @@ export default function Dashboard({ pilot }) {
                         const height        = slotHeightPx() - 8
                         const endTime       = slotEndTime(slot.slot_time)
 
-                        // Vivid block colours for week view — all slots clearly visible
-                        // Orange = waiting for colleague response (pending assignment)
+                        // Slot colours (priority order):
+                        // 🔴 Red    = colleague refused, still need a replacement
+                        // 🟠 Orange = waiting for colleague reply (pending)
+                        // 🟢 Green  = confirmed
+                        // 🟡 Yellow = booking pending pilot confirmation
+                        // ⬜ Grey   = slot unavailable
+                        // 🔵 Blue   = available slot (no booking)
                         const hasPendingAssignment = activeBks.some(b => b._hasPendingAssignment)
+                        const hasRefusedAssignment = activeBks.some(b => b._hasRefusedAssignment)
                         let wBg, wColor, wBorder
-                        if (hasPendingAssignment) {
-                          wBg = '#ea580c'; wColor = 'white'; wBorder = '#9a3412' // orange = en attente collègue
+                        if (hasRefusedAssignment) {
+                          wBg = '#dc2626'; wColor = 'white'; wBorder = '#991b1b' // red = refused, needs replacement
+                        } else if (hasPendingAssignment) {
+                          wBg = '#ea580c'; wColor = 'white'; wBorder = '#9a3412' // orange = waiting for reply
                         } else if (activeBks.some(b => b.status === 'confirmed')) {
                           wBg = '#16a34a'; wColor = 'white'; wBorder = '#166534'
                         } else if (activeBks.some(b => b.status === 'pending')) {
@@ -1146,6 +1166,7 @@ export default function Dashboard({ pilot }) {
             <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
             <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
             <span className="legend-item"><span className="legend-dot" style={{ background:'#ea580c' }} />Collègue ?</span>
+            <span className="legend-item"><span className="legend-dot" style={{ background:'#dc2626' }} />Refusé !</span>
           </div>
         </div>
       )}
