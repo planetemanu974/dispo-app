@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
 import Settings from './Settings'
+import History from './History'
 import { useSettings } from '../contexts/SettingsContext'
 
 const TODAY = new Date().toISOString().split('T')[0]
@@ -26,6 +27,27 @@ function getWeekStart(dateStr) {
 }
 
 // ── sendSMS: calls the Supabase Edge Function ──────────────────────────────
+// ── logActivity ──────────────────────────────────────────────────────────────
+// Records every meaningful pilot action in the activity_log table.
+// action:      string key, e.g. 'booking_created'
+// entityType:  'booking' | 'slot'
+// entityId:    uuid of the affected row (or null)
+// details:     free-form object stored as jsonb (booking_ref, contact_name, …)
+async function logActivity(pilotId, action, entityType, entityId, details = {}) {
+  try {
+    await supabase.from('activity_log').insert({
+      pilot_id:    pilotId,
+      action,
+      entity_type: entityType,
+      entity_id:   entityId || null,
+      details,
+    })
+  } catch (err) {
+    // Log failure is non-fatal — never block the main action
+    console.warn('[logActivity] could not write log:', err)
+  }
+}
+
 async function sendSMS(to, message) {
   try {
     const { data, error } = await supabase.functions.invoke('send-sms', {
@@ -147,6 +169,7 @@ export default function Dashboard({ pilot }) {
   const [menuOpen, setMenuOpen]               = useState(false)
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
   const [showSettings, setShowSettings]       = useState(false)
+  const [showHistory, setShowHistory]         = useState(false)
 
   // PWA update detection — fires when a new service worker takes control
   const [updateReady, setUpdateReady] = useState(false)
@@ -337,8 +360,14 @@ export default function Dashboard({ pilot }) {
 
   // ── toggleAvailability ────────────────────────────────────────────────────
   async function toggleAvailability(slot) {
+    const newAvail = !slot.is_available
     await supabase.from('pilot_slots')
-      .update({ is_available: !slot.is_available }).eq('id', slot.id)
+      .update({ is_available: newAvail }).eq('id', slot.id)
+    logActivity(pilot.id, 'slot_toggled', 'slot', slot.id, {
+      slot_date:    slot.slot_date,
+      slot_time:    slot.slot_time,
+      is_available: newAvail,
+    })
     loadDay(selectedDate)
     loadWeek(weekStart)
   }
@@ -347,6 +376,19 @@ export default function Dashboard({ pilot }) {
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
     setSelectedBooking(prev => prev ? { ...prev, status: action } : null)
+
+    // Audit log
+    const logAction = action === 'confirmed' ? 'booking_confirmed'
+                    : action === 'refused'   ? 'booking_refused'
+                    : `booking_${action}`
+    logActivity(pilot.id, logAction, 'booking', bookingId, {
+      booking_ref:   selectedBooking?.booking_ref,
+      contact_name:  selectedBooking?.contact_name,
+      contact_phone: selectedBooking?.contact_phone,
+      slot_date:     selectedBooking?.pilot_slots?.slot_date,
+      slot_time:     selectedBooking?.pilot_slots?.slot_time,
+      pax_count:     selectedBooking?.passengers?.length || 0,
+    })
 
     if (action === 'confirmed' && selectedBooking?.contact_phone) {
       const slotDate = selectedBooking.pilot_slots?.slot_date || selectedDate
@@ -526,6 +568,12 @@ export default function Dashboard({ pilot }) {
         await supabase.from('bookings').update({
           notes: (nbForm.notes.trim() ? nbForm.notes.trim() + '\n' : '') + '⚠️ SMS non envoyé (vérifier le numéro)',
         }).eq('id', bk.id)
+        // Audit log the SMS failure
+        logActivity(pilot.id, 'sms_failed', 'booking', bk.id, {
+          booking_ref:   ref,
+          contact_phone: nbForm.contactPhone.trim(),
+          note:          'SMS non envoyé — numéro invalide ou problème réseau',
+        })
         alert(
           `⚠️ Réservation créée, mais le SMS n'a pas pu être envoyé au client.\n` +
           `Numéro : ${nbForm.contactPhone.trim()}\n` +
@@ -533,6 +581,16 @@ export default function Dashboard({ pilot }) {
         )
       }
     }
+
+    // Audit log — booking created manually
+    logActivity(pilot.id, 'booking_created', 'booking', bk.id, {
+      booking_ref:   ref,
+      contact_name:  nbForm.contactName.trim(),
+      contact_phone: nbForm.contactPhone.trim(),
+      slot_date:     newBookingSlot.slot.slot_date || newBookingSlot.date,
+      slot_time:     newBookingSlot.slot.slot_time,
+      pax_count:     nbForm.passengers.length,
+    })
 
     const savedDate = newBookingSlot.date
     setNbSaving(false)
@@ -564,6 +622,13 @@ export default function Dashboard({ pilot }) {
   async function handleCancel(bookingId) {
     if (!window.confirm('Annuler cette reservation ?')) return
     await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+    logActivity(pilot.id, 'booking_cancelled', 'booking', bookingId, {
+      booking_ref:   selectedBooking?.booking_ref,
+      contact_name:  selectedBooking?.contact_name,
+      contact_phone: selectedBooking?.contact_phone,
+      slot_date:     selectedBooking?.pilot_slots?.slot_date,
+      slot_time:     selectedBooking?.pilot_slots?.slot_time,
+    })
     setSelectedBooking(null); setEditMode(false)
     const { data: slotData } = await supabase
       .from('pilot_slots').select('id, slot_date, slot_time')
@@ -609,11 +674,24 @@ export default function Dashboard({ pilot }) {
 
   // ── handleSaveEdit ────────────────────────────────────────────────────────
   async function handleSaveEdit() {
+    // Capture changes before saving for the audit log
+    const oldPhone = selectedBooking.contact_phone
+    const newPhone = editData.contact_phone
+    const phoneChanged = oldPhone !== newPhone
+
     await supabase.from('bookings').update({
       contact_name:  editData.contact_name,
       contact_phone: editData.contact_phone,
       pilot_slot_id: editData.pilot_slot_id,
     }).eq('id', selectedBooking.id)
+
+    logActivity(pilot.id, 'booking_edited', 'booking', selectedBooking.id, {
+      booking_ref:   selectedBooking.booking_ref,
+      contact_name:  editData.contact_name,
+      contact_phone: newPhone,
+      slot_date:     editData.slot_date,
+      ...(phoneChanged ? { old_phone: oldPhone, new_phone: newPhone } : {}),
+    })
 
     const originalIds = (selectedBooking.passengers || []).map(p => p.id)
     const keptIds     = editData.passengers.filter(p => p.id).map(p => p.id)
@@ -753,6 +831,7 @@ export default function Dashboard({ pilot }) {
           <MenuLink icon="👥" label="Collègues"     onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
           <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
           <MenuLink icon="🧾" label="Factures"      onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
+          <MenuLink icon="📋" label="Historique"    onClick={() => { setMenuOpen(false); setShowHistory(true) }} />
           <MenuLink icon="📊" label="Comptabilité"  disabled />
           <MenuLink icon="☁️" label="Météo"         disabled />
         </nav>
@@ -812,6 +891,13 @@ export default function Dashboard({ pilot }) {
       {showSettings && (
         <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
           <Settings onBack={() => setShowSettings(false)} />
+        </div>
+      )}
+
+      {/* Page Historique — overlay plein écran */}
+      {showHistory && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
+          <History pilot={pilot} onBack={() => setShowHistory(false)} />
         </div>
       )}
 
