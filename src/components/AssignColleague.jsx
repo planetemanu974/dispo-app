@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 // Base URL for the job response page
-const APP_URL = import.meta.env.VITE_APP_URL || 'https://dispo-app-six.vercel.app'
+const APP_URL = import.meta.env.VITE_APP_URL || 'https://dispo-app-pi.vercel.app'
 
 async function sendSMS(to, message) {
   try {
@@ -81,16 +81,15 @@ export default function AssignColleague({ booking, pilot, slotDate, slotTime, on
       return
     }
 
-    // Build SMS
+    // Build SMS — short and clear, oui/non via link
     const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
       weekday: 'long', day: 'numeric', month: 'long',
     })
     const timeLabel = slotTime?.slice(0, 5) || ''
     const responseUrl = `${APP_URL}/job/${assign.token}`
     const smsMsg =
-      `Bonjour ${colleague.name}, ${pilot.name} vous propose un vol biplace ` +
-      `le ${dateLabel} a ${timeLabel} a Kelonia Saint-Leu. ` +
-      `Acceptez ou refusez ici : ${responseUrl}`
+      `Dispo ${dateLabel} a ${timeLabel} pour ${pilot.name} ? ` +
+      `Repondre ici : ${responseUrl}`
 
     const { error: smsErr } = await sendSMS(colleague.phone, smsMsg)
 
