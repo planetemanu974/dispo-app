@@ -86,26 +86,40 @@ async function loadSlots(date) {
     setSlotTogether(null); setSlotAdultOnly(null)
   }
 
-  // Build passenger rows from the 4 quick-fill counts, preserving existing data
+  // Build passenger rows from the 4 quick-fill counts, preserving existing data.
+  // Marmaille rows always come first and carry is_marmaille:true to lock their flight type.
   function buildPassengersFromCounts(total, children, disco, perf, existing) {
     const childFTId = childFlightType?.id || 'discovery'
     const rows = []
     for (let i = 0; i < total; i++) {
       const prev = existing[i] || {}
       if (i < children) {
-        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
-                    weight_kg: prev.weight_kg||'', age: prev.age||'',
-                    flight_type: childFTId, parental_auth: prev.parental_auth||false })
+        // Marmaille — vol verrouillé, autorisation parentale obligatoire
+        rows.push({ ...emptyPassenger(),
+          first_name:    prev.first_name||'',  last_name: prev.last_name||'',
+          weight_kg:     prev.weight_kg||'',   age:       prev.age||'',
+          flight_type:   childFTId,
+          parental_auth: prev.parental_auth||false,
+          is_marmaille:  true,
+        })
       } else if (i < children + disco) {
-        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
-                    weight_kg: prev.weight_kg||'', age: prev.age||'', flight_type: 'discovery' })
+        rows.push({ ...emptyPassenger(),
+          first_name: prev.first_name||'', last_name: prev.last_name||'',
+          weight_kg:  prev.weight_kg||'',  age:       prev.age||'',
+          flight_type: 'discovery', is_marmaille: false,
+        })
       } else if (i < children + disco + perf) {
-        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
-                    weight_kg: prev.weight_kg||'', age: prev.age||'', flight_type: 'performance' })
+        rows.push({ ...emptyPassenger(),
+          first_name: prev.first_name||'', last_name: prev.last_name||'',
+          weight_kg:  prev.weight_kg||'',  age:       prev.age||'',
+          flight_type: 'performance', is_marmaille: false,
+        })
       } else {
-        rows.push({ ...emptyPassenger(), first_name: prev.first_name||'', last_name: prev.last_name||'',
-                    weight_kg: prev.weight_kg||'', age: prev.age||'',
-                    flight_type: adultFlightTypes[0]?.id || 'discovery' })
+        rows.push({ ...emptyPassenger(),
+          first_name: prev.first_name||'', last_name: prev.last_name||'',
+          weight_kg:  prev.weight_kg||'',  age:       prev.age||'',
+          flight_type: adultFlightTypes[0]?.id || 'discovery', is_marmaille: false,
+        })
       }
     }
     return rows
@@ -576,14 +590,25 @@ if (hasLightChild) {
           </div>
 
           {passengers.map((p, i) => {
-            const age       = parseInt(p.age, 10)
-            const isChild   = !isNaN(age) && age > 0 && age <= AGE_LIMITS.CHILD_MAX_AGE
-            const onlyFirst = slots.every(s => isFirstSlot(s.slot_time))
+            const age        = parseInt(p.age, 10)
+            const isChild    = p.is_marmaille || (!isNaN(age) && age > 0 && age <= AGE_LIMITS.CHILD_MAX_AGE)
+            const onlyFirst  = slots.every(s => isFirstSlot(s.slot_time))
+            // Show parental auth as soon as is_marmaille is set OR age < 18 entered
+            const needsAuth  = p.is_marmaille || (parseInt(p.age) < 18 && p.age !== '')
 
             return (
               <div key={i} className="passenger-card">
                 <div className="passenger-header">
-                  <span>Passager {i + 1}</span>
+                  {/* Label de l'en-tête : "Marmaille N" si enfant, sinon "Passager N" */}
+                  <span style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    {p.is_marmaille && (
+                      <span style={{
+                        background:'#f59e0b', color:'#000', fontSize:10, fontWeight:700,
+                        borderRadius:4, padding:'1px 6px', textTransform:'uppercase', letterSpacing:'.5px'
+                      }}>Marmaille</span>
+                    )}
+                    Passager {i + 1}
+                  </span>
                   {i > 0 && (
                     <button className="btn-ghost-small"
                       onClick={() => setPassengers(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
@@ -614,36 +639,51 @@ if (hasLightChild) {
 
                 <div className="field">
                   <label>Type de vol</label>
-                  <select value={p.flight_type}
-                    onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
-                    disabled={isChild || onlyFirst}>
-                    {isChild
-                      ? <option value={childFlightType.id}>
-                          {childFlightType.label} — {childFlightType.duration_min} min ({childFlightType.price_eur} €)
+                  {isChild ? (
+                    // Marmaille — vol verrouillé, pas de sélection possible
+                    <div style={{
+                      padding:'10px 12px', borderRadius:8,
+                      background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.35)',
+                      color:'#fbbf24', fontWeight:600, fontSize:14,
+                    }}>
+                      🪂 {childFlightType.label} — {childFlightType.duration_min} min · {childFlightType.price_eur} €
+                      <span style={{ display:'block', fontSize:11, fontWeight:400, opacity:.75, marginTop:2 }}>
+                        Réservé aux {childFlightType.min_age}–{childFlightType.max_age} ans — non modifiable
+                      </span>
+                    </div>
+                  ) : (
+                    <select value={p.flight_type}
+                      onChange={e => updatePassenger(i, 'flight_type', e.target.value)}
+                      disabled={onlyFirst}>
+                      {adultFlightTypes.map(ft => (
+                        <option key={ft.id} value={ft.id}>
+                          {ft.label} — {ft.duration_min} min ({ft.price_eur} €)
+                          {ft.blocks_slots > 1 ? ` · ${ft.blocks_slots} créneaux` : ''}
                         </option>
-                      : adultFlightTypes.map(ft => (
-                          <option key={ft.id} value={ft.id}>
-                            {ft.label} — {ft.duration_min} min ({ft.price_eur} €)
-                            {ft.blocks_slots > 1 ? ` · ${ft.blocks_slots} créneaux` : ''}
-                          </option>
-                        ))
-                    }
-                  </select>
-                  {isChild && (
-                    <span className="info-msg">
-                      Tarif {childFlightType.label} ({childFlightType.min_age}–{childFlightType.max_age} ans) — {childFlightType.duration_min} min.
-                    </span>
+                      ))}
+                    </select>
                   )}
                   {!isChild && onlyFirst && <span className="info-msg">Vol découverte uniquement sur le créneau 8h.</span>}
                   {!isChild && (() => { const ft = flightTypes.find(f => f.id === p.flight_type); return ft?.blocks_slots > 1 ? <span className="info-msg">⚠️ Ce vol occupe {ft.blocks_slots} créneaux consécutifs.</span> : null })()}
                 </div>
 
-                {parseInt(p.age) < 18 && p.age !== '' && (
-                  <div className="field checkbox-field">
-                    <label>
+                {/* Autorisation parentale — visible dès qu'un passager est marqué marmaille */}
+                {needsAuth && (
+                  <div className="field checkbox-field" style={{
+                    background: p.parental_auth ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)',
+                    border: `1px solid ${p.parental_auth ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.3)'}`,
+                    borderRadius: 8, padding: '10px 12px',
+                  }}>
+                    <label style={{ display:'flex', alignItems:'flex-start', gap:8, cursor:'pointer' }}>
                       <input type="checkbox" checked={p.parental_auth}
-                        onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)} />
-                      {' '}Autorisation parentale confirmée
+                        onChange={e => updatePassenger(i, 'parental_auth', e.target.checked)}
+                        style={{ marginTop:2, flexShrink:0 }} />
+                      <span>
+                        <strong>Autorisation parentale confirmée</strong>
+                        <span style={{ display:'block', fontSize:12, opacity:.7, marginTop:2 }}>
+                          Obligatoire pour les moins de 18 ans
+                        </span>
+                      </span>
                     </label>
                     {errors[`${i}_parental`] && <span className="error-msg">{errors[`${i}_parental`]}</span>}
                   </div>
