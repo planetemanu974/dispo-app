@@ -1143,28 +1143,33 @@ export default function Dashboard({ pilot }) {
                                 openNewBooking(slot, date)
                               }
                             }}>
-                            {/* "+" button — top-right corner, absolutely positioned */}
-                            {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
-                              <button
-                                style={{
-                                  position:'absolute', top:3, right:3,
-                                  background:'rgba(255,255,255,0.35)', color:'white',
-                                  border:'1px solid rgba(255,255,255,0.5)', borderRadius:5,
-                                  fontSize:'0.68rem', fontWeight:900,
-                                  padding:'1px 5px', lineHeight:1.5,
-                                  cursor:'pointer', backdropFilter:'blur(2px)',
-                                  zIndex:1,
-                                }}
-                                onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
-                                title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
-                                +{remainingW}
-                              </button>
+                            {/* Row 1: time (left) + "+N" badge (right) in a single flex row */}
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'2px 3px 0 4px', minHeight:0 }}>
+                              <span style={{ fontSize:'0.55rem', fontWeight:700, opacity:0.85, lineHeight:1 }}>
+                                {slot.slot_time.slice(0, 5)}
+                              </span>
+                              {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
+                                <button
+                                  style={{
+                                    background:'rgba(255,255,255,0.35)', color:'white',
+                                    border:'1px solid rgba(255,255,255,0.5)', borderRadius:4,
+                                    fontSize:'0.62rem', fontWeight:900,
+                                    padding:'0 4px', lineHeight:1.4,
+                                    cursor:'pointer', flexShrink:0,
+                                  }}
+                                  onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
+                                  title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
+                                  +{remainingW}
+                                </button>
+                              )}
+                            </div>
+                            {/* Row 2: passenger name */}
+                            {name && (
+                              <span style={{ fontSize:'0.65rem', fontWeight:800, padding:'0 4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block' }}>
+                                {name}
+                              </span>
                             )}
-                            {/* Time + name — right padding leaves room for the badge */}
-                            <span style={{ fontSize:'0.55rem', fontWeight:700, padding:'2px 4px 0', opacity:0.85, paddingRight: remainingW > 0 ? '26px' : '4px' }}>
-                              {slot.slot_time.slice(0, 5)}
-                            </span>
-                            {name && <span style={{ fontSize:'0.65rem', fontWeight:800, paddingLeft:4, paddingRight: remainingW > 0 ? '26px' : '4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>}
+                            {/* Row 3: pax count */}
                             {pax !== null && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85 }}>{pax} pax</span>
                             )}
