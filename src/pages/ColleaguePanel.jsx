@@ -702,16 +702,15 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
               href={(() => {
                 const slotLabel = formatSlotForMessage(requestSlot.date, requestSlot.time)
                 const msg = encodeURIComponent(
-                  `Salut ${detailColleague.name.split(' ')[0]} 👋, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
+                  `Salut ${detailColleague.name.split(' ')[0]}, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
                 )
-                const num = toWhatsAppNumber(detailColleague.phone)
-                return `https://wa.me/${num}?text=${msg}`
+                return `sms:${detailColleague.phone}?body=${msg}`
               })()}
               target="_blank"
               rel="noopener noreferrer"
               style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#064e3b', color: '#6ee7b7', border: '1px solid #065f4655', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
             >
-              📲 Demander dispo — {formatSlotForMessage(requestSlot.date, requestSlot.time)}
+              💬 SMS — {formatSlotForMessage(requestSlot.date, requestSlot.time)}
             </a>
           )}
           {requestSlot?.date && !detailColleague.phone && (
