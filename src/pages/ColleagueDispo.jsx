@@ -76,6 +76,12 @@ export default function ColleagueDispo() {
   const [requestError, setRequestError]   = useState(null)
   const [requestDone, setRequestDone]     = useState(false)
 
+  // Message collègue → pilote
+  const [msgBody, setMsgBody]         = useState('')
+  const [msgSending, setMsgSending]   = useState(false)
+  const [msgSent, setMsgSent]         = useState(false)
+  const [msgError, setMsgError]       = useState(null)
+
   // ── Récupérer le nom affiché du pilote ───────────────────────────────
   async function fetchPilotName(pilotId) {
     // Essaie d'abord sms_name (champ court dédié), puis name générique
@@ -221,6 +227,25 @@ export default function ColleagueDispo() {
     loadHistory(session)
 
     setTimeout(() => setRequestSlot(null), 2000)
+  }
+
+  // ── Envoyer un message au pilote ─────────────────────────────────────
+  async function sendMessage(e) {
+    e.preventDefault()
+    if (!msgBody.trim()) return
+    setMsgSending(true)
+    setMsgError(null)
+    const { error } = await supabase.from('colleague_messages').insert({
+      pilot_id:       session.pilot_id,
+      colleague_id:   session.colleague_id,
+      colleague_name: session.name,
+      body:           msgBody.trim(),
+    })
+    setMsgSending(false)
+    if (error) { setMsgError('Erreur : ' + error.message); return }
+    setMsgSent(true)
+    setMsgBody('')
+    setTimeout(() => setMsgSent(false), 4000)
   }
 
   // ── Rendu : écran de chargement ───────────────────────────────────────
@@ -412,6 +437,54 @@ export default function ColleagueDispo() {
           </div>
         )
       })()}
+
+      {/* ── Message au pilote ── */}
+      <div style={{ padding: '20px 16px 0' }}>
+        <h2 style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ flex: 1, height: 1, background: '#1e293b' }} />
+          Envoyer un message
+          <span style={{ flex: 1, height: 1, background: '#1e293b' }} />
+        </h2>
+        <form onSubmit={sendMessage} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <textarea
+            value={msgBody}
+            onChange={e => setMsgBody(e.target.value)}
+            placeholder={`Message pour ${session.pilotName || 'le pilote'}…`}
+            maxLength={1000}
+            rows={3}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: '#1e293b', border: '1px solid #334155',
+              borderRadius: 10, padding: '10px 12px',
+              color: '#e2e8f0', fontSize: 14, fontFamily: 'inherit',
+              resize: 'none', outline: 'none',
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontSize: 10, color: '#475569' }}>{msgBody.length}/1000</span>
+            {msgSent && (
+              <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>✓ Message envoyé !</span>
+            )}
+            {msgError && (
+              <span style={{ fontSize: 12, color: '#f87171' }}>{msgError}</span>
+            )}
+            <button
+              type="submit"
+              disabled={msgSending || !msgBody.trim()}
+              style={{
+                background: msgBody.trim() ? '#22c55e' : '#334155',
+                color: '#fff', border: 'none', borderRadius: 8,
+                padding: '8px 18px', fontSize: 13, fontWeight: 700,
+                cursor: msgBody.trim() ? 'pointer' : 'default',
+                transition: 'background 0.2s',
+                fontFamily: 'inherit',
+              }}
+            >
+              {msgSending ? 'Envoi…' : 'Envoyer'}
+            </button>
+          </div>
+        </form>
+      </div>
 
       {/* ── Historique des demandes ── */}
       <div style={{ padding: '20px 16px 8px' }}>

@@ -144,8 +144,8 @@ function MenuLink({ icon, label, onClick, disabled, extra }) {
         <span style={{ fontSize:'1.1rem', width:24, textAlign:'center' }}>{icon}</span>
         <span>{label}</span>
         {disabled && <span style={{ marginLeft:'auto', fontSize:'0.7rem', background:'rgba(255,255,255,0.1)', borderRadius:4, padding:'2px 6px' }}>Bientôt</span>}
+        {extra && <span style={{ marginLeft:'auto', background:'#22c55e', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:'0.75rem', fontWeight:700, minWidth:20, textAlign:'center' }}>{extra}</span>}
       </button>
-      {extra}
     </div>
   )
 }
@@ -184,6 +184,11 @@ export default function Dashboard({ pilot }) {
   const [showSettings, setShowSettings]       = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
   const [showAssign, setShowAssign]           = useState(false) // AssignColleague drawer
+
+  // Colleague messages (unread)
+  const [messages, setMessages]       = useState([])
+  const [showMessages, setShowMessages] = useState(false)
+  const unreadCount = messages.filter(m => !m.read_at).length
 
   // PWA update detection — fires when a new service worker takes control
   const [updateReady, setUpdateReady] = useState(false)
@@ -240,10 +245,30 @@ export default function Dashboard({ pilot }) {
       await loadWeek(getWeekStart(startDate))
       await loadDay(startDate)
       loadPlanning(startDate)
+
+      // Load colleague messages (all, most recent first)
+      const { data: msgs } = await supabase
+        .from('colleague_messages')
+        .select('*')
+        .eq('pilot_id', pilot.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (msgs) setMessages(msgs)
     }
 
     init()
   }, [pilot.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Mark colleague messages as read ───────────────────────────────────────
+  async function markMessagesRead() {
+    const unread = messages.filter(m => !m.read_at).map(m => m.id)
+    if (unread.length === 0) return
+    await supabase
+      .from('colleague_messages')
+      .update({ read_at: new Date().toISOString() })
+      .in('id', unread)
+    setMessages(prev => prev.map(m => unread.includes(m.id) ? { ...m, read_at: new Date().toISOString() } : m))
+  }
 
   // ── Load week when weekStart changes ──────────────────────────────────────
   useEffect(() => {
@@ -906,6 +931,7 @@ export default function Dashboard({ pilot }) {
         <nav style={{ flex:1, paddingTop:6 }}>
           <MenuLink icon="📅" label="Planning"      onClick={() => setMenuOpen(false)} />
           <MenuLink icon="👥" label="Collègues"     onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
+          <MenuLink icon="💬" label="Messages"      onClick={() => { setMenuOpen(false); setShowMessages(true); markMessagesRead() }} extra={unreadCount > 0 ? unreadCount : null} />
           <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
           <MenuLink icon="🧾" label="Factures"      onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
           <MenuLink icon="📋" label="Historique"    onClick={() => { setMenuOpen(false); setShowHistory(true) }} />
@@ -975,6 +1001,46 @@ export default function Dashboard({ pilot }) {
       {showHistory && (
         <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
           <History pilot={pilot} onBack={() => setShowHistory(false)} />
+        </div>
+      )}
+
+      {/* Messages des collègues — overlay plein écran */}
+      {showMessages && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, background:'#0f172a', overflowY:'auto' }}>
+          <div style={{ maxWidth:480, margin:'0 auto', padding:'0 0 40px' }}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'center', gap:12, padding:'16px 16px 12px', borderBottom:'1px solid #1e293b', position:'sticky', top:0, background:'#0f172a', zIndex:1 }}>
+              <button onClick={() => setShowMessages(false)} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:22, cursor:'pointer', padding:'0 4px', lineHeight:1 }}>←</button>
+              <h2 style={{ flex:1, margin:0, fontSize:16, fontWeight:800, color:'#f1f5f9' }}>Messages des collègues</h2>
+              {unreadCount > 0 && <span style={{ background:'#22c55e', color:'#fff', borderRadius:10, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{unreadCount} non lu{unreadCount > 1 ? 's' : ''}</span>}
+            </div>
+            {/* Liste */}
+            {messages.length === 0 ? (
+              <p style={{ color:'#475569', textAlign:'center', marginTop:60, fontSize:14 }}>Aucun message pour l'instant.</p>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                {messages.map(msg => {
+                  const d = new Date(msg.created_at)
+                  const dateStr = d.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' })
+                  const timeStr = d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })
+                  return (
+                    <div key={msg.id} style={{
+                      padding:'14px 16px',
+                      borderBottom:'1px solid #1e293b',
+                      background: msg.read_at ? 'transparent' : 'rgba(34,197,94,0.05)',
+                    }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                        <span style={{ fontWeight:700, fontSize:14, color:'#e2e8f0' }}>{msg.colleague_name}</span>
+                        <span style={{ fontSize:11, color:'#475569' }}>{dateStr} · {timeStr}</span>
+                      </div>
+                      <p style={{ margin:0, fontSize:14, color: msg.read_at ? '#94a3b8' : '#cbd5e1', lineHeight:1.5 }}>{msg.body}</p>
+                      {!msg.read_at && <span style={{ display:'inline-block', marginTop:6, fontSize:10, color:'#22c55e', fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase' }}>● Nouveau</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
