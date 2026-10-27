@@ -160,6 +160,8 @@ export default function Dashboard({ pilot }) {
   const [weekStart, setWeekStart]             = useState(() => getWeekStart(TODAY))
   const [weekData, setWeekData]               = useState({})       // { [date]: { slots, bookings } }
   const [weekLoading, setWeekLoading]         = useState(false)
+  // Fixed pilot unavailability for current week (loaded in loadWeek)
+  const [fixedUnavailability, setFixedUnavailability] = useState([])
 
   // Day view state
   const [selectedDate, setSelectedDate]       = useState(null)
@@ -480,6 +482,15 @@ export default function Dashboard({ pilot }) {
       })
     })
 
+    // Load fixed pilot unavailability for this week
+    const { data: unavailData } = await supabase
+      .from('fixed_pilot_unavailability')
+      .select('id, colleague_id, start_date, end_date, slot_time')
+      .eq('pilot_id', pilot.id)
+      .lte('start_date', days[days.length - 1])
+      .gte('end_date', days[0])
+    setFixedUnavailability(unavailData || [])
+
     setWeekData(byDate)
     setWeekLoading(false)
   }
@@ -507,6 +518,19 @@ export default function Dashboard({ pilot }) {
     setSlots(slotsData || [])
     setBookings(bookingsData)
     setLoading(false)
+  }
+
+  // ── isColleagueUnavailable ────────────────────────────────────────────────
+  // Returns true if the fixed colleague has an unavailability entry covering
+  // the given date and optional slot_time (null = full-day check only).
+  function isColleagueUnavailable(colleagueId, dateStr, slotTime) {
+    return fixedUnavailability.some(u => {
+      if (u.colleague_id !== colleagueId) return false
+      if (u.start_date > dateStr || u.end_date < dateStr) return false
+      if (u.slot_time === null) return true  // full-day covers any slot
+      // Specific slot check — match HH:MM prefix
+      return slotTime && u.slot_time.slice(0, 5) === slotTime.slice(0, 5)
+    })
   }
 
   // ── loadPlanning ──────────────────────────────────────────────────────────
@@ -1712,6 +1736,31 @@ export default function Dashboard({ pilot }) {
                             )}
                             {!slot.is_available && activeBks.length === 0 && (
                               <span style={{ fontSize:'0.58rem', fontWeight:700, padding:'0 4px', opacity:0.8, letterSpacing:'0.04em', textTransform:'uppercase' }}>pas dispo</span>
+                            )}
+                            {/* Fixed pilots availability row — numbered badges at the bottom */}
+                            {fixedPilotsAvail.length > 0 && (
+                              <div style={{ display:'flex', gap:2, padding:'1px 3px', marginTop:'auto', flexWrap:'nowrap' }}>
+                                {fixedPilotsAvail.map(c => {
+                                  const unavail = isColleagueUnavailable(c.id, slot.slot_date, slot.slot_time)
+                                  return (
+                                    <div key={c.id}
+                                      title={unavail ? `${c.name} — indisponible` : `${c.name} — disponible`}
+                                      style={{
+                                        width: 13, height: 13,
+                                        borderRadius: '50%',
+                                        background: unavail ? 'transparent' : 'rgba(255,255,255,0.85)',
+                                        border: `1px solid ${unavail ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'}`,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: '0.48rem', fontWeight: 900,
+                                        color: unavail ? 'transparent' : wBg,
+                                        flexShrink: 0,
+                                        lineHeight: 1,
+                                      }}>
+                                      {c.fixed_order}
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             )}
                           </div>
                         )
