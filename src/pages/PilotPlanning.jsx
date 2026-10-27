@@ -32,8 +32,13 @@ function getMondayOf(date) {
   return d
 }
 
+// UTC-safe ISO string — uses local date parts to avoid UTC shift in UTC+4 (La Réunion).
+// toISOString() returns UTC, which shifts the date by -1 day when local time is before midnight UTC.
 function toISO(date) {
-  return date.toISOString().slice(0, 10)
+  const y  = date.getFullYear()
+  const m  = String(date.getMonth() + 1).padStart(2, '0')
+  const d  = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 function addDays(date, n) {

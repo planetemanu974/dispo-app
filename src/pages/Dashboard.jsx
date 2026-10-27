@@ -397,6 +397,11 @@ export default function Dashboard({ pilot }) {
               colleague_id: fp.id,
               pilot_id:     pilot.id,
               status:       'accepted',
+              // slot_date / slot_time required by the pilot-planning Edge Function filter
+              slot_date:    selectedBooking.pilot_slots?.slot_date || null,
+              slot_time:    selectedBooking.pilot_slots?.slot_time || null,
+              pilot_name:   pilot.name,
+              pilot_phone:  pilot.phone || '',
             })
           ))
           const { data: refreshed } = await supabase
@@ -1619,6 +1624,11 @@ export default function Dashboard({ pilot }) {
               colleague_id: colleague.id,
               pilot_id:     pilot.id,
               status:       'accepted',
+              // slot_date / slot_time required by the pilot-planning Edge Function filter
+              slot_date:    fixedPilotPicker.date  || null,
+              slot_time:    fixedPilotPicker.time  || null,
+              pilot_name:   pilot.name,
+              pilot_phone:  pilot.phone || '',
             })
           if (error) { alert('Erreur lors de l\'assignation.'); return }
           setFixedPilotPicker(null)
