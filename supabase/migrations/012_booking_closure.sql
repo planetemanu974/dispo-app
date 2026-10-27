@@ -32,6 +32,7 @@ ALTER TABLE public.bookings
   -- NULL = not yet closed; set to now() when pilot clicks "Clôturer"
 
 -- Index for the pilot report (flights per pilot per month)
+-- Note: bookings has no pilot_id column — pilot is resolved via pilot_slot_id
 CREATE INDEX IF NOT EXISTS bookings_flew_pilot
-  ON public.bookings (pilot_id, flew_pilot_name, paid_at)
+  ON public.bookings (flew_pilot_name, paid_at)
   WHERE flew_pilot_name IS NOT NULL;

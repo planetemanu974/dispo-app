@@ -30,7 +30,7 @@
 import jsPDF from 'jspdf'
 
 // ── Issuer constants ──────────────────────────────────────────────────────────
-const ISSUER_NAME    = 'Planète Parapente'
+const ISSUER_NAME    = 'Planete Parapente'
 const ISSUER_LINE2   = '44A rue du Général de Gaulle'
 const ISSUER_LINE3   = '97426 LES TROIS BASSINS'
 const ISSUER_TEL     = 'Tél : 0692 20 09 61'

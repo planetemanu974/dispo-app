@@ -785,11 +785,13 @@ export default function Dashboard({ pilot }) {
       let invoiceNum = null
       if (closureData.invoiceType !== 'none') {
         const dayPrefix = buildInvoiceNumber(flightDate, 0).replace('/0', '') // DDMMYY
+        // bookings has no pilot_id column — filter via pilot_slot_id list
+        // (RLS also restricts to the pilot's own data)
         const { data: todayInvoices } = await supabase
           .from('bookings')
           .select('invoice_number')
-          .eq('pilot_id', pilot.id)
           .like('invoice_number', `${dayPrefix}/%`)
+          .not('invoice_number', 'is', null)
         const nextSeq = (todayInvoices?.length || 0) + 1
         invoiceNum = buildInvoiceNumber(flightDate, nextSeq)
       }
@@ -829,8 +831,8 @@ export default function Dashboard({ pilot }) {
         const { data: existingNow } = await supabase
           .from('bookings')
           .select('invoice_number')
-          .eq('pilot_id', pilot.id)
           .like('invoice_number', `${dayPrefix}/%`)
+          .not('invoice_number', 'is', null)
         let baseSeq = (existingNow?.length || 0) // we already wrote the booking above
 
         passengers.forEach((p, idx) => {
@@ -878,10 +880,11 @@ export default function Dashboard({ pilot }) {
       // month = 'YYYY-MM'
       const from = `${month}-01`
       const to   = `${month}-31`
+      // bookings has no pilot_id — filter via non-null flew_pilot_name + date range
+      // RLS restricts rows to the logged-in pilot's slots automatically
       const { data } = await supabase
         .from('bookings')
         .select('flew_pilot_name, payment_method, invoice_type, paid_at, pilot_slots(slot_date, slot_time), passengers(*)')
-        .eq('pilot_id', pilot.id)
         .not('flew_pilot_name', 'is', null)
         .gte('paid_at', from)
         .lte('paid_at', to)
