@@ -3065,7 +3065,10 @@ export default function Dashboard({ pilot }) {
                         flightTypes={flightTypes}
                         pilots={[
                           pilot.sms_name || 'Capitaine',
-                          ...colleagues.map(c => c.name).filter(Boolean),
+                          // Seulement les collègues assignés à CE vol
+                          ...bookingAssignments
+                            .map(a => a.colleagues?.name)
+                            .filter(Boolean),
                         ]}
                         onDone={(patch) => {
                           setSelectedBooking(prev => ({ ...prev, ...patch }))

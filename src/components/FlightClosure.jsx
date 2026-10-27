@@ -13,7 +13,7 @@
  *   { pilot_flights: [...], payment_groups: [...] }
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildInvoiceNumber, generateInvoice, invoiceFilename } from '../lib/invoice'
 
@@ -512,10 +512,34 @@ function PilotFlightRow({ pf, idx, pilotNames, flightTypes, canRemove, onChange,
   const hasType = !!pf.flight_type_id
   const hasPack = pf.media_pack !== 'none'
 
+  // Mode "Autre" : actif si le nom actuel n'est pas dans la liste connue
+  const isCustomName = pf.pilot_name !== '' && !pilotNames.includes(pf.pilot_name)
+  const [customMode, setCustomMode] = useState(isCustomName)
+
+  // Sync si pilotNames change après le montage (cas rare)
+  useEffect(() => {
+    if (customMode && pilotNames.includes(pf.pilot_name)) setCustomMode(false)
+  }, [pilotNames]) // eslint-disable-line
+
   const selectBase = {
     background: '#1e293b', border: '1px solid #334155',
     borderRadius: 7, padding: '9px 6px', fontFamily: 'inherit',
     cursor: 'pointer', minWidth: 0,
+  }
+
+  function handlePilotSelect(e) {
+    if (e.target.value === '__autre__') {
+      // Basculer sur le champ texte libre, vider le nom
+      setCustomMode(true)
+      onChange('pilot_name', '')
+    } else {
+      onChange('pilot_name', e.target.value)
+    }
+  }
+
+  function handleCustomBack() {
+    setCustomMode(false)
+    onChange('pilot_name', pilotNames[0] || '')
   }
 
   return (
@@ -531,21 +555,55 @@ function PilotFlightRow({ pf, idx, pilotNames, flightTypes, canRemove, onChange,
         {idx + 1}
       </span>
 
-      {/* Dropdown pilote */}
-      <select
-        value={pf.pilot_name}
-        onChange={e => onChange('pilot_name', e.target.value)}
-        style={{
-          ...selectBase,
-          flex: 1.2,
-          fontSize: 13,
-          color: pf.pilot_name ? '#e2e8f0' : '#64748b',
-        }}>
-        <option value="">— Pilote —</option>
-        {pilotNames.map(name => (
-          <option key={name} value={name}>{name}</option>
-        ))}
-      </select>
+      {/* Pilote : dropdown OU champ texte libre (mode "Autre") */}
+      {customMode ? (
+        <div style={{ flex: 1.2, display: 'flex', gap: 3, minWidth: 0 }}>
+          {/* Champ texte libre pour un pilote non listé */}
+          <input
+            autoFocus
+            type="text"
+            value={pf.pilot_name}
+            onChange={e => onChange('pilot_name', e.target.value)}
+            placeholder="Prénom du pilote…"
+            style={{
+              flex: 1,
+              background: 'rgba(251,191,36,0.06)',
+              border: '1px solid rgba(251,191,36,0.35)',
+              borderRadius: 7, padding: '9px 7px',
+              fontFamily: 'inherit', fontSize: 13,
+              color: '#fbbf24', minWidth: 0,
+            }}
+          />
+          {/* Retour vers la liste */}
+          <button
+            onClick={handleCustomBack}
+            title="Revenir à la liste"
+            style={{
+              background: 'none', border: '1px solid #334155',
+              borderRadius: 7, padding: '6px 7px',
+              cursor: 'pointer', color: '#475569', fontSize: 13, flexShrink: 0,
+            }}>
+            ←
+          </button>
+        </div>
+      ) : (
+        <select
+          value={pf.pilot_name}
+          onChange={handlePilotSelect}
+          style={{
+            ...selectBase,
+            flex: 1.2,
+            fontSize: 13,
+            color: pf.pilot_name ? '#e2e8f0' : '#64748b',
+          }}>
+          <option value="">— Pilote —</option>
+          {pilotNames.map(name => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+          {/* Option pour saisir un pilote hors liste */}
+          <option value="__autre__">✏️ Autre…</option>
+        </select>
+      )}
 
       {/* Dropdown type de vol */}
       <select
