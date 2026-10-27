@@ -439,8 +439,9 @@ export default function Dashboard({ pilot }) {
     const bookingIds = bookingsData.map(b => b.id)
     let pendingAssignmentBookingIds  = new Set()  // orange — waiting for reply
     let refusedAssignmentBookingIds  = new Set()  // red    — refused, no replacement
-    let acceptedAssignmentBookingIds = new Set()  // green  — colleague confirmed
-    const acceptedColleagueByBooking = {}         // bookingId → colleague name
+    let acceptedAssignmentBookingIds = new Set()  // green  — at least one confirmed
+    const acceptedColleagueByBooking = {}         // bookingId → first accepted colleague name (for badge)
+    const acceptedAssignmentCountByBooking = {}   // bookingId → total accepted count
     if (bookingIds.length > 0) {
       const { data: assignData } = await supabase
         .from('booking_assignments')
@@ -451,7 +452,10 @@ export default function Dashboard({ pilot }) {
         if (a.status === 'refused')  refusedAssignmentBookingIds.add(a.booking_id)
         if (a.status === 'accepted') {
           acceptedAssignmentBookingIds.add(a.booking_id)
-          acceptedColleagueByBooking[a.booking_id] = a.colleagues?.name || '—'
+          if (!acceptedColleagueByBooking[a.booking_id])
+            acceptedColleagueByBooking[a.booking_id] = a.colleagues?.name || '—'
+          acceptedAssignmentCountByBooking[a.booking_id] =
+            (acceptedAssignmentCountByBooking[a.booking_id] || 0) + 1
         }
       })
       // A booking with "refused" but also "pending" stays orange (replacement in progress)
@@ -475,10 +479,11 @@ export default function Dashboard({ pilot }) {
     // Attach assignment flags + accepted colleague name to each booking
     Object.values(byDate).forEach(({ bookings }) => {
       bookings.forEach(b => {
-        b._hasPendingAssignment  = pendingAssignmentBookingIds.has(b.id)
-        b._hasRefusedAssignment  = refusedAssignmentBookingIds.has(b.id)
-        b._hasAcceptedAssignment = acceptedAssignmentBookingIds.has(b.id)
-        b._acceptedColleagueName = acceptedColleagueByBooking[b.id] || null
+        b._hasPendingAssignment    = pendingAssignmentBookingIds.has(b.id)
+        b._hasRefusedAssignment    = refusedAssignmentBookingIds.has(b.id)
+        b._hasAcceptedAssignment   = acceptedAssignmentBookingIds.has(b.id)
+        b._acceptedColleagueName   = acceptedColleagueByBooking[b.id] || null
+        b._acceptedAssignmentCount = acceptedAssignmentCountByBooking[b.id] || 0
       })
     })
 
@@ -1658,26 +1663,30 @@ export default function Dashboard({ pilot }) {
                         const fixedPilotsAvail = colleagues
                           .filter(c => c.is_direct && c.is_fixed)
                           .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-                        // Fixed pilots actually available (not indispo) for this date + slot
+                        // Fixed pilots actually available for this date + slot, excluding pilot himself
+                        // (pilot is already counted by the "bPax - 1" formula — don't double-count)
                         const fixedPilotsPresent = fixedPilotsAvail.filter(c =>
                           !isColleagueUnavailable(c.id, slot.slot_date, slot.slot_time)
+                          && c.id !== pilot?.id
                         )
 
                         let needsColleague
                         if (activeBks.length > 1) {
-                          // Multi-booking slot: every booking needs a colleague unless fixed pilots cover all
+                          // Multi-booking slot: check each booking individually
                           needsColleague = activeBks.some(b => {
                             const bPax = b.passengers?.length || 1
-                            const coveredByFixed = fixedPilotsPresent.length >= bPax - 1
-                            return !b._hasAcceptedAssignment && !b._hasPendingAssignment && !coveredByFixed
+                            const pilotsNeeded = bPax - 1  // pilot covers pax 1 himself
+                            const totalCovered = fixedPilotsPresent.length + (b._acceptedAssignmentCount || 0)
+                            return totalCovered < pilotsNeeded && !b._hasPendingAssignment
                           })
                         } else {
                           const bPax = activeBks[0]?.passengers?.length || totalPaxW
-                          const coveredByFixed = fixedPilotsPresent.length >= bPax - 1
+                          const pilotsNeeded = bPax - 1
+                          const b0 = activeBks[0]
+                          const totalCovered = fixedPilotsPresent.length + (b0?._acceptedAssignmentCount || 0)
                           needsColleague = totalPaxW > 1
-                            && !activeBks.some(b => b._hasAcceptedAssignment)
+                            && totalCovered < pilotsNeeded
                             && !hasPendingAssignment
-                            && !coveredByFixed
                         }
                         let wBg, wColor, wBorder
                         if (hasRefusedAssignment || needsColleague) {
@@ -2319,7 +2328,19 @@ export default function Dashboard({ pilot }) {
                       .filter(c => c.is_direct && c.is_fixed)
                       .filter(c => !isColleagueUnavailable(c.id, slotDate, slotTime))
                       .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-                    const pilotName = sortedFixed[i]?.name || (i === 0 ? pilot.name : null)
+                    // Accepted freelance colleagues fill slots beyond fixed pilots
+                    const acceptedFreelancers = bookingAssignments
+                      .filter(a => a.status === 'accepted')
+                      .map(a => a.colleagues?.name)
+                      .filter(Boolean)
+                    // i=0 → sortedFixed[0] (pilot himself if he's listed as fixed) or pilot.name
+                    // i=1..N → sortedFixed[i], then accepted freelancers once fixed list is exhausted
+                    const freelancerForSlot = !sortedFixed[i] && i > 0
+                      ? acceptedFreelancers[i - sortedFixed.length] || null
+                      : null
+                    const pilotName = sortedFixed[i]?.name
+                      || (i === 0 ? pilot.name : null)
+                      || freelancerForSlot
                     return (
                       <div key={p.id} className="modal-pax-card">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
