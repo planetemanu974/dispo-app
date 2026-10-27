@@ -163,6 +163,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
   const [detailColleague, setDetailColleague] = useState(null)  // { id, name, address, siret, phone, active }
   const [detailSaving,    setDetailSaving]    = useState(false)
   const [detailError,     setDetailError]     = useState(null)
+  const [planningToken,   setPlanningToken]   = useState(null)  // active token for fixed pilot
 
   // Historique (dans la fiche collègue)
   const [history,        setHistory]        = useState({ invoices: [], requests: [] })
@@ -274,8 +275,20 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
   async function openDetail(c) {
     setDetailColleague({ ...c })
     setDetailError(null)
+    setPlanningToken(null)
     setHistoryTab('invoices')
     setHistoryLoading(true)
+    // Load planning token if this is a fixed pilot
+    if (c.is_fixed) {
+      const { data: tokenRow } = await supabase
+        .from('fixed_pilot_tokens')
+        .select('token')
+        .eq('colleague_id', c.id)
+        .eq('pilot_id', pilot.id)
+        .is('revoked_at', null)
+        .maybeSingle()
+      setPlanningToken(tokenRow?.token || null)
+    }
     // Charger factures + demandes en parallèle
     const [invRes, reqRes] = await Promise.all([
       supabase
@@ -329,17 +342,39 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
   async function handleToggleFixed() {
     const newFixed = !detailColleague.is_fixed
     let newOrder = null
+
     if (newFixed) {
       // Assign next available fixed_order rank
       const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
       const maxOrder = fixedPilots.reduce((m, c) => Math.max(m, c.fixed_order || 0), 0)
       newOrder = maxOrder + 1
     }
+
     await supabase
       .from('colleagues')
       .update({ is_fixed: newFixed, fixed_order: newFixed ? newOrder : null })
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
+
+    if (newFixed) {
+      // Generate a new planning token for this fixed pilot
+      const { data: tokenRow } = await supabase
+        .from('fixed_pilot_tokens')
+        .insert({ colleague_id: detailColleague.id, pilot_id: pilot.id })
+        .select('token')
+        .single()
+      setPlanningToken(tokenRow?.token || null)
+    } else {
+      // Revoke all active tokens for this colleague
+      await supabase
+        .from('fixed_pilot_tokens')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('colleague_id', detailColleague.id)
+        .eq('pilot_id', pilot.id)
+        .is('revoked_at', null)
+      setPlanningToken(null)
+    }
+
     setDetailColleague(prev => ({ ...prev, is_fixed: newFixed, fixed_order: newOrder }))
     loadColleagues()
   }
@@ -943,6 +978,44 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                   </div>
                 )
               })()}
+              {/* Planning link for fixed pilot */}
+              {detailColleague.is_fixed && planningToken && (() => {
+                const planningUrl = `${window.location.origin}/pilot-planning/${planningToken}`
+                return (
+                  <div style={{ marginTop: 14, padding: '12px', background: '#0f2027', border: '1px solid #1d4ed844', borderRadius: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+                      📅 Planning personnel
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', wordBreak: 'break-all', marginBottom: 8 }}>
+                      {planningUrl}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => navigator.clipboard?.writeText(planningUrl).catch(() => {})}
+                        style={{ flex: 1, padding: '8px', background: '#1e293b', color: '#93c5fd', border: '1px solid #1d4ed844', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        📋 Copier le lien
+                      </button>
+                      {detailColleague.phone && (
+                        <button
+                          onClick={async () => {
+                            const msg = `Bonjour ${detailColleague.name}, voici votre lien planning : ${planningUrl}`
+                            const { error } = await supabase.functions.invoke('send-sms', {
+                              body: { to: detailColleague.phone, message: msg },
+                            })
+                            if (error) alert('Erreur envoi SMS : ' + error.message)
+                            else alert('SMS envoyé !')
+                          }}
+                          style={{ flex: 1, padding: '8px', background: '#1e3a5f', color: '#93c5fd', border: '1px solid #1d4ed844', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          📱 Envoyer par SMS
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
               <button
                 onClick={handleToggleFixed}
                 style={{

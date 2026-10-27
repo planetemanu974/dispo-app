@@ -9,6 +9,7 @@ import ManuDispo     from './pages/ManuDispo'
 import ColleagueJoin  from './pages/ColleagueJoin'
 import ColleagueDispo from './pages/ColleagueDispo'
 import JobResponse    from './pages/JobResponse'
+import PilotPlanning  from './pages/PilotPlanning'
 import './App.css'
 
 export default function App() {
@@ -44,7 +45,8 @@ export default function App() {
           <Route path="/manu-dispo"  element={<ManuDispo />} />
           <Route path="/join"        element={<ColleagueJoin />} />
           <Route path="/dispo"       element={<ColleagueDispo />} />
-          <Route path="/job/:token"  element={<JobResponse />} />
+          <Route path="/job/:token"          element={<JobResponse />} />
+          <Route path="/pilot-planning/:token" element={<PilotPlanning />} />
           <Route path="/" element={session && pilot ? <Dashboard pilot={pilot} /> : <Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
