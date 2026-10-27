@@ -152,9 +152,9 @@ export default function FlightClosure({
   // ── État : vols du jour ────────────────────────────────────────────────
   const [pilotFlights, setPilotFlights] = useState(() => {
     const existing = parseExistingPilotFlights(booking.closure_data)
-    return existing?.length
-      ? existing
-      : [newPilotFlight(pilotNames[0] || '')]
+    if (existing?.length) return existing
+    // Pré-remplir une ligne par pilote (toi + tous les collègues)
+    return pilotNames.map(name => newPilotFlight(name))
   })
 
   // ── État : cartes de paiement ──────────────────────────────────────────
@@ -390,18 +390,20 @@ export default function FlightClosure({
         </div>
 
         {/* Lignes de vols */}
-        {pilotFlights.map((pf, idx) => (
-          <PilotFlightRow
-            key={pf.id}
-            pf={pf}
-            idx={idx}
-            pilotNames={pilotNames}
-            flightTypes={flightTypes}
-            canRemove={pilotFlights.length > 1}
-            onChange={(key, val) => updatePilotFlight(pf.id, key, val)}
-            onRemove={() => removePilotFlight(pf.id)}
-          />
-        ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {pilotFlights.map((pf, idx) => (
+            <PilotFlightRow
+              key={pf.id}
+              pf={pf}
+              idx={idx}
+              pilotNames={pilotNames}
+              flightTypes={flightTypes}
+              canRemove={pilotFlights.length > 1}
+              onChange={(key, val) => updatePilotFlight(pf.id, key, val)}
+              onRemove={() => removePilotFlight(pf.id)}
+            />
+          ))}
+        </div>
 
         {/* Ajouter un vol */}
         <button
@@ -501,96 +503,99 @@ export default function FlightClosure({
   )
 }
 
-// ── Ligne d'un vol du jour (pilote + type + pack) ─────────────────────────
+// ── Ligne d'un vol du jour (pilote + type + pack) — layout compact ────────
+//
+// Chaque ligne = une rangée sur mobile :
+//   [Pilote ▾]  [Type de vol ▾]  [Pack ▾]  [✕]
 
 function PilotFlightRow({ pf, idx, pilotNames, flightTypes, canRemove, onChange, onRemove }) {
+  const hasType = !!pf.flight_type_id
+  const hasPack = pf.media_pack !== 'none'
+
+  const selectBase = {
+    background: '#1e293b', border: '1px solid #334155',
+    borderRadius: 7, padding: '9px 6px', fontFamily: 'inherit',
+    cursor: 'pointer', minWidth: 0,
+  }
+
   return (
     <div style={{
-      background: '#0f172a',
-      borderRadius: 8,
-      padding: '10px',
-      border: pf.flight_type_id
-        ? '1px solid rgba(125,211,252,0.2)'
-        : '1px solid #1e293b',
       display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
+      alignItems: 'center',
+      gap: 5,
+      padding: '4px 0',
+      borderBottom: '1px solid #1e293b',
     }}>
-      {/* Ligne 1 : numéro + pilote + supprimer */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 11, color: '#475569', fontWeight: 700, minWidth: 20 }}>
-          {idx + 1}.
-        </span>
+      {/* Numéro */}
+      <span style={{ fontSize: 11, color: '#334155', fontWeight: 700, minWidth: 16, textAlign: 'right', flexShrink: 0 }}>
+        {idx + 1}
+      </span>
 
-        {/* Sélecteur de pilote */}
-        <select
-          value={pf.pilot_name}
-          onChange={e => onChange('pilot_name', e.target.value)}
+      {/* Dropdown pilote */}
+      <select
+        value={pf.pilot_name}
+        onChange={e => onChange('pilot_name', e.target.value)}
+        style={{
+          ...selectBase,
+          flex: 1.2,
+          fontSize: 13,
+          color: pf.pilot_name ? '#e2e8f0' : '#64748b',
+        }}>
+        <option value="">— Pilote —</option>
+        {pilotNames.map(name => (
+          <option key={name} value={name}>{name}</option>
+        ))}
+      </select>
+
+      {/* Dropdown type de vol */}
+      <select
+        value={pf.flight_type_id}
+        onChange={e => onChange('flight_type_id', e.target.value)}
+        style={{
+          ...selectBase,
+          flex: 1.2,
+          fontSize: 13,
+          color:      hasType ? '#7dd3fc' : '#64748b',
+          background: hasType ? 'rgba(125,211,252,0.07)' : '#1e293b',
+          border:     hasType ? '1px solid rgba(125,211,252,0.25)' : '1px solid #334155',
+        }}>
+        <option value="">— Type —</option>
+        {flightTypes.map(ft => (
+          <option key={ft.id} value={ft.id}>{ft.label}</option>
+        ))}
+      </select>
+
+      {/* Dropdown pack média */}
+      <select
+        value={pf.media_pack}
+        onChange={e => onChange('media_pack', e.target.value)}
+        style={{
+          ...selectBase,
+          flex: 1,
+          fontSize: 12,
+          color:      hasPack ? '#fbbf24' : '#475569',
+          background: hasPack ? 'rgba(251,191,36,0.07)' : '#1e293b',
+          border:     hasPack ? '1px solid rgba(251,191,36,0.25)' : '1px solid #334155',
+        }}>
+        <option value="none">Aucun</option>
+        <option value="pack_photo">📷 Photo +10€</option>
+        <option value="pack_photo_video">🎬 Vidéo +20€</option>
+      </select>
+
+      {/* Supprimer */}
+      {canRemove ? (
+        <button onClick={onRemove}
           style={{
-            flex: 1, background: '#1e293b', border: '1px solid #334155',
-            borderRadius: 6, padding: '7px 8px', color: '#e2e8f0',
-            fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
-          }}>
-          <option value="">— Pilote —</option>
-          {pilotNames.map(name => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-
-        {canRemove && (
-          <button onClick={onRemove}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#334155', fontSize: 15, lineHeight: 1, padding: '0 2px',
-            }}
-            title="Supprimer ce vol">
-            ✕
-          </button>
-        )}
-      </div>
-
-      {/* Ligne 2 : type de vol + pack média */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        {/* Boutons type de vol */}
-        <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
-          {flightTypes.map(ft => (
-            <button
-              key={ft.id}
-              onClick={() => onChange('flight_type_id', pf.flight_type_id === ft.id ? '' : ft.id)}
-              style={{
-                padding: '7px 8px', borderRadius: 6, cursor: 'pointer',
-                fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-                border:     pf.flight_type_id === ft.id
-                  ? '2px solid #7dd3fc'
-                  : '1px solid #334155',
-                background: pf.flight_type_id === ft.id
-                  ? 'rgba(125,211,252,0.12)'
-                  : '#1e293b',
-                color:      pf.flight_type_id === ft.id ? '#7dd3fc' : '#64748b',
-              }}>
-              {ft.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Sélecteur pack média */}
-        <select
-          value={pf.media_pack}
-          onChange={e => onChange('media_pack', e.target.value)}
-          style={{
-            background: pf.media_pack !== 'none' ? 'rgba(251,191,36,0.08)' : '#1e293b',
-            border: pf.media_pack !== 'none' ? '1px solid rgba(251,191,36,0.3)' : '1px solid #334155',
-            borderRadius: 6, padding: '7px 6px',
-            color: pf.media_pack !== 'none' ? '#fbbf24' : '#64748b',
-            fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
-            minWidth: 0, flexShrink: 0,
-          }}>
-          {MEDIA_PACK_OPTIONS.map(opt => (
-            <option key={opt.id} value={opt.id}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#334155', fontSize: 14, lineHeight: 1,
+            padding: '4px', flexShrink: 0,
+          }}
+          title="Supprimer ce vol">
+          ✕
+        </button>
+      ) : (
+        <span style={{ width: 22, flexShrink: 0 }} />
+      )}
     </div>
   )
 }
