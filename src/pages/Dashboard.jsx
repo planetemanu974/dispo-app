@@ -275,7 +275,7 @@ export default function Dashboard({ pilot }) {
       // Load colleagues for pilot dropdown in closure section
       const { data: cols } = await supabase
         .from('colleagues')
-        .select('id, name, is_direct, is_fixed')
+        .select('id, name, is_direct, is_fixed, fixed_order')
         .eq('pilot_id', pilot.id)
         .order('name')
       if (cols) setColleagues(cols)
@@ -322,33 +322,35 @@ export default function Dashboard({ pilot }) {
         .eq('booking_id', selectedBooking.id)
         .order('created_at')
 
-      let existingAssignments = existing || []
+      const existingAssignments = existing || []
       const paxCount = selectedBooking.passengers?.length || 1
 
-      // Cleanup: remove any accepted assignment where the colleague IS the main pilot (self-assign bug)
-      const selfAssigns = existingAssignments.filter(a => a.status === 'accepted' && a.colleague_id === pilot.id)
-      if (selfAssigns.length > 0) {
-        await Promise.all(selfAssigns.map(a =>
-          supabase.from('booking_assignments').delete().eq('id', a.id)
-        ))
-        existingAssignments = existingAssignments.filter(a => a.colleague_id !== pilot.id)
-      }
+      // Fixed pilots sorted by rank (N°1 = main pilot, N°2..N = colleagues)
+      const fixedPilots = colleagues
+        .filter(c => c.is_direct && c.is_fixed)
+        .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
 
-      const acceptedCount = existingAssignments.filter(a => a.status === 'accepted').length
+      if (paxCount > 1 && fixedPilots.length >= 2) {
+        // Pilots N°2..N fly passengers 2..N — build the expected colleague list
+        const expectedColleagues = fixedPilots.slice(1, paxCount) // N°2, N°3, ...
 
-      // Auto-assign fixed pilots when: multi-pax, no accepted assignments yet, enough fixed pilots
-      if (paxCount > 1 && acceptedCount === 0) {
-        const fixedPilots = colleagues
-          .filter(c => c.is_direct && c.is_fixed && c.id !== pilot.id) // exclude main pilot (already on pax 1)
-          .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-          .map((c, i) => ({ ...c, fixed_order: c.fixed_order ?? (i + 1) }))
+        // Check if accepted assignments already match expected list (same ids, same order)
+        const accepted = existingAssignments
+          .filter(a => a.status === 'accepted')
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
-        // Passenger 1 is always the main pilot — assign fixed pilots for passengers 2..N
-        const slotsNeeded = paxCount - 1
-        const pilotsToAssign = fixedPilots.slice(0, slotsNeeded)
+        const alreadyCorrect = accepted.length === expectedColleagues.length &&
+          accepted.every((a, i) => a.colleague_id === expectedColleagues[i].id)
 
-        if (pilotsToAssign.length > 0) {
-          await Promise.all(pilotsToAssign.map(fp =>
+        if (!alreadyCorrect) {
+          // Delete all accepted assignments and recreate in correct rank order
+          const toDelete = existingAssignments.filter(a => a.status === 'accepted')
+          if (toDelete.length > 0) {
+            await supabase.from('booking_assignments')
+              .delete()
+              .in('id', toDelete.map(a => a.id))
+          }
+          await Promise.all(expectedColleagues.map(fp =>
             supabase.from('booking_assignments').insert({
               booking_id:   selectedBooking.id,
               colleague_id: fp.id,
@@ -356,14 +358,12 @@ export default function Dashboard({ pilot }) {
               status:       'accepted',
             })
           ))
-          // Re-fetch after auto-assignment
           const { data: refreshed } = await supabase
             .from('booking_assignments')
             .select('*, colleagues(name, phone)')
             .eq('booking_id', selectedBooking.id)
             .order('created_at')
           setBookingAssignments(refreshed || [])
-          // Refresh the week view to update colours
           loadWeek(weekStart)
           return
         }
@@ -2227,16 +2227,11 @@ export default function Dashboard({ pilot }) {
                 </div>
                 <div className="modal-passengers">
                   {selectedBooking.passengers?.map((p, i) => {
-                    // Passenger 1 → fixed pilot N°1 name; passengers 2+ → accepted colleagues (in order)
-                    const acceptedAssigns = bookingAssignments
-                      .filter(a => a.status === 'accepted')
-                      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                    // All passengers: use fixed pilots sorted by rank (N°1, N°2, N°3…)
                     const sortedFixed = colleagues
                       .filter(c => c.is_direct && c.is_fixed)
                       .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-                    const pilotName = i === 0
-                      ? (sortedFixed[0]?.name || pilot.name)  // N°1 fixed pilot (= main pilot)
-                      : (acceptedAssigns[i - 1]?.colleagues?.name || null)
+                    const pilotName = sortedFixed[i]?.name || (i === 0 ? pilot.name : null)
                     return (
                       <div key={p.id} className="modal-pax-card">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
