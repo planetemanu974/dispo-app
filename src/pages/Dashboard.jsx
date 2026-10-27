@@ -673,6 +673,41 @@ export default function Dashboard({ pilot }) {
     loadWeek(weekStart)
   }
 
+  // ── deleteBulkSlots ───────────────────────────────────────────────────────
+  // Permanently removes selected slots from pilot_slots.
+  // Warns if any have active bookings; user must confirm before proceeding.
+  async function deleteBulkSlots() {
+    const ids = [...selectedSlotIds]
+    if (ids.length === 0) return
+
+    // Check for active bookings on selected slots
+    const { data: activeBks } = await supabase
+      .from('bookings')
+      .select('id, pilot_slot_id')
+      .in('pilot_slot_id', ids)
+      .in('status', ['pending', 'confirmed'])
+
+    if (activeBks && activeBks.length > 0) {
+      const ok = window.confirm(
+        `⚠️ ${activeBks.length} réservation(s) active(s) sont liées à ces créneaux.\n\nSupprimer quand même ? Les réservations seront aussi supprimées.`
+      )
+      if (!ok) return
+    } else {
+      const ok = window.confirm(
+        `Supprimer définitivement ${ids.length} créneau(x) sélectionné(s) ?`
+      )
+      if (!ok) return
+    }
+
+    await supabase.from('pilot_slots').delete().in('id', ids)
+    logActivity(pilot.id, 'bulk_slot_delete', 'slot', null, {
+      slot_ids: ids, count: ids.length
+    })
+    setSelectedSlotIds(new Set())
+    setSelectMode(false)
+    loadWeek(weekStart)
+  }
+
   // ── handleBooking ─────────────────────────────────────────────────────────
   async function handleBooking(bookingId, action) {
     await supabase.from('bookings').update({ status: action }).eq('id', bookingId)
@@ -1941,6 +1976,12 @@ export default function Dashboard({ pilot }) {
                 disabled={selectedSlotIds.size === 0}
                 style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #dc2626', background:'rgba(127,29,29,0.3)', color:'#fca5a5', fontWeight:700, fontSize:'0.78rem', cursor: selectedSlotIds.size === 0 ? 'not-allowed' : 'pointer', opacity: selectedSlotIds.size === 0 ? 0.5 : 1, fontFamily:'inherit' }}>
                 ✗ PAS DISPO
+              </button>
+              <button
+                onClick={deleteBulkSlots}
+                disabled={selectedSlotIds.size === 0}
+                style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #7c3aed', background:'rgba(109,40,217,0.2)', color:'#c4b5fd', fontWeight:700, fontSize:'0.78rem', cursor: selectedSlotIds.size === 0 ? 'not-allowed' : 'pointer', opacity: selectedSlotIds.size === 0 ? 0.5 : 1, fontFamily:'inherit' }}>
+                🗑 Supprimer
               </button>
               <button
                 onClick={() => { setSelectMode(false); setSelectedSlotIds(new Set()) }}
