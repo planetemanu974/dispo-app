@@ -182,6 +182,7 @@ export default function Dashboard({ pilot }) {
   // Side menu drawer state
   const [menuOpen, setMenuOpen]               = useState(false)
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
+  const [colleagueRequestSlot, setColleagueRequestSlot] = useState(null) // { date, time } — set when opened from "Pas de pilote"
   const [showSettings, setShowSettings]       = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
   const [showAssign, setShowAssign]           = useState(false) // AssignColleague drawer
@@ -1330,7 +1331,8 @@ export default function Dashboard({ pilot }) {
       <ColleaguePanel
         pilot={pilot}
         forceOpen={colleaguePanelOpen}
-        onClose={() => setColleaguePanelOpen(false)}
+        requestSlot={colleagueRequestSlot}
+        onClose={() => { setColleaguePanelOpen(false); setColleagueRequestSlot(null) }}
       />
 
       {/* ── Pending alert ── */}
@@ -2009,6 +2011,10 @@ export default function Dashboard({ pilot }) {
                       <button
                         onClick={e => {
                           e.stopPropagation()
+                          setColleagueRequestSlot({
+                            date: bk.pilot_slots?.slot_date,
+                            time: bk.pilot_slots?.slot_time,
+                          })
                           setSelectedSlotBookings([])
                           setColleaguePanelOpen(true)
                         }}

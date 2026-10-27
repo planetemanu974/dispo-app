@@ -109,7 +109,26 @@ function generateInvoicePDF({ JsPDF, invoiceNumber, invoiceDate, amount, designa
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
-export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
+// Format a local phone number for WhatsApp (Réunion: 0692… → 262692…)
+function toWhatsAppNumber(phone) {
+  if (!phone) return ''
+  const digits = phone.replace(/\D/g, '')
+  if (digits.startsWith('0')) return '262' + digits.slice(1)
+  if (digits.startsWith('262') || digits.startsWith('33')) return digits
+  return digits
+}
+
+// Format a slot date + time for a human-readable message
+function formatSlotForMessage(date, time) {
+  if (!date) return ''
+  const d = new Date(date + 'T00:00:00')
+  const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
+  const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+  const label = `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`
+  return time ? `${label} à ${time.slice(0, 5)}` : label
+}
+
+export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => { if (forceOpen) setOpen(true) }, [forceOpen])
@@ -676,6 +695,30 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
               {detailSaving ? 'Sauvegarde…' : '💾 Enregistrer'}
             </button>
           </form>
+
+          {/* Bouton WhatsApp — uniquement si le panneau est ouvert depuis un créneau sans pilote */}
+          {requestSlot?.date && detailColleague.phone && (
+            <a
+              href={(() => {
+                const slotLabel = formatSlotForMessage(requestSlot.date, requestSlot.time)
+                const msg = encodeURIComponent(
+                  `Salut ${detailColleague.name.split(' ')[0]} 👋, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
+                )
+                const num = toWhatsAppNumber(detailColleague.phone)
+                return `https://wa.me/${num}?text=${msg}`
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#064e3b', color: '#6ee7b7', border: '1px solid #065f4655', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
+            >
+              📲 Demander dispo — {formatSlotForMessage(requestSlot.date, requestSlot.time)}
+            </a>
+          )}
+          {requestSlot?.date && !detailColleague.phone && (
+            <p style={{ fontSize: 12, color: '#f59e0b', background: '#451a0333', borderRadius: 6, padding: '8px 10px', marginTop: 10 }}>
+              ⚠️ Ajoutez un numéro de téléphone pour envoyer un message.
+            </p>
+          )}
 
           {/* Bouton facture */}
           {detailColleague.active && (
