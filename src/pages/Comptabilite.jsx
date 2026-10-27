@@ -127,12 +127,16 @@ export default function Comptabilite({ pilot, flightTypes }) {
       const group = row.closure_data?.payment_groups?.find(
         g => g.invoice_number === row.invoice_number)
 
+      // IDs des packs média (label sans "biplace")
+      const PACK_IDS = new Set(['pack_photo', 'pack_photo_video'])
+
       if (group?.flight_lines?.length) {
         // Nouveau format : flight_lines dans le groupe
         for (const line of group.flight_lines) {
           for (let i = 0; i < (line.count || 1); i++) {
+            const isPack = PACK_IDS.has(line.flight_type_id)
             lines.push({
-              label:    `${line.label} biplace`,
+              label:    isPack ? line.label : `${line.label} biplace`,
               priceEur: line.price_eur || 0,
             })
           }

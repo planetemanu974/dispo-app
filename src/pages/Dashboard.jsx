@@ -3063,6 +3063,10 @@ export default function Dashboard({ pilot }) {
                         booking={selectedBooking}
                         pilot={{ id: pilot.id, name: pilot.sms_name || 'Capitaine' }}
                         flightTypes={flightTypes}
+                        pilots={[
+                          pilot.sms_name || 'Capitaine',
+                          ...colleagues.map(c => c.name).filter(Boolean),
+                        ]}
                         onDone={(patch) => {
                           setSelectedBooking(prev => ({ ...prev, ...patch }))
                           setShowClosure(false)
