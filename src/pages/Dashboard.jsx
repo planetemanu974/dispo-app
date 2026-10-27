@@ -449,10 +449,13 @@ export default function Dashboard({ pilot }) {
     let acceptedAssignmentBookingIds = new Set()  // green  — at least one confirmed
     const acceptedColleagueByBooking = {}         // bookingId → first accepted colleague name (for badge)
     const acceptedAssignmentCountByBooking = {}   // bookingId → total accepted count
+    // colleagueIdsByBooking: bookingId → Set<colleague_id> (accepted assignments only)
+    // Used by the pilots grid to show blue "booked" cells
+    const colleagueIdsByBooking = {}
     if (bookingIds.length > 0) {
       const { data: assignData } = await supabase
         .from('booking_assignments')
-        .select('booking_id, status, colleagues(name)')
+        .select('booking_id, status, colleague_id, colleagues(name)')
         .in('booking_id', bookingIds)
       ;(assignData || []).forEach(a => {
         if (a.status === 'pending')  pendingAssignmentBookingIds.add(a.booking_id)
@@ -463,6 +466,12 @@ export default function Dashboard({ pilot }) {
             acceptedColleagueByBooking[a.booking_id] = a.colleagues?.name || '—'
           acceptedAssignmentCountByBooking[a.booking_id] =
             (acceptedAssignmentCountByBooking[a.booking_id] || 0) + 1
+        }
+        // Track which colleagues are assigned (any non-refused status) for the pilots grid
+        if (a.status !== 'refused' && a.colleague_id) {
+          if (!colleagueIdsByBooking[a.booking_id])
+            colleagueIdsByBooking[a.booking_id] = new Set()
+          colleagueIdsByBooking[a.booking_id].add(a.colleague_id)
         }
       })
       // A booking with "refused" but also "pending" stays orange (replacement in progress)
@@ -491,6 +500,8 @@ export default function Dashboard({ pilot }) {
         b._hasAcceptedAssignment   = acceptedAssignmentBookingIds.has(b.id)
         b._acceptedColleagueName   = acceptedColleagueByBooking[b.id] || null
         b._acceptedAssignmentCount = acceptedAssignmentCountByBooking[b.id] || 0
+        // Set of colleague IDs (pending or accepted) assigned to this booking
+        b._assignedColleagueIds    = colleagueIdsByBooking[b.id] || new Set()
       })
     })
 
@@ -2705,7 +2716,18 @@ export default function Dashboard({ pilot }) {
                                   {slotTimes.map(slotTime => {
                                     // Check if this slot exists on this day
                                     const slotExists = daySlots.some(s => s.slot_time?.slice(0,5) === slotTime)
-                                    const unavail = isColleagueUnavailable(pilot.id, date, slotTime + ':00')
+                                    const unavail    = isColleagueUnavailable(pilot.id, date, slotTime + ':00')
+
+                                    // Is this pilot booked on this slot?
+                                    // Main pilot (fixed_order=1) = booked if ANY booking exists on this slot.
+                                    // Other colleagues = booked if they appear in _assignedColleagueIds.
+                                    const { bookings: dayBookings = [] } = weekData[date] || {}
+                                    const slotBookings = dayBookings.filter(b =>
+                                      b.pilot_slots?.slot_time?.slice(0,5) === slotTime
+                                    )
+                                    const isBooked = isMainPilot
+                                      ? slotBookings.length > 0
+                                      : slotBookings.some(b => b._assignedColleagueIds?.has(pilot.id))
 
                                     if (!slotExists) {
                                       // Slot doesn't exist this day
@@ -2719,17 +2741,34 @@ export default function Dashboard({ pilot }) {
                                       )
                                     }
 
+                                    // Color priority: absent (red) > booked (blue) > present (green)
+                                    let cellBg, cellBorder, cellIcon, cellTitle
+                                    if (unavail) {
+                                      cellBg     = '#7f1d1d'
+                                      cellBorder = '#dc2626'
+                                      cellIcon   = '✗'
+                                      cellTitle  = `Cliquer pour rendre ${pilot.name} présent — ${slotTime}`
+                                    } else if (isBooked) {
+                                      cellBg     = '#1e3a5f'
+                                      cellBorder = '#3b82f6'
+                                      cellIcon   = '✈'
+                                      cellTitle  = `${pilot.name} est booké sur ce créneau — ${slotTime}`
+                                    } else {
+                                      cellBg     = '#14532d'
+                                      cellBorder = '#16a34a'
+                                      cellIcon   = '✓'
+                                      cellTitle  = `Cliquer pour marquer ${pilot.name} absent — ${slotTime}`
+                                    }
+
                                     return (
                                       <span key={slotTime}
                                         role="button"
-                                        title={unavail
-                                          ? `Cliquer pour rendre ${pilot.name} présent — ${slotTime}`
-                                          : `Cliquer pour marquer ${pilot.name} absent — ${slotTime}`}
+                                        title={cellTitle}
                                         onClick={() => togglePilotAvailability(pilot.id, date, slotTime)}
                                         style={{
                                           width:22, height:22, borderRadius:5,
-                                          background: unavail ? '#7f1d1d' : '#14532d',
-                                          border: `1px solid ${unavail ? '#dc2626' : '#16a34a'}`,
+                                          background: cellBg,
+                                          border: `1px solid ${cellBorder}`,
                                           display:'inline-flex', alignItems:'center',
                                           justifyContent:'center', fontSize:'0.7rem',
                                           cursor:'pointer',
@@ -2738,7 +2777,7 @@ export default function Dashboard({ pilot }) {
                                         }}
                                         onMouseEnter={e => { e.currentTarget.style.filter='brightness(1.4)'; e.currentTarget.style.transform='scale(1.15)' }}
                                         onMouseLeave={e => { e.currentTarget.style.filter=''; e.currentTarget.style.transform='' }}>
-                                        {unavail ? '✗' : '✓'}
+                                        {cellIcon}
                                       </span>
                                     )
                                   })}
@@ -2764,6 +2803,13 @@ export default function Dashboard({ pilot }) {
                       border:'1px solid #16a34a', display:'inline-block'
                     }} />
                     Présent
+                  </span>
+                  <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{
+                      width:14, height:14, borderRadius:3, background:'#1e3a5f',
+                      border:'1px solid #3b82f6', display:'inline-block'
+                    }} />
+                    Booké ✈
                   </span>
                   <span style={{ display:'flex', alignItems:'center', gap:5 }}>
                     <span style={{
@@ -3070,9 +3116,40 @@ export default function Dashboard({ pilot }) {
                             .map(a => a.colleagues?.name)
                             .filter(Boolean),
                         ]}
-                        onDone={(patch) => {
+                        onDone={async (patch) => {
                           setSelectedBooking(prev => ({ ...prev, ...patch }))
                           setShowClosure(false)
+
+                          // ── Sync booking_assignments ───────────────────────
+                          // If a colleague was replaced at closure (e.g. Charles → Edouard),
+                          // remove their booking_assignment so their planning no longer shows the booking.
+                          try {
+                            const finalPilotNames = new Set(
+                              (patch.closure_data?.pilot_flights || [])
+                                .map(pf => pf.pilot_name)
+                                .filter(Boolean)
+                            )
+                            // For each assignment, check if the colleague's name is still in pilot_flights
+                            const removedIds = bookingAssignments
+                              .filter(a => {
+                                const name = a.colleagues?.name
+                                return name && !finalPilotNames.has(name)
+                              })
+                              .map(a => a.colleague_id)
+                              .filter(Boolean)
+
+                            if (removedIds.length > 0) {
+                              await supabase
+                                .from('booking_assignments')
+                                .delete()
+                                .eq('booking_id', selectedBooking.id)
+                                .in('colleague_id', removedIds)
+                            }
+                          } catch (syncErr) {
+                            // Non-fatal — log only
+                            console.warn('[onDone] booking_assignments sync error:', syncErr)
+                          }
+
                           loadDay(selectedDate)
                           loadWeek(weekStart)
                         }}
