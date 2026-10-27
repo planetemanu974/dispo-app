@@ -725,13 +725,21 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
               🗑️ Supprimer ce pilote
             </button>
           ) : (
-            /* Structure : révoquer / réactiver */
-            <button
-              onClick={handleToggleActive}
-              style={{ width: '100%', marginTop: 10, padding: '10px', background: detailColleague.active ? '#7f1d1d33' : '#14532d33', color: detailColleague.active ? '#fca5a5' : '#86efac', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              {detailColleague.active ? 'Révoquer l\'accès' : 'Réactiver'}
-            </button>
+            /* Structure : révoquer / réactiver + supprimer */
+            <>
+              <button
+                onClick={handleToggleActive}
+                style={{ width: '100%', marginTop: 10, padding: '10px', background: detailColleague.active ? '#7f1d1d33' : '#14532d33', color: detailColleague.active ? '#fca5a5' : '#86efac', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                {detailColleague.active ? 'Révoquer l\'accès' : 'Réactiver'}
+              </button>
+              <button
+                onClick={handleDeleteColleague}
+                style={{ width: '100%', marginTop: 8, padding: '10px', background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🗑️ Supprimer cette structure
+              </button>
+            </>
           )}
         </ModalOverlay>
       )}
