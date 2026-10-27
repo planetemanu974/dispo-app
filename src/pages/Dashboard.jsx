@@ -4,6 +4,7 @@ import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
 import Settings from './Settings'
 import History from './History'
+import Comptabilite from './Comptabilite'
 import AssignColleague from '../components/AssignColleague'
 import FlightClosure from '../components/FlightClosure'
 import { useSettings } from '../contexts/SettingsContext'
@@ -193,6 +194,7 @@ export default function Dashboard({ pilot }) {
   const [fixedPilotPicker, setFixedPilotPicker] = useState(null) // { bookingId, slotLabel, date, time } — quick picker for fixed pilots
   const [showSettings, setShowSettings]       = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
+  const [showComptabilite, setShowComptabilite] = useState(false)
   const [showAssign, setShowAssign]           = useState(false) // AssignColleague drawer
 
   // Colleague messages (unread)
@@ -1316,7 +1318,7 @@ export default function Dashboard({ pilot }) {
           <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
           <MenuLink icon="💰" label="Rapport pilotes" onClick={() => { setMenuOpen(false); setShowPilotReport(true); loadPilotReport(reportMonth) }} />
           <MenuLink icon="📋" label="Historique"    onClick={() => { setMenuOpen(false); setShowHistory(true) }} />
-          <MenuLink icon="📊" label="Comptabilité"  disabled />
+          <MenuLink icon="🧾" label="Comptabilité"  onClick={() => { setMenuOpen(false); setShowComptabilite(true) }} />
           <MenuLink icon="☁️" label="Météo"         disabled />
         </nav>
 
@@ -1387,6 +1389,26 @@ export default function Dashboard({ pilot }) {
       {showHistory && (
         <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
           <History pilot={pilot} onBack={() => setShowHistory(false)} />
+        </div>
+      )}
+
+      {/* ── Comptabilité — overlay plein écran ────────────────────────────────── */}
+      {showComptabilite && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, overflowY:'auto' }}>
+          <div style={{ maxWidth:480, margin:'0 auto', padding:'0 0 40px', position:'relative' }}>
+            <button
+              onClick={() => setShowComptabilite(false)}
+              style={{
+                position:'sticky', top:0, zIndex:10,
+                display:'flex', alignItems:'center', gap:6,
+                background:'#1e293b', border:'none', borderBottom:'1px solid #334155',
+                color:'#94a3b8', fontSize:14, cursor:'pointer', padding:'14px 16px',
+                width:'100%', fontFamily:'inherit',
+              }}>
+              ← Retour
+            </button>
+            <Comptabilite pilot={pilot} flightTypes={flightTypes} />
+          </div>
         </div>
       )}
 
