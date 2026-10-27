@@ -124,13 +124,21 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   const [colleagues, setColleagues] = useState([])
   const [colLoading, setColLoading] = useState(false)
 
-  // Modal : invitation
+  // Modal : invitation structure
   const [showInvite,   setShowInvite]   = useState(false)
   const [inviteName,   setInviteName]   = useState('')
   const [inviteLink,   setInviteLink]   = useState(null)
   const [inviteSaving, setInviteSaving] = useState(false)
   const [inviteError,  setInviteError]  = useState(null)
   const [copied,       setCopied]       = useState(false)
+
+  // Modal : ajouter un pilote direct (indépendant, sans compte app)
+  const [showAddDirect,  setShowAddDirect]  = useState(false)
+  const [directName,     setDirectName]     = useState('')
+  const [directPhone,    setDirectPhone]    = useState('')
+  const [directEmail,    setDirectEmail]    = useState('')
+  const [directSaving,   setDirectSaving]   = useState(false)
+  const [directError,    setDirectError]    = useState(null)
 
   // Modal : fiche collègue (édition)
   const [detailColleague, setDetailColleague] = useState(null)  // { id, name, address, siret, phone, active }
@@ -165,7 +173,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, email, active, invite_used, created_at')
+      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct')
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -184,6 +192,41 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   async function handleDecision(requestId, newStatus) {
     await supabase.rpc('update_colleague_request', { p_request_id: requestId, p_status: newStatus })
     setRequests(prev => prev.map(r => r.request_id === requestId ? { ...r, status: newStatus } : r))
+  }
+
+  // ── Ajouter un pilote direct (indépendant) ───────────────────────────────
+  async function handleAddDirect(e) {
+    e.preventDefault()
+    if (!directName.trim()) return
+    setDirectSaving(true); setDirectError(null)
+    const { error } = await supabase
+      .from('colleagues')
+      .insert({
+        pilot_id:  pilot.id,
+        name:      directName.trim(),
+        phone:     directPhone.trim() || null,
+        email:     directEmail.trim() || null,
+        is_direct: true,
+        active:    true,
+      })
+    if (error) { setDirectError('Erreur lors de l\'ajout. Réessayez.'); setDirectSaving(false); return }
+    setDirectSaving(false)
+    setShowAddDirect(false)
+    setDirectName(''); setDirectPhone(''); setDirectEmail('')
+    loadColleagues()
+  }
+
+  // ── Supprimer un pilote direct ────────────────────────────────────────────
+  async function handleDeleteColleague() {
+    if (!window.confirm(`Supprimer définitivement ${detailColleague.name || 'ce pilote'} ?`)) return
+    const { error } = await supabase
+      .from('colleagues')
+      .delete()
+      .eq('id', detailColleague.id)
+      .eq('pilot_id', pilot.id)
+    if (error) { alert('Erreur lors de la suppression. Réessayez.'); return }
+    setDetailColleague(null)
+    loadColleagues()
   }
 
   // ── Invitation ────────────────────────────────────────────────────────────
@@ -455,43 +498,45 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
               {/* ── Onglet Mes collègues ──────────────────────────────── */}
               {tab === 'colleagues' && (
                 <div style={{ paddingTop: 12 }}>
-                  <button
-                    onClick={() => { setShowInvite(true); setInviteName(''); setInviteLink(null); setInviteError(null) }}
-                    style={s.btnInvite}
-                  >
-                    + Inviter une structure
-                  </button>
 
-                  {colLoading ? <p style={s.muted}>Chargement…</p>
-                    : colleagues.length === 0 ? <p style={s.muted}>Aucun collègue invité pour l'instant.</p>
-                    : colleagues.map(c => (
-                      // Carte cliquable → ouvre la fiche
-                      <button
-                        key={c.id}
-                        onClick={() => openDetail(c)}
-                        style={{
-                          width: '100%', textAlign: 'left', background: '#1e293b',
-                          border: '1px solid #334155', borderRadius: 10, padding: '12px 14px',
-                          marginBottom: 8, cursor: 'pointer', opacity: c.active ? 1 : 0.5,
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div>
-                            <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14, marginBottom: 3 }}>
-                              {c.name || <em style={{ color: '#64748b' }}>Sans nom</em>}
-                            </div>
-                            <div style={{ fontSize: 11, color: '#64748b' }}>
-                              {c.active
-                                ? (c.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
-                                : '🚫 Accès révoqué'}
-                            </div>
-                          </div>
-                          <span style={{ color: '#475569', fontSize: 18 }}>›</span>
-                        </div>
-                      </button>
-                    ))
-                  }
+                  {/* ── Section : Structures ───────────────────────────── */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>🏢 Structures</span>
+                    <button
+                      onClick={() => { setShowInvite(true); setInviteName(''); setInviteLink(null); setInviteError(null) }}
+                      style={s.btnInviteSmall}
+                    >
+                      + Inviter
+                    </button>
+                  </div>
+
+                  {colLoading ? <p style={s.muted}>Chargement…</p> : (() => {
+                    const structures = colleagues.filter(c => !c.is_direct)
+                    return structures.length === 0
+                      ? <p style={{ ...s.muted, padding: '10px 0 16px', textAlign: 'left' }}>Aucune structure invitée.</p>
+                      : structures.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} />)
+                  })()}
+
+                  {/* Séparateur */}
+                  <div style={{ borderTop: '1px solid #1e293b', margin: '12px 0 14px' }} />
+
+                  {/* ── Section : Pilotes indépendants ─────────────────── */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>👨‍✈️ Pilotes indépendants</span>
+                    <button
+                      onClick={() => { setShowAddDirect(true); setDirectName(''); setDirectPhone(''); setDirectEmail(''); setDirectError(null) }}
+                      style={s.btnInviteSmall}
+                    >
+                      + Ajouter
+                    </button>
+                  </div>
+
+                  {!colLoading && (() => {
+                    const directs = colleagues.filter(c => c.is_direct)
+                    return directs.length === 0
+                      ? <p style={{ ...s.muted, padding: '10px 0', textAlign: 'left' }}>Aucun pilote ajouté.</p>
+                      : directs.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} />)
+                  })()}
                 </div>
               )}
             </div>
@@ -535,6 +580,44 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
         </ModalOverlay>
       )}
 
+      {/* ── Modal : ajouter un pilote direct ─────────────────────────────── */}
+      {showAddDirect && (
+        <ModalOverlay onClose={() => setShowAddDirect(false)}>
+          <h3 style={s.modalTitle}>👨‍✈️ Ajouter un pilote</h3>
+          <p style={{ color: '#64748b', fontSize: 12, margin: '-8px 0 16px' }}>
+            Un collègue indépendant que vous connaissez sur le terrain.
+          </p>
+          <form onSubmit={handleAddDirect}>
+            <label style={s.label}>Prénom / Nom *</label>
+            <input
+              type="text" value={directName} onChange={e => setDirectName(e.target.value)}
+              style={s.input} placeholder="Ex : Robert Payet" autoFocus required
+            />
+
+            <label style={{ ...s.label, marginTop: 12 }}>Téléphone</label>
+            <input
+              type="tel" value={directPhone} onChange={e => setDirectPhone(e.target.value)}
+              style={s.input} placeholder="Ex : 0692 …"
+            />
+
+            <label style={{ ...s.label, marginTop: 12 }}>Email</label>
+            <input
+              type="email" value={directEmail} onChange={e => setDirectEmail(e.target.value)}
+              style={s.input} placeholder="Ex : robert@parapente.re"
+            />
+
+            {directError && <p style={{ ...s.error, marginTop: 8 }}>{directError}</p>}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+              <button type="button" onClick={() => setShowAddDirect(false)} style={s.btnGrey}>Annuler</button>
+              <button type="submit" disabled={directSaving} style={s.btnGreen}>
+                {directSaving ? 'Ajout…' : '✓ Ajouter'}
+              </button>
+            </div>
+          </form>
+        </ModalOverlay>
+      )}
+
       {/* ── Modal : fiche collègue ────────────────────────────────────────── */}
       {detailColleague && (
         <ModalOverlay onClose={() => setDetailColleague(null)}>
@@ -542,13 +625,15 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
             {detailColleague.name || 'Collègue'}
           </h3>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 12 }}>
-            {detailColleague.active
-              ? (detailColleague.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
-              : '🚫 Accès révoqué'}
+            {detailColleague.is_direct
+              ? '👨‍✈️ Pilote indépendant'
+              : (detailColleague.active
+                  ? (detailColleague.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
+                  : '🚫 Accès révoqué')}
           </p>
 
           <form onSubmit={handleSaveDetail}>
-            <label style={s.label}>Nom de la structure</label>
+            <label style={s.label}>{detailColleague.is_direct ? 'Prénom / Nom' : 'Nom de la structure'}</label>
             <input type="text" value={detailColleague.name || ''} onChange={e => setDetailColleague(p => ({ ...p, name: e.target.value }))} style={s.input} required />
 
             <label style={{ ...s.label, marginTop: 12 }}>Adresse</label>
@@ -630,13 +715,24 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
             )}
           </div>
 
-          {/* Révoquer / Réactiver */}
-          <button
-            onClick={handleToggleActive}
-            style={{ width: '100%', marginTop: 10, padding: '10px', background: detailColleague.active ? '#7f1d1d33' : '#14532d33', color: detailColleague.active ? '#fca5a5' : '#86efac', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-          >
-            {detailColleague.active ? 'Révoquer l\'accès' : 'Réactiver'}
-          </button>
+          {/* Actions selon le type */}
+          {detailColleague.is_direct ? (
+            /* Pilote direct : uniquement supprimer */
+            <button
+              onClick={handleDeleteColleague}
+              style={{ width: '100%', marginTop: 10, padding: '10px', background: '#7f1d1d33', color: '#fca5a5', border: '1px solid #7f1d1d55', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🗑️ Supprimer ce pilote
+            </button>
+          ) : (
+            /* Structure : révoquer / réactiver */
+            <button
+              onClick={handleToggleActive}
+              style={{ width: '100%', marginTop: 10, padding: '10px', background: detailColleague.active ? '#7f1d1d33' : '#14532d33', color: detailColleague.active ? '#fca5a5' : '#86efac', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              {detailColleague.active ? 'Révoquer l\'accès' : 'Réactiver'}
+            </button>
+          )}
         </ModalOverlay>
       )}
 
@@ -723,6 +819,37 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
   )
 }
 
+// ── Carte collègue réutilisable ───────────────────────────────────────────────
+function ColleagueCard({ c, onOpen }) {
+  return (
+    <button
+      onClick={() => onOpen(c)}
+      style={{
+        width: '100%', textAlign: 'left', background: '#1e293b',
+        border: '1px solid #334155', borderRadius: 10, padding: '12px 14px',
+        marginBottom: 8, cursor: 'pointer', opacity: c.active ? 1 : 0.55,
+        fontFamily: 'inherit',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14, marginBottom: 3 }}>
+            {c.name || <em style={{ color: '#64748b' }}>Sans nom</em>}
+          </div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>
+            {c.is_direct
+              ? (c.phone ? `📞 ${c.phone}` : '👨‍✈️ Pilote indépendant')
+              : (c.active
+                  ? (c.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
+                  : '🚫 Accès révoqué')}
+          </div>
+        </div>
+        <span style={{ color: '#475569', fontSize: 18 }}>›</span>
+      </div>
+    </button>
+  )
+}
+
 // ── Overlay modal réutilisable ────────────────────────────────────────────────
 function ModalOverlay({ children, onClose }) {
   return (
@@ -767,5 +894,6 @@ const s = {
   btnGrey:  { flex: 1, padding: '10px', background: '#334155', color: '#94a3b8', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
   btnAccept: { flex: 1, padding: '8px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' },
   btnRefuse: { flex: 1, padding: '8px', background: '#334155', color: '#fca5a5', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
-  btnInvite: { width: '100%', padding: '11px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 16, fontFamily: 'inherit' },
+  btnInvite:      { width: '100%', padding: '11px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 16, fontFamily: 'inherit' },
+  btnInviteSmall: { padding: '5px 12px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' },
 }
