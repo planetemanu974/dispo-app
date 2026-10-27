@@ -275,10 +275,42 @@ export default function Dashboard({ pilot }) {
       // Load colleagues for pilot dropdown in closure section
       const { data: cols } = await supabase
         .from('colleagues')
-        .select('id, name, is_direct, is_fixed, fixed_order')
+        .select('id, name, is_direct, is_fixed, fixed_order, created_at')
         .eq('pilot_id', pilot.id)
         .order('name')
-      if (cols) setColleagues(cols)
+      if (cols) {
+        // Normalize fixed_order for fixed pilots that still have NULL (promoted before migration 016).
+        // Sort by existing non-null ranks first, then assign next ranks to nulls in DB order.
+        const fixedCols = cols.filter(c => c.is_direct && c.is_fixed)
+        const hasNulls = fixedCols.some(c => c.fixed_order === null)
+        if (hasNulls) {
+          // Sort: non-null ranks first, then nulls in creation order (oldest = lowest rank)
+          const sorted = [...fixedCols].sort((a, b) => {
+            const ao = a.fixed_order ?? 99
+            const bo = b.fixed_order ?? 99
+            if (ao !== bo) return ao - bo
+            return new Date(a.created_at) - new Date(b.created_at)
+          })
+          let nextRank = sorted.reduce((m, c) => c.fixed_order ? Math.max(m, c.fixed_order) : m, 0) + 1
+          for (const c of sorted) {
+            if (c.fixed_order === null) {
+              await supabase.from('colleagues')
+                .update({ fixed_order: nextRank })
+                .eq('id', c.id)
+                .eq('pilot_id', pilot.id)
+              c.fixed_order = nextRank++
+            }
+          }
+          // Merge normalized values back into cols
+          const updated = cols.map(c => {
+            const norm = sorted.find(s => s.id === c.id)
+            return norm ? { ...c, fixed_order: norm.fixed_order } : c
+          })
+          setColleagues(updated)
+        } else {
+          setColleagues(cols)
+        }
+      }
     }
 
     init()
