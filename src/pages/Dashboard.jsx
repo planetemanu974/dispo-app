@@ -164,6 +164,8 @@ export default function Dashboard({ pilot }) {
   const [fixedUnavailability, setFixedUnavailability] = useState([])
   // Slot clicked in week view for toggle-availability mini-modal
   const [slotToggleTarget, setSlotToggleTarget]       = useState(null) // slot object | null
+  const [selectMode, setSelectMode]                   = useState(false)          // bulk-select mode
+  const [selectedSlotIds, setSelectedSlotIds]         = useState(new Set())      // Set<slot.id>
 
   // Day view state
   const [selectedDate, setSelectedDate]       = useState(null)
@@ -652,6 +654,22 @@ export default function Dashboard({ pilot }) {
       is_available: newAvail,
     })
     loadDay(selectedDate)
+    loadWeek(weekStart)
+  }
+
+  // ── applyBulkAvailability ─────────────────────────────────────────────────
+  // Sets is_available on all selectedSlotIds in one Supabase call, then exits select mode.
+  async function applyBulkAvailability(isAvailable) {
+    const ids = [...selectedSlotIds]
+    if (ids.length === 0) return
+    await supabase.from('pilot_slots')
+      .update({ is_available: isAvailable })
+      .in('id', ids)
+    logActivity(pilot.id, 'bulk_slot_toggle', 'slot', null, {
+      slot_ids: ids, is_available: isAvailable, count: ids.length
+    })
+    setSelectedSlotIds(new Set())
+    setSelectMode(false)
     loadWeek(weekStart)
   }
 
@@ -1649,10 +1667,44 @@ export default function Dashboard({ pilot }) {
                   return (
                     <div key={date}
                       className={`cal-day-header ${isToday ? 'cal-day-header--today' : ''}`}
-                      style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #1e293b', cursor:'pointer', background: isToday ? '#172554' : undefined }}
-                      onClick={() => { setSelectedDate(date); setViewMode('day'); loadDay(date) }}>
+                      style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 2px', borderRight:'1px solid #1e293b', cursor:'pointer', background: isToday ? '#172554' : undefined, position:'relative' }}
+                      onClick={() => {
+                        if (selectMode) {
+                          // Toggle all slots for this day
+                          const daySlots = weekData[date]?.slots || []
+                          const dayIds   = daySlots.map(s => s.id)
+                          const allSelected = dayIds.every(id => selectedSlotIds.has(id))
+                          setSelectedSlotIds(prev => {
+                            const next = new Set(prev)
+                            if (allSelected) dayIds.forEach(id => next.delete(id))
+                            else             dayIds.forEach(id => next.add(id))
+                            return next
+                          })
+                          return
+                        }
+                        setSelectedDate(date); setViewMode('day'); loadDay(date)
+                      }}>
                       <span className="cal-day-name" style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'#94a3b8' }}>{DAY_LABELS[colIdx]}</span>
                       <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`} style={{ fontSize:'1rem', fontWeight:800, width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', background: isToday ? '#3b82f6' : undefined, color: isToday ? 'white' : '#e2e8f0' }}>{num}</span>
+                      {/* Select-mode: day checkbox */}
+                      {selectMode && (() => {
+                        const daySlots  = weekData[date]?.slots || []
+                        const dayIds    = daySlots.map(s => s.id)
+                        const allSel    = dayIds.length > 0 && dayIds.every(id => selectedSlotIds.has(id))
+                        const someSel   = dayIds.some(id => selectedSlotIds.has(id))
+                        return (
+                          <div style={{
+                            position:'absolute', top:4, right:4,
+                            width:14, height:14, borderRadius:3,
+                            background: allSel ? '#3b82f6' : someSel ? '#60a5fa' : 'rgba(255,255,255,0.1)',
+                            border:`2px solid ${allSel || someSel ? '#93c5fd' : 'rgba(255,255,255,0.35)'}`,
+                            display:'flex', alignItems:'center', justifyContent:'center',
+                            fontSize:9, color:'white', fontWeight:900, pointerEvents:'none',
+                          }}>
+                            {allSel ? '✓' : someSel ? '–' : ''}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -1767,6 +1819,16 @@ export default function Dashboard({ pilot }) {
                             className={status}
                             style={{ position:'absolute', left:4, right:4, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
+                              if (selectMode) {
+                                // Toggle slot selection
+                                setSelectedSlotIds(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(slot.id)) next.delete(slot.id)
+                                  else next.add(slot.id)
+                                  return next
+                                })
+                                return
+                              }
                               if (!slot.is_available && activeBks.length === 0) {
                                 // Closed slot — open mini modal to reopen
                                 setSlotToggleTarget(slot)
@@ -1779,6 +1841,19 @@ export default function Dashboard({ pilot }) {
                                 openNewBooking(slot, date)
                               }
                             }}>
+                            {/* Select-mode checkbox overlay */}
+                            {selectMode && (
+                              <div style={{
+                                position:'absolute', top:3, right:3, zIndex:10,
+                                width:16, height:16, borderRadius:4,
+                                background: selectedSlotIds.has(slot.id) ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                                border: `2px solid ${selectedSlotIds.has(slot.id) ? '#93c5fd' : 'rgba(255,255,255,0.5)'}`,
+                                display:'flex', alignItems:'center', justifyContent:'center',
+                                fontSize:10, color:'white', fontWeight:900, pointerEvents:'none',
+                              }}>
+                                {selectedSlotIds.has(slot.id) ? '✓' : ''}
+                              </div>
+                            )}
                             {/* Row 1: time (left) + "+N" badge (right) in a single flex row */}
                             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'2px 3px 0 4px', minHeight:0 }}>
                               <span style={{ fontSize:'0.55rem', fontWeight:700, opacity:0.85, lineHeight:1 }}>
@@ -1848,14 +1923,46 @@ export default function Dashboard({ pilot }) {
             </div>
           )}
 
-          {/* Calendar legend */}
-          <div className="week-legend">
-            <span className="legend-item"><span className="legend-dot legend-dot--free" />Libre</span>
-            <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
-            <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
-            <span className="legend-item"><span className="legend-dot" style={{ background:'#ea580c' }} />Collègue ?</span>
-            <span className="legend-item"><span className="legend-dot" style={{ background:'#dc2626' }} />Pilote manquant</span>
-          </div>
+          {/* Calendar legend + bulk-select controls */}
+          {selectMode ? (
+            /* ── Bulk-select action bar ── */
+            <div className="week-legend" style={{ gap:6, flexWrap:'wrap' }}>
+              <span style={{ color:'#94a3b8', fontSize:'0.78rem', fontWeight:600, marginRight:4 }}>
+                {selectedSlotIds.size} créneau{selectedSlotIds.size !== 1 ? 'x' : ''} sélectionné{selectedSlotIds.size !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={() => applyBulkAvailability(true)}
+                disabled={selectedSlotIds.size === 0}
+                style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #16a34a', background:'rgba(20,83,45,0.3)', color:'#86efac', fontWeight:700, fontSize:'0.78rem', cursor: selectedSlotIds.size === 0 ? 'not-allowed' : 'pointer', opacity: selectedSlotIds.size === 0 ? 0.5 : 1, fontFamily:'inherit' }}>
+                ✓ DISPO
+              </button>
+              <button
+                onClick={() => applyBulkAvailability(false)}
+                disabled={selectedSlotIds.size === 0}
+                style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #dc2626', background:'rgba(127,29,29,0.3)', color:'#fca5a5', fontWeight:700, fontSize:'0.78rem', cursor: selectedSlotIds.size === 0 ? 'not-allowed' : 'pointer', opacity: selectedSlotIds.size === 0 ? 0.5 : 1, fontFamily:'inherit' }}>
+                ✗ PAS DISPO
+              </button>
+              <button
+                onClick={() => { setSelectMode(false); setSelectedSlotIds(new Set()) }}
+                style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #475569', background:'rgba(71,85,105,0.2)', color:'#94a3b8', fontWeight:700, fontSize:'0.78rem', cursor:'pointer', fontFamily:'inherit' }}>
+                Annuler
+              </button>
+            </div>
+          ) : (
+            /* ── Normal legend ── */
+            <div className="week-legend">
+              <span className="legend-item"><span className="legend-dot legend-dot--free" />Libre</span>
+              <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
+              <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
+              <span className="legend-item"><span className="legend-dot" style={{ background:'#ea580c' }} />Collègue ?</span>
+              <span className="legend-item"><span className="legend-dot" style={{ background:'#dc2626' }} />Pilote manquant</span>
+              <button
+                onClick={() => setSelectMode(true)}
+                style={{ marginLeft:'auto', padding:'4px 10px', borderRadius:8, border:'1.5px solid #475569', background:'rgba(71,85,105,0.15)', color:'#94a3b8', fontWeight:700, fontSize:'0.72rem', cursor:'pointer', fontFamily:'inherit' }}>
+                ☐ Sélectionner
+              </button>
+            </div>
+          )}
         </div>
       )}
 
