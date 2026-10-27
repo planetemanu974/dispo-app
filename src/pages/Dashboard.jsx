@@ -182,7 +182,7 @@ export default function Dashboard({ pilot }) {
   // Side menu drawer state
   const [menuOpen, setMenuOpen]               = useState(false)
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
-  const [colleagueRequestSlot, setColleagueRequestSlot] = useState(null) // { date, time } — set when opened from "Pas de pilote"
+  const [colleagueRequestSlot, setColleagueRequestSlot] = useState(null) // { date, time, bookingId? } — set when opened from "Pas de pilote"
   const [fixedPilotPicker, setFixedPilotPicker] = useState(null) // { bookingId, slotLabel, date, time } — quick picker for fixed pilots
   const [showSettings, setShowSettings]       = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
@@ -1380,7 +1380,7 @@ export default function Dashboard({ pilot }) {
               <button
                 onClick={() => {
                   setFixedPilotPicker(null)
-                  setColleagueRequestSlot({ date: fixedPilotPicker.date, time: fixedPilotPicker.time })
+                  setColleagueRequestSlot({ date: fixedPilotPicker.date, time: fixedPilotPicker.time, bookingId: fixedPilotPicker.bookingId })
                   setColleaguePanelOpen(true)
                 }}
                 style={{ width: '100%', marginTop: 6, padding: '11px', background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -2084,7 +2084,7 @@ export default function Dashboard({ pilot }) {
                             setFixedPilotPicker({ bookingId: bk.id, date: slotDate, time: slotTime })
                           } else {
                             // No fixed pilots — open full ColleaguePanel with SMS
-                            setColleagueRequestSlot({ date: slotDate, time: slotTime })
+                            setColleagueRequestSlot({ date: slotDate, time: slotTime, bookingId: bk.id })
                             setSelectedSlotBookings([])
                             setColleaguePanelOpen(true)
                           }

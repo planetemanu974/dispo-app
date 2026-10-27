@@ -723,28 +723,60 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
             </button>
           </form>
 
-          {/* Bouton WhatsApp — uniquement si le panneau est ouvert depuis un créneau sans pilote */}
-          {requestSlot?.date && detailColleague.phone && (
-            <a
-              href={(() => {
-                const slotLabel = formatSlotForMessage(requestSlot.date, requestSlot.time)
-                const msg = encodeURIComponent(
-                  `Salut ${detailColleague.name.split(' ')[0]}, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
-                )
-                return `sms:${detailColleague.phone}?body=${msg}`
-              })()}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#064e3b', color: '#6ee7b7', border: '1px solid #065f4655', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
-            >
-              💬 SMS — {formatSlotForMessage(requestSlot.date, requestSlot.time)}
-            </a>
-          )}
-          {requestSlot?.date && !detailColleague.phone && (
-            <p style={{ fontSize: 12, color: '#f59e0b', background: '#451a0333', borderRadius: 6, padding: '8px 10px', marginTop: 10 }}>
-              ⚠️ Ajoutez un numéro de téléphone pour envoyer un message.
-            </p>
-          )}
+          {/* Action créneau — uniquement si ouvert depuis un "Pas de pilote" */}
+          {requestSlot?.date && (() => {
+            const slotLabel = formatSlotForMessage(requestSlot.date, requestSlot.time)
+
+            if (detailColleague.is_fixed) {
+              // Pilote fixe → assignation directe, pas de SMS
+              return (
+                <button
+                  onClick={async () => {
+                    if (!requestSlot.bookingId) { alert('Identifiant de réservation manquant.'); return }
+                    const { error } = await supabase
+                      .from('booking_assignments')
+                      .insert({
+                        booking_id:   requestSlot.bookingId,
+                        colleague_id: detailColleague.id,
+                        pilot_id:     pilot.id,
+                        status:       'accepted',
+                        note:         'Assigné directement (pilote fixe)',
+                      })
+                    if (error) { alert('Erreur lors de l\'assignation.'); return }
+                    setDetailColleague(null)
+                    setOpen(false)
+                    onClose && onClose()
+                  }}
+                  style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#14532d', color: '#86efac', border: '1px solid #16a34a55', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', boxSizing: 'border-box' }}
+                >
+                  ✅ Sélectionner pour {slotLabel}
+                </button>
+              )
+            }
+
+            // Pilote indépendant → SMS
+            if (detailColleague.phone) {
+              const msg = encodeURIComponent(
+                `Salut ${detailColleague.name.split(' ')[0]}, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
+              )
+              return (
+                <a
+                  href={`sms:${detailColleague.phone}?body=${msg}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#064e3b', color: '#6ee7b7', border: '1px solid #065f4655', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
+                >
+                  💬 SMS — {slotLabel}
+                </a>
+              )
+            }
+
+            return (
+              <p style={{ fontSize: 12, color: '#f59e0b', background: '#451a0333', borderRadius: 6, padding: '8px 10px', marginTop: 10 }}>
+                ⚠️ Ajoutez un numéro de téléphone pour envoyer un message.
+              </p>
+            )
+          })()}
 
           {/* Bouton facture */}
           {detailColleague.active && (
