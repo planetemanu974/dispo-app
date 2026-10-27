@@ -278,15 +278,24 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
     setPlanningToken(null)
     setHistoryTab('invoices')
     setHistoryLoading(true)
-    // Load planning token if this is a fixed pilot
+    // Load (or auto-create) planning token for fixed pilots
     if (c.is_fixed) {
-      const { data: tokenRow } = await supabase
+      let { data: tokenRow } = await supabase
         .from('fixed_pilot_tokens')
         .select('token')
         .eq('colleague_id', c.id)
         .eq('pilot_id', pilot.id)
         .is('revoked_at', null)
         .maybeSingle()
+      // Auto-generate token for pilots who were already fixed before migration 017
+      if (!tokenRow) {
+        const { data: newToken } = await supabase
+          .from('fixed_pilot_tokens')
+          .insert({ colleague_id: c.id, pilot_id: pilot.id })
+          .select('token')
+          .single()
+        tokenRow = newToken
+      }
       setPlanningToken(tokenRow?.token || null)
     }
     // Charger factures + demandes en parallèle
