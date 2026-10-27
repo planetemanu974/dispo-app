@@ -292,24 +292,22 @@ export default function ColleagueDispo() {
 
         {/* Titre centré : "[Nom du pilote] Dispo" */}
         <div style={{ flex: 1, textAlign: 'center', padding: '0 8px' }}>
-          <span style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9', letterSpacing: '0.01em' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9', letterSpacing: '0.01em', lineHeight: 1.2 }}>
             {session.pilotName || 'Mon pilote'}
-          </span>
-          <span style={{ fontSize: 15, fontWeight: 400, color: '#64748b', marginLeft: 5 }}>
-            Dispo
-          </span>
+            <span style={{ fontWeight: 400, color: '#22c55e', marginLeft: 6, fontSize: 12 }}>Dispo</span>
+          </div>
+          <div style={{ fontSize: 10, color: '#475569', marginTop: 2, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            {session.name}
+          </div>
         </div>
 
         {/* Déconnexion droite */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: '#64748b' }}>{session.name}</span>
-          <button onClick={handleLogout} style={s.logoutBtn}>Déconnexion</button>
-        </div>
+        <button onClick={handleLogout} style={s.logoutBtn}>Déconnexion</button>
       </div>
 
       {/* ── Légende ── */}
       <div style={s.legend}>
-        <span style={s.dot('#16a34a')} /> Disponible
+        <span style={s.dot('#16a34a')} /> Dispo
         <span style={s.dot('#f59e0b')} /> Demandé
         <span style={s.dot('#6366f1')} /> Confirmé
       </div>
@@ -346,25 +344,32 @@ export default function ColleagueDispo() {
         })
 
         return (
-          <div style={{ overflowX: 'auto', padding: '0 8px' }}>
+          <div style={{ overflowX: 'auto', padding: '0 8px', marginTop: 2 }}>
             {/* Table : 1re colonne = heure, puis 1 colonne par jour */}
-            <table style={{ borderCollapse: 'separate', borderSpacing: '4px', width: '100%', tableLayout: 'fixed' }}>
+            <table style={{ borderCollapse: 'separate', borderSpacing: '3px 4px', width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
                   {/* Cellule vide coin supérieur gauche */}
-                  <th style={{ width: 36 }} />
-                  {visibleDays.map(date => (
-                    <th key={date} style={{ ...s.dayHeader, padding: '4px 2px 6px', fontWeight: 700 }}>
-                      {formatDate(date)}
-                    </th>
-                  ))}
+                  <th style={{ width: 32 }} />
+                  {visibleDays.map(date => {
+                    const isToday = date === today()
+                    return (
+                      <th key={date} style={{
+                        ...s.dayHeader,
+                        padding: '4px 2px 6px',
+                        color: isToday ? '#38bdf8' : '#475569',
+                      }}>
+                        {formatDate(date)}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {allTimes.map(time => (
                   <tr key={time}>
                     {/* Colonne heure */}
-                    <td style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textAlign: 'right', paddingRight: 6, whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                    <td style={{ fontSize: 9, color: '#475569', fontWeight: 700, textAlign: 'right', paddingRight: 5, whiteSpace: 'nowrap', verticalAlign: 'middle', letterSpacing: '0.02em' }}>
                       {time}
                     </td>
                     {/* Une cellule par jour */}
@@ -388,13 +393,14 @@ export default function ColleagueDispo() {
                             disabled={!canRequest}
                             style={{
                               ...s.slotBtn,
-                              background: bg,
+                              background: `linear-gradient(135deg, ${bg}, ${bg}cc)`,
                               cursor: canRequest ? 'pointer' : 'default',
                               width: '100%',
+                              opacity: canRequest ? 1 : 0.75,
                             }}
                           >
-                            <span style={{ fontWeight: 700, fontSize: 13 }}>{time}</span>
-                            <span style={{ fontSize: 10, marginTop: 1 }}>{label}</span>
+                            <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: '0.01em' }}>{time}</span>
+                            <span style={{ fontSize: 8, marginTop: 1, opacity: 0.8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
                           </button>
                         </td>
                       )
@@ -408,9 +414,11 @@ export default function ColleagueDispo() {
       })()}
 
       {/* ── Historique des demandes ── */}
-      <div style={{ padding: '24px 16px 8px' }}>
-        <h2 style={{ fontSize: 14, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>
+      <div style={{ padding: '20px 16px 8px' }}>
+        <h2 style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ flex: 1, height: 1, background: '#1e293b' }} />
           Historique de vos demandes
+          <span style={{ flex: 1, height: 1, background: '#1e293b' }} />
         </h2>
 
         {histLoading ? (
@@ -524,10 +532,10 @@ export default function ColleagueDispo() {
 // ── Couleur et libellé d'un créneau selon son statut ─────────────────────
 function slotAppearance(slot) {
   if (slot.my_request_status === 'accepted') return { bg: '#6366f1', label: 'Confirmé' }
-  if (slot.my_request_status === 'pending')  return { bg: '#f59e0b', label: 'En attente' }
+  if (slot.my_request_status === 'pending')  return { bg: '#f59e0b', label: 'Demandé' }
   if (!slot.is_available)                    return { bg: '#dc2626', label: 'Non dispo' }
   if (slot.is_booked)                        return { bg: '#94a3b8', label: 'Occupé' }
-  return { bg: '#16a34a', label: 'Disponible' }
+  return { bg: '#16a34a', label: 'Dispo' }
 }
 
 // ── Couleur et libellé d'une entrée historique ────────────────────────────
@@ -542,10 +550,10 @@ function Screen({ children }) {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: '#0f172a',
+      background: 'linear-gradient(160deg, #0c1628 0%, #0f172a 60%, #111827 100%)',
       color: '#f1f5f9',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      paddingBottom: 32,
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+      paddingBottom: 40,
     }}>
       {children}
     </div>
@@ -582,62 +590,73 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '16px 16px 8px',
-    background: '#1e293b',
-    borderBottom: '1px solid #334155',
+    padding: '14px 16px 12px',
+    background: 'rgba(30,41,59,0.85)',
+    backdropFilter: 'blur(12px)',
+    borderBottom: '1px solid rgba(51,65,85,0.6)',
+    boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
   },
   headerTitle: { fontSize: 18, fontWeight: 800, color: '#f1f5f9' },
   headerSub:   { fontSize: 12, color: '#64748b', marginTop: 2 },
   logoutBtn: {
-    background: 'transparent',
-    border: '1px solid #334155',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.12)',
     color: '#94a3b8',
-    borderRadius: 6,
-    padding: '5px 10px',
-    fontSize: 12,
+    borderRadius: 8,
+    padding: '5px 12px',
+    fontSize: 11,
     cursor: 'pointer',
+    fontWeight: 500,
+    letterSpacing: '0.02em',
   },
   // ─ Légende ─
   legend: {
     display: 'flex',
-    gap: 14,
-    padding: '8px 16px',
-    fontSize: 11,
+    gap: 16,
+    padding: '8px 16px 6px',
+    fontSize: 10,
     color: '#94a3b8',
     flexWrap: 'wrap',
     alignItems: 'center',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    fontWeight: 600,
   },
   dot: (color) => ({
     display: 'inline-block',
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: '50%',
     background: color,
-    marginRight: 4,
+    marginRight: 5,
+    boxShadow: `0 0 5px ${color}80`,
   }),
   // ─ Navigation semaine ─
   weekNav: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '10px 16px',
+    padding: '8px 12px 10px',
     gap: 8,
   },
   weekLabel: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#e2e8f0',
     textAlign: 'center',
     flex: 1,
+    letterSpacing: '0.02em',
+    textTransform: 'uppercase',
   },
   navBtn: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'rgba(30,41,59,0.8)',
+    border: '1px solid rgba(71,85,105,0.5)',
     color: '#94a3b8',
-    borderRadius: 8,
-    padding: '6px 14px',
-    fontSize: 18,
+    borderRadius: 10,
+    padding: '6px 16px',
+    fontSize: 16,
     cursor: 'pointer',
+    lineHeight: 1,
   },
   // ─ Grille ─
   grid: {
@@ -659,14 +678,14 @@ const s = {
     alignItems: 'center',
   },
   dayHeader: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 700,
-    color: '#64748b',
+    color: '#475569',
     textTransform: 'uppercase',
-    letterSpacing: '0.03em',
+    letterSpacing: '0.04em',
     textAlign: 'center',
     marginBottom: 2,
-    lineHeight: 1.3,
+    lineHeight: 1.4,
   },
   noSlot: {
     color: '#334155',
@@ -678,13 +697,14 @@ const s = {
     width: '100%',
     border: 'none',
     borderRadius: 7,
-    padding: '6px 4px',
+    padding: '5px 3px',
     color: '#fff',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    transition: 'filter 0.15s',
+    transition: 'filter 0.15s, transform 0.1s',
     fontFamily: 'inherit',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
   },
   // ─ Modal ─
   overlay: {
