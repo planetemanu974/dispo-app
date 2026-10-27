@@ -133,7 +133,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
 
   useEffect(() => { if (forceOpen) setOpen(true) }, [forceOpen])
 
-  const [tab, setTab] = useState('requests')
+  const [tab, setTab] = useState('colleagues')
 
   // Demandes entrantes
   const [requests,   setRequests]   = useState([])
@@ -475,8 +475,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
             {/* Onglets */}
             <div style={{ display: 'flex', borderBottom: '1px solid #1e293b' }}>
               {[
-                { id: 'requests',   label: `Demandes${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
                 { id: 'colleagues', label: 'Mes collègues' },
+                { id: 'requests',   label: `Demandes${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
               ].map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)} style={{
                   flex: 1, padding: '10px', background: 'none', border: 'none',
