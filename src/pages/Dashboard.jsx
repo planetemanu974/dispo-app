@@ -1654,22 +1654,26 @@ export default function Dashboard({ pilot }) {
                         // - Single booking: total pax > 1 and no colleague assigned yet
                         // - Multiple bookings: each booking needs its own pilot (Capitaine covers only one),
                         //   so any booking without an accepted colleague is missing a pilot
-                        // Fixed pilots available (sorted, with normalized rank)
+                        // Fixed pilots — all sorted by rank (for the dot row display)
                         const fixedPilotsAvail = colleagues
                           .filter(c => c.is_direct && c.is_fixed)
                           .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
+                        // Fixed pilots actually available (not indispo) for this date + slot
+                        const fixedPilotsPresent = fixedPilotsAvail.filter(c =>
+                          !isColleagueUnavailable(c.id, slot.slot_date, slot.slot_time)
+                        )
 
                         let needsColleague
                         if (activeBks.length > 1) {
                           // Multi-booking slot: every booking needs a colleague unless fixed pilots cover all
                           needsColleague = activeBks.some(b => {
                             const bPax = b.passengers?.length || 1
-                            const coveredByFixed = fixedPilotsAvail.length >= bPax - 1
+                            const coveredByFixed = fixedPilotsPresent.length >= bPax - 1
                             return !b._hasAcceptedAssignment && !b._hasPendingAssignment && !coveredByFixed
                           })
                         } else {
                           const bPax = activeBks[0]?.passengers?.length || totalPaxW
-                          const coveredByFixed = fixedPilotsAvail.length >= bPax - 1
+                          const coveredByFixed = fixedPilotsPresent.length >= bPax - 1
                           needsColleague = totalPaxW > 1
                             && !activeBks.some(b => b._hasAcceptedAssignment)
                             && !hasPendingAssignment
@@ -2308,9 +2312,12 @@ export default function Dashboard({ pilot }) {
                 </div>
                 <div className="modal-passengers">
                   {selectedBooking.passengers?.map((p, i) => {
-                    // All passengers: use fixed pilots sorted by rank (N°1, N°2, N°3…)
+                    // Fixed pilots available for this booking's slot (exclude indispo)
+                    const slotDate = selectedBooking.pilot_slots?.slot_date
+                    const slotTime = selectedBooking.pilot_slots?.slot_time
                     const sortedFixed = colleagues
                       .filter(c => c.is_direct && c.is_fixed)
+                      .filter(c => !isColleagueUnavailable(c.id, slotDate, slotTime))
                       .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
                     const pilotName = sortedFixed[i]?.name || (i === 0 ? pilot.name : null)
                     return (
@@ -2374,6 +2381,67 @@ export default function Dashboard({ pilot }) {
                     </button>
                   </div>
                 )}
+
+                {/* ── Reinforcement needed banner ── */}
+                {(() => {
+                  const slotDate = selectedBooking.pilot_slots?.slot_date
+                  const slotTime = selectedBooking.pilot_slots?.slot_time
+                  const paxCount = selectedBooking.passengers?.length || 1
+                  const availFixed = colleagues
+                    .filter(c => c.is_direct && c.is_fixed)
+                    .filter(c => !isColleagueUnavailable(c.id, slotDate, slotTime))
+                  const pilotsNeeded = paxCount - 1  // pilot himself covers pax 1
+                  const missing = pilotsNeeded - availFixed.length
+                  if (missing <= 0) return null
+
+                  // Freelance (non-fixed) direct colleagues to call as reinforcement
+                  const freelancers = colleagues
+                    .filter(c => c.is_direct && !c.is_fixed)
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+
+                  return (
+                    <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(239,68,68,0.08)', borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f87171', marginBottom: 8 }}>
+                        ⚠️ Renfort nécessaire — {missing} pilote{missing > 1 ? 's' : ''} manquant{missing > 1 ? 's' : ''}
+                      </div>
+                      {freelancers.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {freelancers.map(c => (
+                            <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 7 }}>
+                              <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#e2e8f0' }}>🪂 {c.name}</span>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                {c.phone && (
+                                  <a href={`tel:${c.phone}`}
+                                    style={{ padding: '4px 10px', background: 'rgba(29,78,216,0.2)', border: '1px solid rgba(29,78,216,0.4)', borderRadius: 6, color: '#93c5fd', fontSize: '0.78rem', textDecoration: 'none', fontWeight: 600 }}>
+                                    📞 Appeler
+                                  </a>
+                                )}
+                                {c.phone && (
+                                  <a href={`sms:${c.phone}`}
+                                    style={{ padding: '4px 10px', background: 'rgba(5,150,105,0.2)', border: '1px solid rgba(5,150,105,0.4)', borderRadius: 6, color: '#6ee7b7', fontSize: '0.78rem', textDecoration: 'none', fontWeight: 600 }}>
+                                    💬 SMS
+                                  </a>
+                                )}
+                                {!c.phone && (
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>Pas de numéro</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                          Aucun pilote indépendant enregistré. Ajoutez des collègues dans vos contacts.
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setShowAssign(true)}
+                        style={{ marginTop: 10, width: '100%', padding: '7px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 7, color: '#fca5a5', fontSize: '0.8rem', cursor: 'pointer' }}>
+                        Envoyer une demande officielle →
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {selectedBooking.status === 'pending' && (
                   <div className="booking-actions">
