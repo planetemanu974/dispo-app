@@ -280,20 +280,22 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
     setHistoryLoading(true)
     // Load (or auto-create) planning token for fixed pilots
     if (c.is_fixed) {
-      let { data: tokenRow } = await supabase
+      let { data: tokenRow, error: fetchErr } = await supabase
         .from('fixed_pilot_tokens')
         .select('token')
         .eq('colleague_id', c.id)
         .eq('pilot_id', pilot.id)
         .is('revoked_at', null)
         .maybeSingle()
+      console.log('[token] fetch:', tokenRow, fetchErr)
       // Auto-generate token for pilots who were already fixed before migration 017
       if (!tokenRow) {
-        const { data: newToken } = await supabase
+        const { data: newToken, error: insertErr } = await supabase
           .from('fixed_pilot_tokens')
           .insert({ colleague_id: c.id, pilot_id: pilot.id })
           .select('token')
           .single()
+        console.log('[token] insert:', newToken, insertErr)
         tokenRow = newToken
       }
       setPlanningToken(tokenRow?.token || null)
