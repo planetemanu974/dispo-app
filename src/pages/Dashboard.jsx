@@ -2380,6 +2380,9 @@ export default function Dashboard({ pilot }) {
                       🧑‍✈️ Collègues demandés
                     </div>
                     {bookingAssignments.map(a => {
+                      const slotDate = selectedBooking.pilot_slots?.slot_date
+                      const slotTime = selectedBooking.pilot_slots?.slot_time
+                      const isAbsent = isColleagueUnavailable(a.colleague_id, slotDate, slotTime)
                       const statusMap = {
                         pending:  { icon: '⏳', color: '#f59e0b', label: 'En attente' },
                         accepted: { icon: '✅', color: '#4ade80', label: 'Accepté' },
@@ -2387,12 +2390,14 @@ export default function Dashboard({ pilot }) {
                       }
                       const st = statusMap[a.status] || statusMap.pending
                       return (
-                        <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
-                          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#e2e8f0' }}>
+                        <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0',
+                          opacity: isAbsent ? 0.45 : 1 }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: isAbsent ? '#94a3b8' : '#e2e8f0' }}>
                             {a.colleagues?.name || '—'}
+                            {isAbsent && <span style={{ marginLeft: 6, fontSize: '0.72rem', fontWeight: 700, color: '#f87171' }}>ABSENT</span>}
                           </span>
-                          <span style={{ fontSize: '0.8rem', color: st.color, fontWeight: 600 }}>
-                            {st.icon} {st.label}
+                          <span style={{ fontSize: '0.8rem', color: isAbsent ? '#64748b' : st.color, fontWeight: 600 }}>
+                            {isAbsent ? '🚫 Absent' : `${st.icon} ${st.label}`}
                           </span>
                         </div>
                       )
