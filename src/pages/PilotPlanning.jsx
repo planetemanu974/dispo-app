@@ -184,8 +184,12 @@ export default function PilotPlanning() {
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerTop}>
-          <span style={styles.paraIcon}>🪂</span>
+          {/* App logo */}
+          <div style={styles.logoWrap}>
+            <img src="/logo-icon.png" alt="Logo" style={{ height: 40, display: 'block' }} />
+          </div>
           <div>
+            <div style={styles.appName}>DISPO / PAS DISPO</div>
             <div style={styles.pilotName}>{colleague?.name}</div>
             <div style={styles.subtitle}>Planning personnel</div>
           </div>
@@ -404,20 +408,21 @@ const styles = {
   headerTop: {
     display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16,
   },
-  paraIcon: { fontSize: 36 },
-  pilotName: { fontSize: 22, fontWeight: 800, color: '#e2e8f0', lineHeight: 1.2 },
-  subtitle: { fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' },
+  logoWrap: { flexShrink: 0 },
+  appName: { fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 2 },
+  pilotName: { fontSize: 22, fontWeight: 800, color: '#ffffff', lineHeight: 1.2 },
+  subtitle: { fontSize: 12, color: '#ffffff', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', opacity: 0.7 },
   weekNav: {
     display: 'flex', alignItems: 'center', gap: 8,
   },
   navBtn: {
     width: 36, height: 36, borderRadius: 8, border: '1px solid #1e3a5f',
-    background: '#0f1f3d', color: '#93c5fd', fontSize: 20, fontWeight: 700,
+    background: '#0f1f3d', color: '#ffffff', fontSize: 20, fontWeight: 700,
     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   weekLabel: {
     flex: 1, padding: '8px 12px', background: '#0f1f3d', border: '1px solid #1e3a5f',
-    borderRadius: 8, color: '#93c5fd', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+    borderRadius: 8, color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
     textAlign: 'center',
   },
   vacationBtn: {
@@ -438,14 +443,14 @@ const styles = {
     display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap',
   },
   dayName: {
-    fontSize: 14, fontWeight: 800, color: '#94a3b8', minWidth: 60,
+    fontSize: 14, fontWeight: 800, color: '#ffffff', minWidth: 60,
   },
   dayDate: {
-    fontSize: 12, color: '#475569', flex: 1,
+    fontSize: 12, color: '#cbd5e1', flex: 1,
   },
   markDayBtn: {
     fontSize: 11, padding: '3px 8px', background: 'transparent',
-    border: '1px dashed #334155', borderRadius: 6, color: '#64748b',
+    border: '1px dashed #475569', borderRadius: 6, color: '#cbd5e1',
     cursor: 'pointer', fontFamily: 'inherit',
   },
   indispoChip: {
@@ -454,7 +459,7 @@ const styles = {
     cursor: 'pointer', fontFamily: 'inherit',
   },
   emptyDay: {
-    fontSize: 12, color: '#334155', fontStyle: 'italic', padding: '4px 0',
+    fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '4px 0',
   },
   fullDayBanner: {
     background: '#1a0a0a', border: '1px solid #7f1d1d44', borderRadius: 8,
@@ -468,14 +473,14 @@ const styles = {
     background: '#1a0a0a', border: '1px solid #7f1d1d44',
   },
   slotTime: {
-    fontSize: 14, fontWeight: 700, color: '#60a5fa',
+    fontSize: 14, fontWeight: 700, color: '#ffffff',
   },
   paxBadge: {
-    fontSize: 12, color: '#64748b',
+    fontSize: 12, color: '#cbd5e1',
   },
   markSlotBtn: {
     fontSize: 11, padding: '3px 8px', marginTop: 6, background: 'transparent',
-    border: '1px dashed #334155', borderRadius: 6, color: '#64748b',
+    border: '1px dashed #475569', borderRadius: 6, color: '#cbd5e1',
     cursor: 'pointer', fontFamily: 'inherit',
   },
   cancelSlotBtn: {
@@ -498,7 +503,7 @@ const styles = {
     borderRadius: 12, padding: 14,
   },
   sectionTitle: {
-    fontSize: 12, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase',
+    fontSize: 12, fontWeight: 700, color: '#ffffff', textTransform: 'uppercase',
     letterSpacing: '.05em', marginBottom: 10,
   },
   rangeRow: {
@@ -515,10 +520,10 @@ const styles = {
     padding: '24px', width: '100%', maxWidth: 360,
   },
   modalTitle: {
-    fontSize: 16, fontWeight: 800, color: '#e2e8f0', marginBottom: 20,
+    fontSize: 16, fontWeight: 800, color: '#ffffff', marginBottom: 20,
   },
   label: {
-    display: 'block', fontSize: 12, color: '#64748b', fontWeight: 700,
+    display: 'block', fontSize: 12, color: '#ffffff', fontWeight: 700,
     textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6,
   },
   dateInput: {
@@ -528,7 +533,7 @@ const styles = {
   },
   cancelBtn: {
     flex: 1, padding: '11px', background: '#0f1f3d', border: '1px solid #1e3a5f',
-    borderRadius: 8, color: '#94a3b8', fontSize: 13, fontWeight: 700,
+    borderRadius: 8, color: '#ffffff', fontSize: 13, fontWeight: 700,
     cursor: 'pointer', fontFamily: 'inherit',
   },
   confirmBtn: {
