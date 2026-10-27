@@ -450,7 +450,7 @@ code {
 }
 .booking-header p {
   font-size: 0.9rem;
-  color: #64748b;
+  color: #94a3b8;
   margin: 0;
 }
 
@@ -468,7 +468,7 @@ code {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #475569;
+  color: #cbd5e1;
   margin: 8px 0 0;
 }
 
@@ -507,7 +507,7 @@ code {
   align-items: center;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #94a3b8;
+  color: #e2e8f0;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -530,7 +530,7 @@ code {
 }
 .field label {
   font-size: 0.75rem;
-  color: #64748b;
+  color: #cbd5e1;
   font-weight: 500;
 }
 
@@ -569,7 +569,7 @@ code {
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
-  color: #94a3b8;
+  color: #e2e8f0;
   cursor: pointer;
 }
 
