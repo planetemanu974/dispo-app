@@ -1347,7 +1347,6 @@ export default function Dashboard({ pilot }) {
               colleague_id: colleague.id,
               pilot_id:     pilot.id,
               status:       'accepted',
-              note:         'Assigné directement (pilote fixe)',
             })
           if (error) { alert('Erreur lors de l\'assignation.'); return }
           setFixedPilotPicker(null)

@@ -727,41 +727,58 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
           {requestSlot?.date && (() => {
             const slotLabel = formatSlotForMessage(requestSlot.date, requestSlot.time)
 
+            const smsLink = detailColleague.phone
+              ? (() => {
+                  const msg = encodeURIComponent(
+                    `Salut ${detailColleague.name.split(' ')[0]}, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
+                  )
+                  return `sms:${detailColleague.phone}?body=${msg}`
+                })()
+              : null
+
             if (detailColleague.is_fixed) {
-              // Pilote fixe → assignation directe, pas de SMS
+              // Pilote fixe → assignation directe EN PREMIER + SMS en option
               return (
-                <button
-                  onClick={async () => {
-                    if (!requestSlot.bookingId) { alert('Identifiant de réservation manquant.'); return }
-                    const { error } = await supabase
-                      .from('booking_assignments')
-                      .insert({
-                        booking_id:   requestSlot.bookingId,
-                        colleague_id: detailColleague.id,
-                        pilot_id:     pilot.id,
-                        status:       'accepted',
-                        note:         'Assigné directement (pilote fixe)',
-                      })
-                    if (error) { alert('Erreur lors de l\'assignation.'); return }
-                    setDetailColleague(null)
-                    setOpen(false)
-                    onClose && onClose()
-                  }}
-                  style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#14532d', color: '#86efac', border: '1px solid #16a34a55', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', boxSizing: 'border-box' }}
-                >
-                  ✅ Sélectionner pour {slotLabel}
-                </button>
+                <>
+                  <button
+                    onClick={async () => {
+                      if (!requestSlot.bookingId) { alert('Identifiant de réservation manquant.'); return }
+                      const { error } = await supabase
+                        .from('booking_assignments')
+                        .insert({
+                          booking_id:   requestSlot.bookingId,
+                          colleague_id: detailColleague.id,
+                          pilot_id:     pilot.id,
+                          status:       'accepted',
+                        })
+                      if (error) { alert('Erreur lors de l\'assignation : ' + error.message); return }
+                      setDetailColleague(null)
+                      setOpen(false)
+                      onClose && onClose()
+                    }}
+                    style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#14532d', color: '#86efac', border: '1px solid #16a34a55', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', boxSizing: 'border-box' }}
+                  >
+                    ✅ Sélectionner pour {slotLabel}
+                  </button>
+                  {smsLink && (
+                    <a
+                      href={smsLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'block', width: '100%', marginTop: 8, padding: '11px', background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
+                    >
+                      💬 Prévenir par SMS
+                    </a>
+                  )}
+                </>
               )
             }
 
             // Pilote indépendant → SMS
-            if (detailColleague.phone) {
-              const msg = encodeURIComponent(
-                `Salut ${detailColleague.name.split(' ')[0]}, tu es disponible pour assurer un biplace le ${slotLabel} ? — Capitaine`
-              )
+            if (smsLink) {
               return (
                 <a
-                  href={`sms:${detailColleague.phone}?body=${msg}`}
+                  href={smsLink}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ display: 'block', width: '100%', marginTop: 12, padding: '13px', background: '#064e3b', color: '#6ee7b7', border: '1px solid #065f4655', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
