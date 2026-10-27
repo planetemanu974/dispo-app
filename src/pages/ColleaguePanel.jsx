@@ -173,7 +173,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct')
+      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct, notes')
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -283,6 +283,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
         siret:   detailColleague.siret   || null,
         phone:   detailColleague.phone   || null,
         email:   detailColleague.email   || null,
+        notes:   detailColleague.notes   || null,
       })
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
@@ -648,6 +649,27 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose }) {
             <label style={{ ...s.label, marginTop: 12 }}>Email</label>
             <input type="email" value={detailColleague.email || ''} onChange={e => setDetailColleague(p => ({ ...p, email: e.target.value }))} style={s.input} placeholder="Ex : contact@974parapente.re" />
 
+            {/* Notes libres — uniquement pour pilotes indépendants */}
+            {detailColleague.is_direct && (
+              <>
+                <label style={{ ...s.label, marginTop: 14 }}>📝 Notes</label>
+                <textarea
+                  value={detailColleague.notes || ''}
+                  onChange={e => setDetailColleague(p => ({ ...p, notes: e.target.value }))}
+                  rows={3}
+                  placeholder="Ex : en vacances du 15 au 20 nov. · disponible le matin uniquement…"
+                  style={{
+                    ...s.input,
+                    resize: 'vertical',
+                    minHeight: 72,
+                    lineHeight: 1.5,
+                    paddingTop: 10,
+                    paddingBottom: 10,
+                  }}
+                />
+              </>
+            )}
+
             {detailError && <p style={{ ...s.error, marginTop: 8 }}>{detailError}</p>}
 
             <button type="submit" disabled={detailSaving} style={{ ...s.btnGreen, width: '100%', marginTop: 16 }}>
@@ -846,7 +868,9 @@ function ColleagueCard({ c, onOpen }) {
           </div>
           <div style={{ fontSize: 11, color: '#64748b' }}>
             {c.is_direct
-              ? (c.phone ? `📞 ${c.phone}` : '👨‍✈️ Pilote indépendant')
+              ? (c.notes
+                  ? <span style={{ fontStyle: 'italic', color: '#f59e0b' }}>📝 {c.notes.length > 40 ? c.notes.slice(0, 38) + '…' : c.notes}</span>
+                  : (c.phone ? `📞 ${c.phone}` : '👨‍✈️ Pilote indépendant'))
               : (c.active
                   ? (c.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
                   : '🚫 Accès révoqué')}
