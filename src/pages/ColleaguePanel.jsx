@@ -351,12 +351,19 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
       .filter(c => c.is_direct && c.is_fixed)
       .sort((a, b) => (a.fixed_order || 99) - (b.fixed_order || 99))
 
-    const myIndex = fixedPilots.findIndex(c => c.id === detailColleague.id)
-    const swapIndex = myIndex + direction
-    if (swapIndex < 0 || swapIndex >= fixedPilots.length) return // already at boundary
+    // Normalize: assign 1-based ranks to any pilot with null fixed_order
+    // (handles pilots promoted before this migration ran)
+    const normalized = fixedPilots.map((c, i) => ({
+      ...c,
+      fixed_order: c.fixed_order ?? (i + 1),
+    }))
 
-    const myPilot = fixedPilots[myIndex]
-    const swapPilot = fixedPilots[swapIndex]
+    const myIndex = normalized.findIndex(c => c.id === detailColleague.id)
+    const swapIndex = myIndex + direction
+    if (swapIndex < 0 || swapIndex >= normalized.length) return
+
+    const myPilot = normalized[myIndex]
+    const swapPilot = normalized[swapIndex]
     const myOrder = myPilot.fixed_order
     const swapOrder = swapPilot.fixed_order
 
@@ -900,7 +907,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                 const fixedSorted = colleagues
                   .filter(c => c.is_direct && c.is_fixed)
                   .sort((a, b) => (a.fixed_order || 99) - (b.fixed_order || 99))
+                  .map((c, i) => ({ ...c, fixed_order: c.fixed_order ?? (i + 1) }))
                 const myIdx = fixedSorted.findIndex(c => c.id === detailColleague.id)
+                const myOrder = myIdx >= 0 ? fixedSorted[myIdx].fixed_order : (detailColleague.fixed_order ?? 1)
                 const isFirst = myIdx === 0
                 const isLast = myIdx === fixedSorted.length - 1
                 return (
@@ -919,7 +928,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                         }}
                       >↑</button>
                       <span style={{ flex: 1, textAlign: 'center', fontWeight: 700, color: '#fcd34d', fontSize: 18 }}>
-                        N°{detailColleague.fixed_order || (myIdx + 1)}
+                        N°{myOrder}
                       </span>
                       <button
                         onClick={() => handleMoveFixed(1)}
