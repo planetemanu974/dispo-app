@@ -538,6 +538,59 @@ export default function Dashboard({ pilot }) {
     })
   }
 
+  // ── togglePilotAvailability ───────────────────────────────────────────────
+  // Called from the pilots planning view when the user clicks a slot cell.
+  // Toggles the absence entry for a given colleague/date/slotTime.
+  // Uses optimistic update: UI changes instantly, Supabase call runs async.
+  async function togglePilotAvailability(colleagueId, dateStr, slotTimeHHMM) {
+    // Find entries that cover this specific slot
+    const matching = fixedUnavailability.filter(u => {
+      if (u.colleague_id !== colleagueId) return false
+      if (u.start_date > dateStr || u.end_date < dateStr) return false
+      if (u.slot_time === null) return true                           // full-day covers any slot
+      return u.slot_time.slice(0, 5) === slotTimeHHMM
+    })
+
+    if (matching.length > 0) {
+      // ── Currently ABSENT → make PRESENT: delete matching entries ──────────
+      const idsToDelete = matching.map(e => e.id)
+      // Optimistic update
+      setFixedUnavailability(prev => prev.filter(u => !idsToDelete.includes(u.id)))
+      const { error } = await supabase
+        .from('fixed_pilot_unavailability')
+        .delete()
+        .in('id', idsToDelete)
+      if (error) {
+        console.error('togglePilotAvailability delete error:', error)
+        loadWeek(weekStart)  // revert on error
+      }
+    } else {
+      // ── Currently PRESENT → make ABSENT: insert new entry ─────────────────
+      const newEntry = {
+        colleague_id: colleagueId,
+        start_date:   dateStr,
+        end_date:     dateStr,
+        slot_time:    slotTimeHHMM + ':00'
+      }
+      const tempId = 'temp_' + Date.now()
+      // Optimistic update with temporary id
+      setFixedUnavailability(prev => [...prev, { ...newEntry, id: tempId }])
+      const { data, error } = await supabase
+        .from('fixed_pilot_unavailability')
+        .insert(newEntry)
+        .select()
+        .single()
+      if (error) {
+        console.error('togglePilotAvailability insert error:', error)
+        setFixedUnavailability(prev => prev.filter(u => u.id !== tempId))
+        loadWeek(weekStart)  // revert on error
+      } else {
+        // Replace temp id with real id from database
+        setFixedUnavailability(prev => prev.map(u => u.id === tempId ? data : u))
+      }
+    }
+  }
+
   // ── loadPlanning ──────────────────────────────────────────────────────────
   async function loadPlanning(fromDate) {
     setPlanningLoading(true)
@@ -2440,15 +2493,24 @@ export default function Dashboard({ pilot }) {
                                     }
 
                                     return (
-                                      <span key={slotTime} title={unavail ? `${pilot.name} absent — ${slotTime}` : `${pilot.name} présent — ${slotTime}`}
+                                      <span key={slotTime}
+                                        role="button"
+                                        title={unavail
+                                          ? `Cliquer pour rendre ${pilot.name} présent — ${slotTime}`
+                                          : `Cliquer pour marquer ${pilot.name} absent — ${slotTime}`}
+                                        onClick={() => togglePilotAvailability(pilot.id, date, slotTime)}
                                         style={{
-                                          width:18, height:18, borderRadius:4,
+                                          width:22, height:22, borderRadius:5,
                                           background: unavail ? '#7f1d1d' : '#14532d',
                                           border: `1px solid ${unavail ? '#dc2626' : '#16a34a'}`,
                                           display:'inline-flex', alignItems:'center',
-                                          justifyContent:'center', fontSize:'0.6rem',
-                                          cursor:'default'
-                                        }}>
+                                          justifyContent:'center', fontSize:'0.7rem',
+                                          cursor:'pointer',
+                                          transition:'filter 0.1s, transform 0.1s',
+                                          userSelect:'none'
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.filter='brightness(1.4)'; e.currentTarget.style.transform='scale(1.15)' }}
+                                        onMouseLeave={e => { e.currentTarget.style.filter=''; e.currentTarget.style.transform='' }}>
                                         {unavail ? '✗' : '✓'}
                                       </span>
                                     )
@@ -2463,10 +2525,11 @@ export default function Dashboard({ pilot }) {
                   </tbody>
                 </table>
 
-                {/* Legend */}
+                {/* Legend + hint */}
                 <div style={{
                   display:'flex', gap:16, padding:'12px 16px', marginTop:8,
-                  fontSize:'0.75rem', color:'#94a3b8', flexWrap:'wrap'
+                  fontSize:'0.75rem', color:'#94a3b8', flexWrap:'wrap',
+                  alignItems:'center'
                 }}>
                   <span style={{ display:'flex', alignItems:'center', gap:5 }}>
                     <span style={{
@@ -2488,6 +2551,9 @@ export default function Dashboard({ pilot }) {
                       display:'inline-block'
                     }} />
                     Pas de créneau
+                  </span>
+                  <span style={{ marginLeft:'auto', color:'#475569', fontStyle:'italic' }}>
+                    👆 Cliquer sur une case pour basculer présence / absence
                   </span>
                 </div>
               </div>
