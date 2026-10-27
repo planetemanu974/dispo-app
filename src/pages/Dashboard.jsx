@@ -322,14 +322,24 @@ export default function Dashboard({ pilot }) {
         .eq('booking_id', selectedBooking.id)
         .order('created_at')
 
-      const existingAssignments = existing || []
+      let existingAssignments = existing || []
       const paxCount = selectedBooking.passengers?.length || 1
+
+      // Cleanup: remove any accepted assignment where the colleague IS the main pilot (self-assign bug)
+      const selfAssigns = existingAssignments.filter(a => a.status === 'accepted' && a.colleague_id === pilot.id)
+      if (selfAssigns.length > 0) {
+        await Promise.all(selfAssigns.map(a =>
+          supabase.from('booking_assignments').delete().eq('id', a.id)
+        ))
+        existingAssignments = existingAssignments.filter(a => a.colleague_id !== pilot.id)
+      }
+
       const acceptedCount = existingAssignments.filter(a => a.status === 'accepted').length
 
       // Auto-assign fixed pilots when: multi-pax, no accepted assignments yet, enough fixed pilots
       if (paxCount > 1 && acceptedCount === 0) {
         const fixedPilots = colleagues
-          .filter(c => c.is_direct && c.is_fixed)
+          .filter(c => c.is_direct && c.is_fixed && c.id !== pilot.id) // exclude main pilot (already on pax 1)
           .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
           .map((c, i) => ({ ...c, fixed_order: c.fixed_order ?? (i + 1) }))
 
