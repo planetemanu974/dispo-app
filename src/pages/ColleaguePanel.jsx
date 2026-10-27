@@ -32,6 +32,14 @@ const PILOT_INFO = {
 
 const MONTHS_FR = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc']
 
+/** Date locale YYYY-MM-DD (sans décalage UTC — Réunion UTC+4) */
+function localDateStr(d = new Date()) {
+  const y  = d.getFullYear()
+  const m  = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 function fmtDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr + 'T00:00:00')
@@ -128,7 +136,7 @@ function formatSlotForMessage(date, time) {
   return time ? `${label} à ${time.slice(0, 5)}` : label
 }
 
-export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot }) {
+export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot, flightTypes = [] }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => { if (forceOpen) setOpen(true) }, [forceOpen])
@@ -166,9 +174,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
   const [planningToken,   setPlanningToken]   = useState(null)  // active token for fixed pilot
 
   // Historique (dans la fiche collègue)
-  const [history,        setHistory]        = useState({ invoices: [], requests: [] })
+  const [history,        setHistory]        = useState({ invoices: [], requests: [], flights: [] })
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [historyTab,     setHistoryTab]     = useState('invoices')  // 'invoices' | 'requests'
+  const [historyTab,     setHistoryTab]     = useState('invoices')  // 'invoices' | 'requests' | 'vols'
 
   // Modal : facture
   const [invoiceColleague, setInvoiceColleague] = useState(null)
@@ -300,8 +308,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
       }
       setPlanningToken(tokenRow?.token || null)
     }
-    // Charger factures + demandes en parallèle
-    const [invRes, reqRes] = await Promise.all([
+    // Charger factures + demandes + vols en parallèle
+    const [invRes, reqRes, bookingsRes] = await Promise.all([
       supabase
         .from('colleague_invoices')
         .select('id, invoice_number, invoice_date, amount_eur, designation')
@@ -309,9 +317,41 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
         .order('invoice_date', { ascending: false }),
       supabase
         .rpc('get_colleague_requests', { p_pilot_id: pilot.id })
-        .then(({ data }) => ({ data: (data || []).filter(r => r.colleague_id === c.id) }))
+        .then(({ data }) => ({ data: (data || []).filter(r => r.colleague_id === c.id) })),
+      // Load all closed bookings to find flights performed by this colleague
+      supabase
+        .from('bookings')
+        .select('id, booking_ref, closure_data, pilot_slots(slot_date, slot_time)')
+        .eq('pilot_id', pilot.id)
+        .not('closure_data', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(300),
     ])
-    setHistory({ invoices: invRes.data || [], requests: reqRes.data || [] })
+
+    // Extract flights where this colleague appears in pilot_flights[]
+    const flights = []
+    for (const b of bookingsRes.data || []) {
+      const pilotFlights = b.closure_data?.pilot_flights || []
+      // A colleague may appear multiple times (multi-pax booking) — deduplicate by booking
+      const match = pilotFlights.find(pf => pf.pilot_name === c.name)
+      if (match) {
+        // Count flights on this booking for this colleague
+        const count = pilotFlights.filter(pf => pf.pilot_name === c.name).length
+        flights.push({
+          booking_id:    b.id,
+          booking_ref:   b.booking_ref,
+          date:          b.pilot_slots?.slot_date,
+          time:          b.pilot_slots?.slot_time,
+          flight_type_id: match.flight_type_id,
+          media_pack:    match.media_pack,
+          count,
+        })
+      }
+    }
+    // Sort descending by date
+    flights.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+
+    setHistory({ invoices: invRes.data || [], requests: reqRes.data || [], flights })
     setHistoryLoading(false)
   }
 
@@ -897,8 +937,12 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
           {/* ── Historique ── */}
           <div style={{ marginTop: 20, borderTop: '1px solid #1e293b', paddingTop: 14 }}>
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              {[{ id: 'invoices', label: `🧾 Factures (${history.invoices.length})` }, { id: 'requests', label: `📋 Demandes (${history.requests.length})` }].map(t => (
-                <button key={t.id} onClick={() => setHistoryTab(t.id)} style={{ flex: 1, padding: '7px 4px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: historyTab === t.id ? 700 : 500, background: historyTab === t.id ? '#0ea5e9' : '#1e293b', color: historyTab === t.id ? '#fff' : '#94a3b8' }}>{t.label}</button>
+              {[
+                { id: 'invoices', label: `🧾 Factures (${history.invoices.length})` },
+                { id: 'vols',     label: `✈ Vols (${history.flights.length})` },
+                { id: 'requests', label: `📋 Demandes (${history.requests.length})` },
+              ].map(t => (
+                <button key={t.id} onClick={() => setHistoryTab(t.id)} style={{ flex: 1, padding: '7px 2px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: historyTab === t.id ? 700 : 500, background: historyTab === t.id ? '#0ea5e9' : '#1e293b', color: historyTab === t.id ? '#fff' : '#94a3b8' }}>{t.label}</button>
               ))}
             </div>
 
@@ -925,6 +969,68 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                       </div>
                     ))
                 )}
+
+                {/* Vols effectués */}
+                {historyTab === 'vols' && (() => {
+                  if (history.flights.length === 0) return (
+                    <p style={s.muted}>Aucun vol enregistré pour ce pilote.</p>
+                  )
+                  // Compute totals
+                  const totalFlights = history.flights.reduce((s, f) => s + (f.count || 1), 0)
+                  // Month filter
+                  const now    = new Date()
+                  const curY   = now.getFullYear()
+                  const curM   = now.getMonth()
+                  const today  = localDateStr()
+                  const todayFlights = history.flights.filter(f => f.date === today)
+                  const monthFlights = history.flights.filter(f => {
+                    if (!f.date) return false
+                    const d = new Date(f.date + 'T00:00:00')
+                    return d.getFullYear() === curY && d.getMonth() === curM
+                  })
+                  const todayCount = todayFlights.reduce((s, f) => s + (f.count || 1), 0)
+                  const monthCount = monthFlights.reduce((s, f) => s + (f.count || 1), 0)
+
+                  return (
+                    <>
+                      {/* Synthèse rapide */}
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                        <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '8px 10px', border: '1px solid #1e293b', textAlign: 'center' }}>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{todayCount}</div>
+                          <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Aujourd'hui</div>
+                        </div>
+                        <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '8px 10px', border: '1px solid #1e293b', textAlign: 'center' }}>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{monthCount}</div>
+                          <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Ce mois</div>
+                        </div>
+                        <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '8px 10px', border: '1px solid #1e293b', textAlign: 'center' }}>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{totalFlights}</div>
+                          <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Total</div>
+                        </div>
+                      </div>
+                      {/* Liste des vols */}
+                      {history.flights.map(f => {
+                        const ftLabel = flightTypes.find(ft => ft.id === f.flight_type_id)?.label || f.flight_type_id || 'Vol'
+                        return (
+                          <div key={f.booking_id} style={{ background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 12px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#e2e8f0', fontSize: 13 }}>
+                                {fmtDate(f.date)}{f.time ? ` · ${fmtTime(f.time)}` : ''}
+                              </div>
+                              <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
+                                {ftLabel}{f.count > 1 ? ` × ${f.count}` : ''}{f.media_pack ? ' · 📸' : ''}
+                              </div>
+                              {f.booking_ref && (
+                                <div style={{ color: '#475569', fontSize: 11, marginTop: 1 }}>Réf. {f.booking_ref}</div>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 22, color: '#38bdf8' }}>✈</div>
+                          </div>
+                        )
+                      })}
+                    </>
+                  )
+                })()}
 
                 {/* Demandes */}
                 {historyTab === 'requests' && (

@@ -1668,6 +1668,7 @@ export default function Dashboard({ pilot }) {
         pilot={pilot}
         forceOpen={colleaguePanelOpen}
         requestSlot={colleagueRequestSlot}
+        flightTypes={flightTypes}
         onClose={() => { setColleaguePanelOpen(false); setColleagueRequestSlot(null) }}
       />
 
