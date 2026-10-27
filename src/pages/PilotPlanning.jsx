@@ -8,8 +8,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/pilot-planning`
+
+// Supabase Edge Functions require a Bearer token even for public (token-based) pages.
+// We pass the anon key — the function itself uses the service role key internally.
+const AUTH_HEADERS = {
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,7 +92,9 @@ export default function PilotPlanning() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${FUNCTION_URL}?token=${token}&week=${week}`)
+      const res = await fetch(`${FUNCTION_URL}?token=${token}&week=${week}`, {
+        headers: AUTH_HEADERS,
+      })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Erreur réseau'); return }
       setColleague(data.colleague)
@@ -111,7 +120,7 @@ export default function PilotPlanning() {
     try {
       const res = await fetch(FUNCTION_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
         body: JSON.stringify({ token, action: 'add_unavail', ...body }),
       })
       const data = await res.json()
@@ -128,7 +137,7 @@ export default function PilotPlanning() {
     try {
       const res = await fetch(FUNCTION_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
         body: JSON.stringify({ token, action: 'remove_unavail', id }),
       })
       if (res.ok) await fetchPlanning(weekStart)
