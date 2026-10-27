@@ -248,21 +248,23 @@ export default function FlightClosure({
         }
       }
 
-      // 6. Log activity
-      await supabase.from('activity_log').insert({
-        pilot_id:    pilot.id,
-        action:      'booking_closed',
-        entity_type: 'booking',
-        entity_id:   booking.id,
-        details: {
-          booking_ref:    booking.booking_ref,
-          contact_name:   booking.contact_name,
-          pax_count:      passengers.length,
-          payment_method: primaryMethod,
-          invoice:        firstInvNum || 'none',
-          pilot:          primaryPilot,
-        },
-      }).catch(() => {}) // non-fatal
+      // 6. Log activity (non-fatal — wrapped to avoid SDK .catch() issue)
+      try {
+        await supabase.from('activity_log').insert({
+          pilot_id:    pilot.id,
+          action:      'booking_closed',
+          entity_type: 'booking',
+          entity_id:   booking.id,
+          details: {
+            booking_ref:    booking.booking_ref,
+            contact_name:   booking.contact_name,
+            pax_count:      passengers.length,
+            payment_method: primaryMethod,
+            invoice:        firstInvNum || 'none',
+            pilot:          primaryPilot,
+          },
+        })
+      } catch (_) { /* non-fatal */ }
 
       // 7. Notify parent
       onDone({
