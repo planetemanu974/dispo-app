@@ -192,7 +192,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct, is_fixed, notes')
+      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct, is_fixed, fixed_order, notes')
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -328,12 +328,44 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
   // ── Basculer pilote fixe / indépendant ───────────────────────────────────
   async function handleToggleFixed() {
     const newFixed = !detailColleague.is_fixed
+    let newOrder = null
+    if (newFixed) {
+      // Assign next available fixed_order rank
+      const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
+      const maxOrder = fixedPilots.reduce((m, c) => Math.max(m, c.fixed_order || 0), 0)
+      newOrder = maxOrder + 1
+    }
     await supabase
       .from('colleagues')
-      .update({ is_fixed: newFixed })
+      .update({ is_fixed: newFixed, fixed_order: newFixed ? newOrder : null })
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
-    setDetailColleague(prev => ({ ...prev, is_fixed: newFixed }))
+    setDetailColleague(prev => ({ ...prev, is_fixed: newFixed, fixed_order: newOrder }))
+    loadColleagues()
+  }
+
+  // ── Monter / descendre un pilote fixe dans l'ordre ───────────────────────
+  async function handleMoveFixed(direction) {
+    // direction: -1 = monter (rang plus petit), +1 = descendre (rang plus grand)
+    const fixedPilots = colleagues
+      .filter(c => c.is_direct && c.is_fixed)
+      .sort((a, b) => (a.fixed_order || 99) - (b.fixed_order || 99))
+
+    const myIndex = fixedPilots.findIndex(c => c.id === detailColleague.id)
+    const swapIndex = myIndex + direction
+    if (swapIndex < 0 || swapIndex >= fixedPilots.length) return // already at boundary
+
+    const myPilot = fixedPilots[myIndex]
+    const swapPilot = fixedPilots[swapIndex]
+    const myOrder = myPilot.fixed_order
+    const swapOrder = swapPilot.fixed_order
+
+    // Swap the two ranks in DB
+    await Promise.all([
+      supabase.from('colleagues').update({ fixed_order: swapOrder }).eq('id', myPilot.id).eq('pilot_id', pilot.id),
+      supabase.from('colleagues').update({ fixed_order: myOrder }).eq('id', swapPilot.id).eq('pilot_id', pilot.id),
+    ])
+    setDetailColleague(prev => ({ ...prev, fixed_order: swapOrder }))
     loadColleagues()
   }
 
@@ -558,10 +590,12 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                   </div>
 
                   {!colLoading && (() => {
-                    const fixed = colleagues.filter(c => c.is_direct && c.is_fixed)
+                    const fixed = colleagues
+                      .filter(c => c.is_direct && c.is_fixed)
+                      .sort((a, b) => (a.fixed_order || 99) - (b.fixed_order || 99))
                     return fixed.length === 0
                       ? <p style={{ ...s.muted, padding: '6px 0 10px', textAlign: 'left', fontSize: 12 }}>Aucun pilote fixe. Promouvez un pilote indépendant depuis sa fiche.</p>
-                      : fixed.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} badge="⭐" />)
+                      : fixed.map((c, i) => <ColleagueCard key={c.id} c={c} onOpen={openDetail} badge={`N°${c.fixed_order || (i+1)}`} />)
                   })()}
 
                   {/* Séparateur */}
@@ -673,7 +707,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
           </h3>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 12 }}>
             {detailColleague.is_direct
-              ? (detailColleague.is_fixed ? '⭐ Pilote fixe' : '👨‍✈️ Pilote indépendant')
+              ? (detailColleague.is_fixed
+                  ? `⭐ Pilote fixe · N°${detailColleague.fixed_order || '?'}`
+                  : '👨‍✈️ Pilote indépendant')
               : (detailColleague.active
                   ? (detailColleague.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
                   : '🚫 Accès révoqué')}
@@ -857,8 +893,47 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
 
           {/* Actions selon le type */}
           {detailColleague.is_direct ? (
-            /* Pilote direct : bascule fixe/indépendant + supprimer */
+            /* Pilote direct : rang (si fixe) + bascule fixe/indépendant + supprimer */
             <>
+              {/* Rank controls — only for fixed pilots */}
+              {detailColleague.is_fixed && (() => {
+                const fixedSorted = colleagues
+                  .filter(c => c.is_direct && c.is_fixed)
+                  .sort((a, b) => (a.fixed_order || 99) - (b.fixed_order || 99))
+                const myIdx = fixedSorted.findIndex(c => c.id === detailColleague.id)
+                const isFirst = myIdx === 0
+                const isLast = myIdx === fixedSorted.length - 1
+                return (
+                  <div style={{ marginTop: 14, padding: '12px 14px', background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>
+                      ⭐ Rang dans l'équipe
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <button
+                        onClick={() => handleMoveFixed(-1)}
+                        disabled={isFirst}
+                        style={{
+                          padding: '8px 16px', borderRadius: 8, border: '1px solid #334155',
+                          background: isFirst ? '#0f172a' : '#1e293b', color: isFirst ? '#334155' : '#94a3b8',
+                          fontSize: 18, fontWeight: 700, cursor: isFirst ? 'default' : 'pointer', fontFamily: 'inherit',
+                        }}
+                      >↑</button>
+                      <span style={{ flex: 1, textAlign: 'center', fontWeight: 700, color: '#fcd34d', fontSize: 18 }}>
+                        N°{detailColleague.fixed_order || (myIdx + 1)}
+                      </span>
+                      <button
+                        onClick={() => handleMoveFixed(1)}
+                        disabled={isLast}
+                        style={{
+                          padding: '8px 16px', borderRadius: 8, border: '1px solid #334155',
+                          background: isLast ? '#0f172a' : '#1e293b', color: isLast ? '#334155' : '#94a3b8',
+                          fontSize: 18, fontWeight: 700, cursor: isLast ? 'default' : 'pointer', fontFamily: 'inherit',
+                        }}
+                      >↓</button>
+                    </div>
+                  </div>
+                )
+              })()}
               <button
                 onClick={handleToggleFixed}
                 style={{
