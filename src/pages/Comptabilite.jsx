@@ -54,7 +54,7 @@ export default function Comptabilite({ pilot, flightTypes }) {
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
-  const [filter, setFilter]     = useState('month') // 'all' | 'month' | 'year'
+  const [filter, setFilter]     = useState('month') // 'all' | 'today' | 'month' | 'year'
   const [downloading, setDownloading] = useState(null)
 
   // ── Chargement ──────────────────────────────────────────────────────────
@@ -188,7 +188,9 @@ export default function Comptabilite({ pilot, flightTypes }) {
   function filteredRows() {
     if (filter === 'all') return rows
     return rows.filter(r => {
-      const d = new Date((r.paid_at || r.date || today) + 'T00:00:00')
+      const rowDate = (r.paid_at || r.date || today).slice(0, 10)
+      const d = new Date(rowDate + 'T00:00:00')
+      if (filter === 'today') return rowDate === today
       if (filter === 'year')  return d.getFullYear() === curYear
       if (filter === 'month') return d.getFullYear() === curYear && d.getMonth() === curMonth
       return true
@@ -238,6 +240,7 @@ export default function Comptabilite({ pilot, flightTypes }) {
       {/* ── Filtres ──────────────────────────────────────────────────────── */}
       <div style={{ padding: '12px 16px 8px', display: 'flex', gap: 6 }}>
         {[
+          { id: 'today', label: "Aujourd'hui" },
           { id: 'month', label: 'Ce mois' },
           { id: 'year',  label: 'Cette année' },
           { id: 'all',   label: 'Tout' },
@@ -277,7 +280,7 @@ export default function Comptabilite({ pilot, flightTypes }) {
         }}>
           <span style={{ fontSize: 12, color: '#64748b' }}>
             {filtered.length} règlement{filtered.length !== 1 ? 's' : ''}
-            {filter === 'month' ? ' ce mois' : filter === 'year' ? ' cette année' : ''}
+            {filter === 'today' ? " aujourd'hui" : filter === 'month' ? ' ce mois' : filter === 'year' ? ' cette année' : ''}
           </span>
           {hasAmounts && (
             <span style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8' }}>
