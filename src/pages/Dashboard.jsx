@@ -1339,6 +1339,14 @@ export default function Dashboard({ pilot }) {
           : 'ce créneau'
 
         async function assignFixed(colleague) {
+          // Remove any existing accepted assignment for this booking before inserting
+          await supabase
+            .from('booking_assignments')
+            .delete()
+            .eq('booking_id', fixedPilotPicker.bookingId)
+            .eq('pilot_id', pilot.id)
+            .eq('status', 'accepted')
+
           // Insert a booking_assignment with status 'accepted' directly
           const { error } = await supabase
             .from('booking_assignments')
@@ -2066,31 +2074,50 @@ export default function Dashboard({ pilot }) {
                     <span style={{ padding: '3px 8px', borderRadius: 6, background: sc.bg, color: sc.color, fontSize: '0.72rem', fontWeight: 700 }}>
                       {sc.label}
                     </span>
-                    {/* Pilot badge — green if colleague accepted, red if missing */}
-                    {bk._acceptedColleagueName ? (
-                      <span style={{ padding: '3px 8px', borderRadius: 6, background: '#14532d', color: '#86efac', fontSize: '0.72rem', fontWeight: 700 }}>
-                        👨‍✈️ {bk._acceptedColleagueName}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={e => {
-                          e.stopPropagation()
-                          const slotDate = bk.pilot_slots?.slot_date
-                          const slotTime = bk.pilot_slots?.slot_time
-                          const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
-                          if (fixedPilots.length > 0) {
-                            // Show quick picker for fixed pilots
-                            setFixedPilotPicker({ bookingId: bk.id, date: slotDate, time: slotTime })
-                          } else {
-                            // No fixed pilots — open full ColleaguePanel with SMS
-                            setColleagueRequestSlot({ date: slotDate, time: slotTime, bookingId: bk.id })
-                            setSelectedSlotBookings([])
-                            setColleaguePanelOpen(true)
-                          }
-                        }}
-                        style={{ padding: '3px 8px', borderRadius: 6, background: '#dc2626', color: 'white', fontSize: '0.72rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-                        🚨 Pas de pilote
-                      </button>
+                    {/* Main pilot badge — always show the logged-in pilot's name */}
+                    <span style={{ padding: '3px 8px', borderRadius: 6, background: '#1e3a5f', color: '#93c5fd', fontSize: '0.72rem', fontWeight: 700 }}>
+                      🪂 {pilot.name}
+                    </span>
+                    {/* Colleague pilot badge — only for multi-pax bookings */}
+                    {paxCount > 1 && (
+                      bk._acceptedColleagueName ? (
+                        // Clickable green badge to reassign the colleague
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            const slotDate = bk.pilot_slots?.slot_date
+                            const slotTime = bk.pilot_slots?.slot_time
+                            const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
+                            if (fixedPilots.length > 0) {
+                              setFixedPilotPicker({ bookingId: bk.id, date: slotDate, time: slotTime })
+                            } else {
+                              setColleagueRequestSlot({ date: slotDate, time: slotTime, bookingId: bk.id })
+                              setSelectedSlotBookings([])
+                              setColleaguePanelOpen(true)
+                            }
+                          }}
+                          style={{ padding: '3px 8px', borderRadius: 6, background: '#14532d', color: '#86efac', fontSize: '0.72rem', fontWeight: 700, border: '1px solid #16a34a55', cursor: 'pointer' }}>
+                          ⭐ {bk._acceptedColleagueName}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            const slotDate = bk.pilot_slots?.slot_date
+                            const slotTime = bk.pilot_slots?.slot_time
+                            const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
+                            if (fixedPilots.length > 0) {
+                              setFixedPilotPicker({ bookingId: bk.id, date: slotDate, time: slotTime })
+                            } else {
+                              setColleagueRequestSlot({ date: slotDate, time: slotTime, bookingId: bk.id })
+                              setSelectedSlotBookings([])
+                              setColleaguePanelOpen(true)
+                            }
+                          }}
+                          style={{ padding: '3px 8px', borderRadius: 6, background: '#dc2626', color: 'white', fontSize: '0.72rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                          🚨 Pas de pilote
+                        </button>
+                      )
                     )}
                     <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
                       {paxCount} pax →
