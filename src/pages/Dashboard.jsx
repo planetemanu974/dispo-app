@@ -2325,11 +2325,14 @@ export default function Dashboard({ pilot }) {
                       .filter(c => c.is_direct && c.is_fixed)
                       .filter(c => !isColleagueUnavailable(c.id, slotDate, slotTime))
                       .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-                    // Accepted colleagues who are NOT already in sortedFixed
-                    // (fixed pilots auto-appear via sortedFixed — only true freelancers fill extra slots)
+                    // Accepted colleagues who are NOT already in sortedFixed AND are available
+                    // (a fixed pilot absent on that slot gets excluded from sortedFixed but
+                    //  may still have an auto-accepted assignment → filter them out here too)
                     const sortedFixedIds = new Set(sortedFixed.map(c => c.id))
                     const acceptedFreelancers = bookingAssignments
-                      .filter(a => a.status === 'accepted' && !sortedFixedIds.has(a.colleague_id))
+                      .filter(a => a.status === 'accepted'
+                        && !sortedFixedIds.has(a.colleague_id)
+                        && !isColleagueUnavailable(a.colleague_id, slotDate, slotTime))
                       .map(a => a.colleagues?.name)
                       .filter(Boolean)
                     // i=0 → sortedFixed[0] (pilot himself if he's listed as fixed) or pilot.name
