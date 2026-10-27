@@ -1663,29 +1663,26 @@ export default function Dashboard({ pilot }) {
                         const fixedPilotsAvail = colleagues
                           .filter(c => c.is_direct && c.is_fixed)
                           .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-                        // Fixed pilots actually available for this date + slot, excluding pilot himself
-                        // (pilot is already counted by the "bPax - 1" formula — don't double-count)
-                        const fixedPilotsPresent = fixedPilotsAvail.filter(c =>
-                          !isColleagueUnavailable(c.id, slot.slot_date, slot.slot_time)
-                          && c.id !== pilot?.id
-                        )
+                        // Fixed pilots available for this slot, excluding the main pilot himself.
+                        // fixedPilotsAvail is sorted by fixed_order; index 0 = pilot himself
+                        // (consistent with fetchAndAutoAssign which does fixedPilots.slice(1))
+                        const fixedPilotsPresent = fixedPilotsAvail
+                          .slice(1)
+                          .filter(c => !isColleagueUnavailable(c.id, slot.slot_date, slot.slot_time))
 
                         let needsColleague
                         if (activeBks.length > 1) {
                           // Multi-booking slot: check each booking individually
                           needsColleague = activeBks.some(b => {
                             const bPax = b.passengers?.length || 1
-                            const pilotsNeeded = bPax - 1  // pilot covers pax 1 himself
-                            const totalCovered = fixedPilotsPresent.length + (b._acceptedAssignmentCount || 0)
-                            return totalCovered < pilotsNeeded && !b._hasPendingAssignment
+                            const pilotsNeeded = bPax - 1  // pilot himself covers pax 1
+                            return fixedPilotsPresent.length < pilotsNeeded && !b._hasPendingAssignment
                           })
                         } else {
                           const bPax = activeBks[0]?.passengers?.length || totalPaxW
                           const pilotsNeeded = bPax - 1
-                          const b0 = activeBks[0]
-                          const totalCovered = fixedPilotsPresent.length + (b0?._acceptedAssignmentCount || 0)
                           needsColleague = totalPaxW > 1
-                            && totalCovered < pilotsNeeded
+                            && fixedPilotsPresent.length < pilotsNeeded
                             && !hasPendingAssignment
                         }
                         let wBg, wColor, wBorder
@@ -2328,9 +2325,11 @@ export default function Dashboard({ pilot }) {
                       .filter(c => c.is_direct && c.is_fixed)
                       .filter(c => !isColleagueUnavailable(c.id, slotDate, slotTime))
                       .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-                    // Accepted freelance colleagues fill slots beyond fixed pilots
+                    // Accepted colleagues who are NOT already in sortedFixed
+                    // (fixed pilots auto-appear via sortedFixed — only true freelancers fill extra slots)
+                    const sortedFixedIds = new Set(sortedFixed.map(c => c.id))
                     const acceptedFreelancers = bookingAssignments
-                      .filter(a => a.status === 'accepted')
+                      .filter(a => a.status === 'accepted' && !sortedFixedIds.has(a.colleague_id))
                       .map(a => a.colleagues?.name)
                       .filter(Boolean)
                     // i=0 → sortedFixed[0] (pilot himself if he's listed as fixed) or pilot.name
@@ -2408,8 +2407,12 @@ export default function Dashboard({ pilot }) {
                   const slotDate = selectedBooking.pilot_slots?.slot_date
                   const slotTime = selectedBooking.pilot_slots?.slot_time
                   const paxCount = selectedBooking.passengers?.length || 1
-                  const availFixed = colleagues
+                  // Fixed pilots sorted by rank; [0] = pilot himself → use slice(1) to exclude
+                  const allFixed = colleagues
                     .filter(c => c.is_direct && c.is_fixed)
+                    .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
+                  const availFixed = allFixed
+                    .slice(1)
                     .filter(c => !isColleagueUnavailable(c.id, slotDate, slotTime))
                   const pilotsNeeded = paxCount - 1  // pilot himself covers pax 1
                   const missing = pilotsNeeded - availFixed.length
