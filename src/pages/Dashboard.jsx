@@ -311,14 +311,58 @@ export default function Dashboard({ pilot }) {
   }, [selectedDate, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch assignments when a booking is selected ───────────────────────────
+  // Also auto-assigns fixed pilots when paxCount > 1 and no accepted assignment exists yet.
   useEffect(() => {
     if (!selectedBooking) { setBookingAssignments([]); return }
-    supabase
-      .from('booking_assignments')
-      .select('*, colleagues(name, phone)')
-      .eq('booking_id', selectedBooking.id)
-      .order('created_at')
-      .then(({ data }) => setBookingAssignments(data || []))
+
+    async function fetchAndAutoAssign() {
+      const { data: existing } = await supabase
+        .from('booking_assignments')
+        .select('*, colleagues(name, phone)')
+        .eq('booking_id', selectedBooking.id)
+        .order('created_at')
+
+      const existingAssignments = existing || []
+      const paxCount = selectedBooking.passengers?.length || 1
+      const acceptedCount = existingAssignments.filter(a => a.status === 'accepted').length
+
+      // Auto-assign fixed pilots when: multi-pax, no accepted assignments yet, enough fixed pilots
+      if (paxCount > 1 && acceptedCount === 0) {
+        const fixedPilots = colleagues
+          .filter(c => c.is_direct && c.is_fixed)
+          .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
+          .map((c, i) => ({ ...c, fixed_order: c.fixed_order ?? (i + 1) }))
+
+        // Passenger 1 is always the main pilot — assign fixed pilots for passengers 2..N
+        const slotsNeeded = paxCount - 1
+        const pilotsToAssign = fixedPilots.slice(0, slotsNeeded)
+
+        if (pilotsToAssign.length > 0) {
+          await Promise.all(pilotsToAssign.map(fp =>
+            supabase.from('booking_assignments').insert({
+              booking_id:   selectedBooking.id,
+              colleague_id: fp.id,
+              pilot_id:     pilot.id,
+              status:       'accepted',
+            })
+          ))
+          // Re-fetch after auto-assignment
+          const { data: refreshed } = await supabase
+            .from('booking_assignments')
+            .select('*, colleagues(name, phone)')
+            .eq('booking_id', selectedBooking.id)
+            .order('created_at')
+          setBookingAssignments(refreshed || [])
+          // Refresh the week view to update colours
+          loadWeek(weekStart)
+          return
+        }
+      }
+
+      setBookingAssignments(existingAssignments)
+    }
+
+    fetchAndAutoAssign()
   }, [selectedBooking?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── loadWeek ───────────────────────────────────────────────────────────────
@@ -1544,12 +1588,26 @@ export default function Dashboard({ pilot }) {
                         // - Single booking: total pax > 1 and no colleague assigned yet
                         // - Multiple bookings: each booking needs its own pilot (Capitaine covers only one),
                         //   so any booking without an accepted colleague is missing a pilot
+                        // Fixed pilots available (sorted, with normalized rank)
+                        const fixedPilotsAvail = colleagues
+                          .filter(c => c.is_direct && c.is_fixed)
+                          .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
+
                         let needsColleague
                         if (activeBks.length > 1) {
-                          // Multi-booking slot: every booking needs a colleague
-                          needsColleague = activeBks.some(b => !b._hasAcceptedAssignment && !b._hasPendingAssignment)
+                          // Multi-booking slot: every booking needs a colleague unless fixed pilots cover all
+                          needsColleague = activeBks.some(b => {
+                            const bPax = b.passengers?.length || 1
+                            const coveredByFixed = fixedPilotsAvail.length >= bPax - 1
+                            return !b._hasAcceptedAssignment && !b._hasPendingAssignment && !coveredByFixed
+                          })
                         } else {
-                          needsColleague = totalPaxW > 1 && !activeBks.some(b => b._hasAcceptedAssignment) && !hasPendingAssignment
+                          const bPax = activeBks[0]?.passengers?.length || totalPaxW
+                          const coveredByFixed = fixedPilotsAvail.length >= bPax - 1
+                          needsColleague = totalPaxW > 1
+                            && !activeBks.some(b => b._hasAcceptedAssignment)
+                            && !hasPendingAssignment
+                            && !coveredByFixed
                         }
                         let wBg, wColor, wBorder
                         if (hasRefusedAssignment || needsColleague) {
@@ -2158,17 +2216,35 @@ export default function Dashboard({ pilot }) {
                   )}
                 </div>
                 <div className="modal-passengers">
-                  {selectedBooking.passengers?.map((p, i) => (
-                    <div key={p.id} className="modal-pax-card">
-                      <div className="modal-pax-name">
-                        Passager {i + 1}{(p.first_name || p.last_name) ? ` — ${p.first_name} ${p.last_name}`.trimEnd() : ''}
+                  {selectedBooking.passengers?.map((p, i) => {
+                    // Passenger 1 → main pilot; passengers 2+ → accepted colleagues (in order)
+                    const acceptedAssigns = bookingAssignments
+                      .filter(a => a.status === 'accepted')
+                      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                    const pilotName = i === 0
+                      ? pilot.name
+                      : (acceptedAssigns[i - 1]?.colleagues?.name || null)
+                    return (
+                      <div key={p.id} className="modal-pax-card">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <div className="modal-pax-name" style={{ margin: 0 }}>
+                            Passager {i + 1}{(p.first_name || p.last_name) ? ` — ${p.first_name} ${p.last_name}`.trimEnd() : ''}
+                          </div>
+                          {pilotName && (
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+                              background: i === 0 ? '#1e3a5f' : '#14532d',
+                              color: i === 0 ? '#93c5fd' : '#86efac' }}>
+                              🪂 {pilotName}
+                            </span>
+                          )}
+                        </div>
+                        <div className="modal-pax-details">
+                          👤 {catLabel(p.weight_kg, p.age)} &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
+                          {p.parental_auth && <span style={{marginLeft:6,color:'#f59e0b'}}>· autorisation parentale</span>}
+                        </div>
                       </div>
-                      <div className="modal-pax-details">
-                        👤 {catLabel(p.weight_kg, p.age)} &nbsp;|&nbsp; ✈️ {flightTypeLabel(p.flight_type)}
-                        {p.parental_auth && <span style={{marginLeft:6,color:'#f59e0b'}}>· autorisation parentale</span>}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 {selectedBooking.notes && (
                   <div className="modal-notes">
