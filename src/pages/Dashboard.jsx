@@ -2245,6 +2245,23 @@ export default function Dashboard({ pilot }) {
               </button>
               <button className="btn-refuse" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>Annuler</button>
             </div>
+
+            {/* Close slot from new-booking form — available even without a booking */}
+            <button
+              onClick={() => {
+                toggleAvailability(newBookingSlot.slot)
+                setNewBookingSlot(null)
+                setNbForm(null)
+              }}
+              style={{
+                width:'100%', marginTop:8, padding:'10px 14px',
+                background:'rgba(127,29,29,0.2)',
+                border:'1.5px solid #dc2626',
+                borderRadius:10, cursor:'pointer', fontWeight:700, fontSize:13,
+                color:'#fca5a5', fontFamily:'inherit'
+              }}>
+              🔒 Fermer ce créneau plutôt (PAS DISPO)
+            </button>
           </div>
         </div>
       )}
