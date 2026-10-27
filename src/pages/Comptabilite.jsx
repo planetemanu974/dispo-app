@@ -120,12 +120,27 @@ export default function Comptabilite({ pilot, flightTypes }) {
   async function handleDownload(row) {
     setDownloading(row.invoice_number)
     try {
-      // Reconstituons les lignes de la facture
+      // Reconstituons les lignes de la facture depuis le groupe de paiement
       const lines = []
 
-      if (row.source === 'new' && row.closure_data?.passengers) {
+      // Trouver le groupe de paiement correspondant à cette facture
+      const group = row.closure_data?.payment_groups?.find(
+        g => g.invoice_number === row.invoice_number)
+
+      if (group?.flight_lines?.length) {
+        // Nouveau format : flight_lines dans le groupe
+        for (const line of group.flight_lines) {
+          for (let i = 0; i < (line.count || 1); i++) {
+            lines.push({
+              label:    `${line.label} biplace`,
+              priceEur: line.price_eur || 0,
+            })
+          }
+        }
+      } else if (row.source === 'new' && row.closure_data?.passengers) {
+        // Ancien format (passagers dans closure_data)
         const paxInGroup = row.closure_data.passengers.filter(p =>
-          row.passenger_ids.includes(p.id))
+          (row.passenger_ids || []).includes(p.id))
         for (const p of paxInGroup) {
           const ft = (flightTypes || []).find(t => t.id === p.actual_flight_type)
           lines.push({
@@ -134,7 +149,7 @@ export default function Comptabilite({ pilot, flightTypes }) {
           })
         }
       } else {
-        // Ancien format ou pas de closure_data : une ligne générique
+        // Très ancien format : une ligne générique par passager
         const paxCount = row.passengers?.length || 1
         for (let i = 0; i < paxCount; i++) {
           lines.push({ label: 'Prestation biplace parapente', priceEur: 0 })

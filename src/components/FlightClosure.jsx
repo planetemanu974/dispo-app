@@ -1,185 +1,187 @@
 /**
- * FlightClosure.jsx — Clôture de vol par passager.
+ * FlightClosure.jsx — Clôture / modification des paiements d'un vol.
  *
- * SECTION PASSAGERS : ajuster pilote réel + type de vol par passager.
- * SECTION RÈGLEMENT : groupes de paiement flexibles.
- *   - Par défaut : un groupe par passager (payer = nom du passager).
- *   - L'utilisateur peut fusionner des passagers dans un même groupe
- *     en cliquant "+ <Nom>" sur la carte d'un groupe.
- *   - Chaque groupe : nom du payeur (éditable) · Espèces/Chèque/Wero
- *     · Sans facture / Avec facture · sous-total.
- *   - Les PDFs se téléchargent immédiatement à la clôture.
+ * Logique :
+ *  - Chaque "règlement" est une carte libre : nom + prénom du payeur,
+ *    quantité par type de vol (0–4 par type), méthode, facture.
+ *  - Pas de lien avec les passagers de la réservation : le pilote saisit
+ *    directement ce qui s'est passé sur le terrain.
+ *  - "Ajouter un paiement" crée une carte supplémentaire.
+ *  - La sauvegarde est additive : on peut rouvrir et ajouter un 4e
+ *    paiement si la dernière personne atterrit plus tard.
+ *  - Les numéros de facture déjà attribués sont conservés lors des
+ *    ré-enregistrements ultérieurs (pas de doublon).
  */
 
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildInvoiceNumber, generateInvoice, invoiceFilename } from '../lib/invoice'
 
-// ── Modes de paiement (pas de CB) ─────────────────────────────────────────────
+// ── Méthodes de paiement ───────────────────────────────────────────────────
 const PAY_METHODS = [
   { id: 'cash',  icon: '💶', label: 'Espèces' },
   { id: 'check', icon: '✅', label: 'Chèque'  },
   { id: 'wero',  icon: '📲', label: 'Wero'    },
 ]
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-function paxDisplayName(p, index) {
-  const full = [p.first_name, p.last_name].filter(Boolean).join(' ')
-  return full || `Passager ${index + 1}`
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-function catLabel(p) {
-  if (p.age != null && p.age < 14) return '< 14 ans'
-  const w = Number(p.weight_kg)
-  if (!w) return ''
-  if (w <= 60)  return '≤ 60 kg'
-  if (w <= 75)  return '61–75 kg'
-  if (w <= 100) return '76–100 kg'
-  return '> 100 kg'
+function newCard() {
+  return {
+    id:             uid(),
+    nom:            '',
+    prenom:         '',
+    quantities:     {},   // { [flightTypeId]: count }
+    method:         '',
+    invoice:        false,
+    invoice_number: null, // gardé si déjà généré
+  }
 }
 
-// ── Composant ────────────────────────────────────────────────────────────────
+/** Reconstruit les cartes depuis closure_data existant */
+function parseExistingGroups(closureData, flightTypes) {
+  const groups = closureData?.payment_groups
+  if (!groups?.length) return null
+
+  return groups.map(g => {
+    const quantities = {}
+
+    if (g.flight_lines?.length) {
+      // Nouveau format (flight_lines)
+      g.flight_lines.forEach(line => {
+        if (line.count > 0) quantities[line.flight_type_id] = line.count
+      })
+    } else if (g.passenger_ids && closureData?.passengers) {
+      // Ancien format : compter les passagers par type de vol
+      const paxInGroup = closureData.passengers.filter(p =>
+        g.passenger_ids.includes(p.id))
+      paxInGroup.forEach(p => {
+        if (p.actual_flight_type) {
+          quantities[p.actual_flight_type] = (quantities[p.actual_flight_type] || 0) + 1
+        }
+      })
+    }
+
+    // Décomposer le nom du payeur
+    const parts = (g.payer_name || '').trim().split(/\s+/)
+    const nom    = parts[0] || ''
+    const prenom = parts.slice(1).join(' ')
+
+    return {
+      id:             g.id || uid(),
+      nom,
+      prenom,
+      quantities,
+      method:         g.method || '',
+      invoice:        g.invoice === 'single',
+      invoice_number: g.invoice_number || null,
+    }
+  })
+}
+
+/** Calcule le sous-total d'une carte */
+function cardTotal(card, flightTypes) {
+  return Object.entries(card.quantities).reduce((sum, [ftId, count]) => {
+    const price = Number(flightTypes.find(t => t.id === ftId)?.price_eur) || 0
+    return sum + price * count
+  }, 0)
+}
+
+/** Vrai si la carte a au moins un vol */
+function hasFlights(card) {
+  return Object.values(card.quantities).some(v => v > 0)
+}
+
+// ── Composant ──────────────────────────────────────────────────────────────
 
 export default function FlightClosure({
   booking,
   pilot,
-  colleagues,
   flightTypes,
-  bookingAssignments,
   onDone,
   onCancel,
 }) {
-  const passengers  = booking.passengers || []
-  const flightDate  = booking.pilot_slots?.slot_date
+  const flightDate = booking.pilot_slots?.slot_date
     || new Date().toISOString().slice(0, 10)
 
-  // ── Pilote par défaut par passager ────────────────────────────────────────
-  function defaultPilotFor(index) {
-    const sortedFixed = (colleagues || [])
-      .filter(c => c.is_direct && c.is_fixed)
-      .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
-    const fixedIds = new Set(sortedFixed.map(c => c.id))
-    const freelancers = (bookingAssignments || [])
-      .filter(a => a.status === 'accepted' && !fixedIds.has(a.colleague_id))
-      .map(a => a.colleagues?.name).filter(Boolean)
-    if (index === 0) return sortedFixed[0]?.name || pilot.name
-    return sortedFixed[index]?.name
-      || freelancers[index - sortedFixed.length]
-      || pilot.name
-  }
-
-  // ── Config par passager (pilote + type de vol) ────────────────────────────
-  const [paxConfig, setPaxConfig] = useState(() => {
-    const cfg = {}
-    passengers.forEach((p, i) => {
-      cfg[p.id] = {
-        actualPilot:      defaultPilotFor(i),
-        actualFlightType: p.flight_type,
-      }
-    })
-    return cfg
+  // Cartes de paiement — pré-remplies depuis closure_data si disponible
+  const [cards, setCards] = useState(() => {
+    const existing = parseExistingGroups(booking.closure_data, flightTypes)
+    return existing?.length ? existing : [newCard()]
   })
-
-  function updatePax(id, key, val) {
-    setPaxConfig(prev => ({ ...prev, [id]: { ...prev[id], [key]: val } }))
-  }
-
-  // ── Groupes de paiement ───────────────────────────────────────────────────
-  // paxAssignment[paxId] = id du passager "chef de groupe"
-  // Initialement chaque passager est son propre chef de groupe.
-  const [paxAssignment, setPaxAssignment] = useState(() => {
-    const a = {}
-    passengers.forEach(p => { a[p.id] = p.id })
-    return a
-  })
-
-  // payConfig[chefId] = { payerName, method, invoice }
-  const [payConfig, setPayConfig] = useState(() => {
-    const c = {}
-    passengers.forEach((p, i) => {
-      c[p.id] = {
-        payerName: paxDisplayName(p, i),
-        method:    '',
-        invoice:   false,
-      }
-    })
-    return c
-  })
-
-  // Chefs de groupe actifs = passagers qui sont leur propre chef
-  const groupLeaders = passengers.filter(p => paxAssignment[p.id] === p.id)
-
-  function groupMembers(leaderId) {
-    return passengers.filter(p => paxAssignment[p.id] === leaderId)
-  }
-
-  function addToGroup(paxId, leaderId) {
-    setPaxAssignment(prev => ({ ...prev, [paxId]: leaderId }))
-  }
-
-  function removeFromGroup(paxId) {
-    // Redevient chef de son propre groupe
-    setPaxAssignment(prev => ({ ...prev, [paxId]: paxId }))
-  }
-
-  function updatePayConfig(leaderId, key, val) {
-    setPayConfig(prev => ({ ...prev, [leaderId]: { ...prev[leaderId], [key]: val } }))
-  }
-
-  // ── Prix ──────────────────────────────────────────────────────────────────
-  function priceOf(ftId) {
-    return Number(flightTypes.find(t => t.id === ftId)?.price_eur) || 0
-  }
-
-  function groupTotal(leaderId) {
-    return groupMembers(leaderId).reduce((s, p) => {
-      return s + priceOf(paxConfig[p.id]?.actualFlightType || p.flight_type)
-    }, 0)
-  }
-
-  function totalEur() {
-    return passengers.reduce((s, p) =>
-      s + priceOf(paxConfig[p.id]?.actualFlightType || p.flight_type), 0)
-  }
-
-  // ── Validation ────────────────────────────────────────────────────────────
-  const isValid = groupLeaders.every(p => !!payConfig[p.id]?.method)
 
   const [saving, setSaving] = useState(false)
 
-  // Tous les pilotes disponibles
-  const allPilotOptions = [
-    { name: pilot.name, label: `✈️ ${pilot.name} (moi)` },
-    ...(colleagues || []).map(c => ({ name: c.name, label: c.name })),
-  ]
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  function updateCard(id, key, val) {
+    setCards(prev => prev.map(c => c.id === id ? { ...c, [key]: val } : c))
+  }
+
+  function setQuantity(cardId, ftId, count) {
+    setCards(prev => prev.map(c => {
+      if (c.id !== cardId) return c
+      const q = { ...c.quantities }
+      if (count === 0) delete q[ftId]
+      else q[ftId] = count
+      return { ...c, quantities: q }
+    }))
+  }
+
+  function addCard() {
+    setCards(prev => [...prev, newCard()])
+  }
+
+  function removeCard(id) {
+    if (cards.length === 1) return // garder au moins une carte
+    setCards(prev => prev.filter(c => c.id !== id))
+  }
+
+  // ── Validation ────────────────────────────────────────────────────────────
+  // Au moins une carte avec des vols et une méthode
+  const validCards = cards.filter(c => hasFlights(c) && c.method)
+  const canSave    = validCards.length > 0
+
+  const grandTotal = cards.reduce((s, c) => s + cardTotal(c, flightTypes), 0)
 
   // ── Sauvegarde ────────────────────────────────────────────────────────────
+
   async function handleSave() {
-    if (!isValid) return
+    if (!canSave) return
     setSaving(true)
     try {
-      // 1. Passagers
-      const closurePassengers = passengers.map(p => ({
-        id:                 p.id,
-        name:               paxDisplayName(p, passengers.indexOf(p)),
-        actual_pilot:       paxConfig[p.id]?.actualPilot || pilot.name,
-        actual_flight_type: paxConfig[p.id]?.actualFlightType || p.flight_type,
-      }))
+      // Construire les groupes de paiement
+      const paymentGroups = cards
+        .filter(c => hasFlights(c) && c.method)
+        .map(c => {
+          const flight_lines = Object.entries(c.quantities)
+            .filter(([, count]) => count > 0)
+            .map(([ftId, count]) => {
+              const ft = flightTypes.find(t => t.id === ftId)
+              return {
+                flight_type_id: ftId,
+                label:          ft?.label || ftId,
+                count,
+                price_eur:      ft?.price_eur || 0,
+              }
+            })
 
-      // 2. Groupes de paiement
-      const paymentGroups = groupLeaders.map(leader => {
-        const members = groupMembers(leader.id)
-        const cfg     = payConfig[leader.id]
-        return {
-          passenger_ids: members.map(m => m.id),
-          method:        cfg.method,
-          invoice:       cfg.invoice ? 'single' : 'none',
-          payer_name:    cfg.payerName,
-        }
-      })
+          const payerName = [c.nom, c.prenom].filter(Boolean).join(' ') || '—'
+          return {
+            id:             c.id,
+            payer_name:     payerName,
+            method:         c.method,
+            invoice:        c.invoice ? 'single' : 'none',
+            flight_lines,
+            invoice_number: c.invoice_number, // conserver l'existant
+          }
+        })
 
-      // 3. Numéros de factures
+      // Attribuer des numéros de facture aux nouvelles demandes
       const dayPrefix = buildInvoiceNumber(flightDate, 0).replace('/0', '')
       const { data: todayInvoices } = await supabase
         .from('bookings')
@@ -189,119 +191,83 @@ export default function FlightClosure({
       let nextSeq = (todayInvoices?.length || 0) + 1
 
       for (const g of paymentGroups) {
-        if (g.invoice === 'single') {
+        if (g.invoice === 'single' && !g.invoice_number) {
           g.invoice_number = buildInvoiceNumber(flightDate, nextSeq++)
         }
       }
 
-      // 4. Persistance DB
-      const primaryPilot  = closurePassengers[0]?.actual_pilot || pilot.name
+      // Persistance
       const primaryMethod = paymentGroups[0]?.method || ''
       const firstInvNum   = paymentGroups.find(g => g.invoice_number)?.invoice_number || null
 
       const { error: dbErr } = await supabase.from('bookings').update({
-        flew_pilot_name: primaryPilot,
-        payment_method:  primaryMethod,
-        invoice_type:    'custom',
-        invoice_number:  firstInvNum,
-        paid_at:         new Date().toISOString(),
-        closure_data:    { passengers: closurePassengers, payment_groups: paymentGroups },
+        payment_method: primaryMethod,
+        invoice_type:   'custom',
+        invoice_number: firstInvNum,
+        paid_at:        new Date().toISOString(),
+        closure_data:   { payment_groups: paymentGroups },
       }).eq('id', booking.id)
 
       if (dbErr) throw dbErr
 
-      // 5. PDFs
+      // Génération des PDFs pour les nouvelles factures
       for (const g of paymentGroups) {
         if (g.invoice === 'single' && g.invoice_number) {
-          const paxInGroup = passengers.filter(p => g.passenger_ids.includes(p.id))
-          const lines = paxInGroup.map(p => {
-            const ft = flightTypes.find(t =>
-              t.id === (paxConfig[p.id]?.actualFlightType || p.flight_type))
-            return {
-              label:    ft ? `${ft.label} biplace` : 'Prestation biplace',
-              priceEur: ft?.price_eur || 0,
-            }
-          })
-          const doc = generateInvoice({
-            invoiceNumber: g.invoice_number,
-            date:          flightDate,
-            clientName:    g.payer_name || booking.contact_name || '—',
-            lines,
-          })
-          doc.save(invoiceFilename(g.invoice_number))
+          // Ne re-générer que si c'est nouveau (pas encore dans les cartes initiales)
+          const wasExisting = (booking.closure_data?.payment_groups || [])
+            .find(old => old.id === g.id && old.invoice_number === g.invoice_number)
+          if (!wasExisting) {
+            const lines = g.flight_lines.flatMap(line =>
+              Array(line.count).fill({
+                label:    `${line.label} biplace`,
+                priceEur: line.price_eur,
+              })
+            )
+            const doc = generateInvoice({
+              invoiceNumber: g.invoice_number,
+              date:          flightDate,
+              clientName:    g.payer_name,
+              lines,
+            })
+            doc.save(invoiceFilename(g.invoice_number))
+          }
         }
       }
 
-      // 6. Log
+      // Log activité (non-bloquant)
       try {
         await supabase.from('activity_log').insert({
           pilot_id:    pilot.id,
-          action:      'booking_closed',
+          action:      'booking_payment_saved',
           entity_type: 'booking',
           entity_id:   booking.id,
           details: {
             booking_ref:   booking.booking_ref,
-            contact_name:  booking.contact_name,
-            pax_count:     passengers.length,
             groups:        paymentGroups.length,
-            pilot:         primaryPilot,
+            pilot:         pilot.name,
           },
         })
       } catch (_) {}
 
-      // 7. Notifier le parent
+      // Mettre à jour les cartes avec les nouveaux invoice_number
+      setCards(prev => prev.map(c => {
+        const saved = paymentGroups.find(g => g.id === c.id)
+        return saved ? { ...c, invoice_number: saved.invoice_number } : c
+      }))
+
       onDone({
-        flew_pilot_name: primaryPilot,
-        payment_method:  primaryMethod,
-        invoice_type:    'custom',
-        invoice_number:  firstInvNum,
-        paid_at:         new Date().toISOString(),
-        closure_data:    { passengers: closurePassengers, payment_groups: paymentGroups },
+        payment_method: primaryMethod,
+        invoice_type:   'custom',
+        invoice_number: firstInvNum,
+        paid_at:        new Date().toISOString(),
+        closure_data:   { payment_groups: paymentGroups },
       })
 
     } catch (err) {
       console.error('[FlightClosure] save error:', err)
-      alert('Erreur lors de la clôture : ' + (err.message || err))
+      alert('Erreur lors de l\'enregistrement : ' + (err.message || err))
     } finally {
       setSaving(false)
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Styles inline (réutilisés)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const sectionLabel = {
-    fontSize: 11, fontWeight: 700, color: '#64748b',
-    textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6,
-  }
-
-  const cardStyle = {
-    background: '#1e293b',
-    borderRadius: 10,
-    padding: '11px 12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  }
-
-  function methodBtnStyle(active) {
-    return {
-      flex: 1, padding: '9px 4px', borderRadius: 8, cursor: 'pointer',
-      fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-      border:      active ? '2px solid #22c55e' : '1px solid #334155',
-      background:  active ? 'rgba(34,197,94,0.12)' : '#0f172a',
-      color:       active ? '#86efac' : '#94a3b8',
-    }
-  }
-
-  function invoiceBtnStyle(active) {
-    return {
-      flex: 1, padding: '8px 4px', borderRadius: 8, cursor: 'pointer',
-      fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-      border:      active ? '2px solid #a78bfa' : '1px solid #334155',
-      background:  active ? 'rgba(167,139,250,0.12)' : '#0f172a',
-      color:       active ? '#c4b5fd' : '#94a3b8',
     }
   }
 
@@ -317,218 +283,75 @@ export default function FlightClosure({
       padding: '14px 14px 12px',
       display: 'flex',
       flexDirection: 'column',
-      gap: 16,
+      gap: 14,
     }}>
       {/* Header */}
       <div style={{ fontSize: 12, fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '.6px' }}>
-        🛬 Clôture du vol
+        🛬 Paiements du vol
       </div>
 
-      {/* ── SECTION PASSAGERS ────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={sectionLabel}>Passagers &amp; pilotes</div>
+      {/* ── CARTES DE PAIEMENT ─────────────────────────────────────────── */}
+      {cards.map((card, cardIndex) => (
+        <PaymentCard
+          key={card.id}
+          card={card}
+          cardIndex={cardIndex}
+          flightTypes={flightTypes}
+          canRemove={cards.length > 1}
+          onNom={v    => updateCard(card.id, 'nom', v)}
+          onPrenom={v => updateCard(card.id, 'prenom', v)}
+          onQuantity={(ftId, count) => setQuantity(card.id, ftId, count)}
+          onMethod={v  => updateCard(card.id, 'method', v)}
+          onInvoice={v => updateCard(card.id, 'invoice', v)}
+          onRemove={() => removeCard(card.id)}
+          subtotal={cardTotal(card, flightTypes)}
+        />
+      ))}
 
-        {passengers.map((p, i) => {
-          const cfg      = paxConfig[p.id] || {}
-          const actualFt = cfg.actualFlightType || p.flight_type
-          const changed  = actualFt !== p.flight_type
+      {/* Ajouter un paiement */}
+      <button
+        onClick={addCard}
+        style={{
+          padding: '10px', borderRadius: 10, cursor: 'pointer',
+          border: '1.5px dashed #334155', background: 'transparent',
+          color: '#64748b', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+        }}>
+        + Ajouter un paiement
+      </button>
 
-          return (
-            <div key={p.id} style={cardStyle}>
-              <div style={{ fontSize: 13, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: '#e2e8f0' }}>{paxDisplayName(p, i)}</span>
-                {catLabel(p) && <span style={{ fontSize: 11, color: '#64748b' }}>{catLabel(p)}</span>}
-                {changed && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>· type modifié ↗</span>}
-              </div>
+      {/* ── TOTAL GÉNÉRAL ─────────────────────────────────────────────── */}
+      {cards.length > 1 && grandTotal > 0 && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '9px 12px',
+          background: 'rgba(56,189,248,0.05)',
+          border: '1px solid rgba(56,189,248,0.15)',
+          borderRadius: 8,
+        }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>
+            {cards.filter(c => hasFlights(c)).length} règlement{cards.filter(c => hasFlights(c)).length > 1 ? 's' : ''}
+          </span>
+          <span style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8' }}>
+            Total : {grandTotal} €
+          </span>
+        </div>
+      )}
 
-              <div style={{ display: 'flex', gap: 6 }}>
-                {/* Pilote */}
-                <select
-                  value={cfg.actualPilot || pilot.name}
-                  onChange={e => updatePax(p.id, 'actualPilot', e.target.value)}
-                  style={{
-                    flex: 1, background: '#0f172a', border: '1px solid #334155',
-                    borderRadius: 8, padding: '7px 8px', color: '#e2e8f0',
-                    fontSize: 13, fontFamily: 'inherit',
-                  }}>
-                  {allPilotOptions.map(pl => (
-                    <option key={pl.name} value={pl.name}>{pl.label}</option>
-                  ))}
-                </select>
-
-                {/* Type de vol */}
-                <select
-                  value={actualFt}
-                  onChange={e => updatePax(p.id, 'actualFlightType', e.target.value)}
-                  style={{
-                    flex: 1,
-                    background: changed ? 'rgba(245,158,11,0.08)' : '#0f172a',
-                    border:     changed ? '1.5px solid #f59e0b' : '1px solid #334155',
-                    borderRadius: 8, padding: '7px 8px',
-                    color:      changed ? '#fcd34d' : '#e2e8f0',
-                    fontSize: 13, fontFamily: 'inherit',
-                  }}>
-                  {flightTypes.map(ft => (
-                    <option key={ft.id} value={ft.id}>✈️ {ft.label} — {ft.price_eur}€</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ── SECTION RÈGLEMENT ────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={sectionLabel}>Règlement · {groupLeaders.length} règlement{groupLeaders.length > 1 ? 's' : ''}</div>
-
-        {groupLeaders.map(leader => {
-          const members     = groupMembers(leader.id)
-          const cfg         = payConfig[leader.id] || {}
-          // Autres chefs de groupe qui pourraient rejoindre ce groupe
-          const otherLeaders = groupLeaders.filter(l => l.id !== leader.id)
-          const subtotal    = groupTotal(leader.id)
-
-          return (
-            <div key={leader.id} style={{
-              ...cardStyle,
-              border: cfg.method
-                ? '1px solid rgba(34,197,94,0.25)'
-                : '1px solid #334155',
-            }}>
-              {/* Nom du payeur */}
-              <input
-                type="text"
-                value={cfg.payerName || ''}
-                onChange={e => updatePayConfig(leader.id, 'payerName', e.target.value)}
-                placeholder="Nom du payeur"
-                style={{
-                  background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-                  padding: '8px 10px', color: '#e2e8f0', fontSize: 14, fontWeight: 700,
-                  fontFamily: 'inherit', width: '100%', boxSizing: 'border-box',
-                }}
-              />
-
-              {/* Passagers couverts + bouton retirer */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {members.map(m => {
-                  const ft = flightTypes.find(t =>
-                    t.id === (paxConfig[m.id]?.actualFlightType || m.flight_type))
-                  const isPrimary = m.id === leader.id
-                  return (
-                    <div key={m.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      background: 'rgba(56,189,248,0.08)',
-                      border: '1px solid rgba(56,189,248,0.2)',
-                      borderRadius: 20, padding: '3px 8px',
-                      fontSize: 12, color: '#e2e8f0',
-                    }}>
-                      <span>{paxDisplayName(m, passengers.indexOf(m))}</span>
-                      <span style={{ color: '#64748b' }}>· {ft?.label} {ft?.price_eur}€</span>
-                      {!isPrimary && (
-                        <button
-                          onClick={() => removeFromGroup(m.id)}
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: '#64748b', fontSize: 13, padding: '0 0 0 2px',
-                            lineHeight: 1,
-                          }}
-                          title="Retirer de ce groupe">
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Ajouter d'autres passagers dans ce groupe */}
-              {otherLeaders.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>Ajouter :</span>
-                  {otherLeaders.map(other => (
-                    <button key={other.id}
-                      onClick={() => addToGroup(other.id, leader.id)}
-                      style={{
-                        padding: '3px 8px', borderRadius: 20, cursor: 'pointer',
-                        fontSize: 12, fontFamily: 'inherit',
-                        border: '1px dashed #475569',
-                        background: 'transparent', color: '#94a3b8',
-                      }}>
-                      + {paxDisplayName(other, passengers.indexOf(other))}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Mode de paiement */}
-              <div style={{ display: 'flex', gap: 5 }}>
-                {PAY_METHODS.map(pm => (
-                  <button key={pm.id}
-                    onClick={() => updatePayConfig(leader.id, 'method', pm.id)}
-                    style={methodBtnStyle(cfg.method === pm.id)}>
-                    {pm.icon}<br />{pm.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Facture */}
-              <div style={{ display: 'flex', gap: 5 }}>
-                <button
-                  onClick={() => updatePayConfig(leader.id, 'invoice', false)}
-                  style={invoiceBtnStyle(!cfg.invoice)}>
-                  🚫 Sans facture
-                </button>
-                <button
-                  onClick={() => updatePayConfig(leader.id, 'invoice', true)}
-                  style={invoiceBtnStyle(cfg.invoice)}>
-                  🧾 Avec facture
-                </button>
-              </div>
-
-              {/* Sous-total */}
-              <div style={{
-                display: 'flex', justifyContent: 'flex-end',
-                fontSize: 15, fontWeight: 800, color: '#38bdf8',
-              }}>
-                {subtotal} €
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ── TOTAL GÉNÉRAL ────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '9px 12px',
-        background: 'rgba(56,189,248,0.05)',
-        border: '1px solid rgba(56,189,248,0.15)',
-        borderRadius: 8,
-      }}>
-        <span style={{ fontSize: 12, color: '#64748b' }}>
-          {passengers.length} vol{passengers.length > 1 ? 's' : ''} · {groupLeaders.length} règlement{groupLeaders.length > 1 ? 's' : ''}
-        </span>
-        <span style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8' }}>
-          {totalEur()} €
-        </span>
-      </div>
-
-      {/* ── ACTIONS ──────────────────────────────────────────────────────── */}
+      {/* ── ACTIONS ───────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button
-          disabled={saving || !isValid}
+          disabled={saving || !canSave}
           onClick={handleSave}
           style={{
             flex: 2, padding: '12px', borderRadius: 10, border: 'none',
-            cursor: saving || !isValid ? 'not-allowed' : 'pointer',
-            background: saving || !isValid
+            cursor: saving || !canSave ? 'not-allowed' : 'pointer',
+            background: saving || !canSave
               ? '#1e293b'
               : 'linear-gradient(135deg,#1d4ed8,#2563eb)',
-            color:  saving || !isValid ? '#475569' : 'white',
+            color:  saving || !canSave ? '#475569' : 'white',
             fontWeight: 800, fontSize: 14, fontFamily: 'inherit',
           }}>
-          {saving ? '⏳ Enregistrement…' : '✓ Clôturer le vol'}
+          {saving ? '⏳ Enregistrement…' : '✓ Enregistrer les paiements'}
         </button>
         <button onClick={onCancel}
           style={{
@@ -537,9 +360,176 @@ export default function FlightClosure({
             color: '#94a3b8', fontWeight: 600, fontSize: 13,
             cursor: 'pointer', fontFamily: 'inherit',
           }}>
-          Annuler
+          Fermer
         </button>
       </div>
     </div>
   )
+}
+
+// ── Carte de paiement ──────────────────────────────────────────────────────
+
+function PaymentCard({
+  card, cardIndex, flightTypes,
+  canRemove,
+  onNom, onPrenom, onQuantity, onMethod, onInvoice, onRemove,
+  subtotal,
+}) {
+  const hasAny = hasFlights(card)
+
+  return (
+    <div style={{
+      background: '#1e293b',
+      borderRadius: 10,
+      padding: '12px 12px 10px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+      border: card.method && hasAny
+        ? '1px solid rgba(34,197,94,0.25)'
+        : '1px solid #334155',
+    }}>
+      {/* Titre + supprimer */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.4px' }}>
+          Règlement {cardIndex + 1}
+        </span>
+        {canRemove && (
+          <button onClick={onRemove}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontSize: 16, lineHeight: 1, padding: '0 2px' }}
+            title="Supprimer ce règlement">
+            🗑
+          </button>
+        )}
+      </div>
+
+      {/* Nom / Prénom */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          type="text" value={card.nom} onChange={e => onNom(e.target.value)}
+          placeholder="Nom"
+          style={inputStyle} />
+        <input
+          type="text" value={card.prenom} onChange={e => onPrenom(e.target.value)}
+          placeholder="Prénom"
+          style={inputStyle} />
+      </div>
+
+      {/* Types de vol + quantités */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {flightTypes.map(ft => (
+          <FlightTypeRow
+            key={ft.id}
+            ft={ft}
+            count={card.quantities[ft.id] || 0}
+            onChange={count => onQuantity(ft.id, count)}
+          />
+        ))}
+      </div>
+
+      {/* Méthode de paiement */}
+      <div style={{ display: 'flex', gap: 5 }}>
+        {PAY_METHODS.map(pm => (
+          <button key={pm.id}
+            onClick={() => onMethod(pm.id)}
+            style={{
+              flex: 1, padding: '9px 4px', borderRadius: 8, cursor: 'pointer',
+              fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              border:      card.method === pm.id ? '2px solid #22c55e' : '1px solid #334155',
+              background:  card.method === pm.id ? 'rgba(34,197,94,0.12)' : '#0f172a',
+              color:       card.method === pm.id ? '#86efac' : '#94a3b8',
+            }}>
+            {pm.icon}<br />{pm.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Facture */}
+      <div style={{ display: 'flex', gap: 5 }}>
+        <button onClick={() => onInvoice(false)}
+          style={invoiceBtnStyle(!card.invoice)}>
+          🚫 Sans facture
+        </button>
+        <button onClick={() => onInvoice(true)}
+          style={invoiceBtnStyle(card.invoice)}>
+          🧾 Avec facture
+        </button>
+      </div>
+
+      {/* Sous-total */}
+      {subtotal > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 15, fontWeight: 800, color: '#38bdf8' }}>
+          {subtotal} €
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Ligne type de vol + quantité ───────────────────────────────────────────
+
+function FlightTypeRow({ ft, count, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Label du type */}
+      <span style={{
+        flex: 1, fontSize: 13, color: count > 0 ? '#e2e8f0' : '#64748b',
+        fontWeight: count > 0 ? 700 : 400,
+      }}>
+        {ft.label}
+        {ft.price_eur && count === 0 && (
+          <span style={{ fontSize: 11, color: '#475569', marginLeft: 4 }}>{ft.price_eur}€</span>
+        )}
+        {count > 0 && (
+          <span style={{ fontSize: 11, color: '#38bdf8', marginLeft: 4 }}>
+            × {count} = {count * ft.price_eur}€
+          </span>
+        )}
+      </span>
+
+      {/* Sélecteur 0–4 */}
+      <div style={{ display: 'flex', gap: 3 }}>
+        {[0, 1, 2, 3, 4].map(n => (
+          <button key={n}
+            onClick={() => onChange(n)}
+            style={{
+              width: 30, height: 30, borderRadius: 6,
+              border: count === n
+                ? n === 0 ? '2px solid #475569' : '2px solid #38bdf8'
+                : '1px solid #334155',
+              background: count === n
+                ? n === 0 ? '#1e293b' : 'rgba(56,189,248,0.15)'
+                : '#0f172a',
+              color: count === n
+                ? n === 0 ? '#475569' : '#7dd3fc'
+                : '#475569',
+              fontSize: 13, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+              lineHeight: 1,
+            }}>
+            {n === 0 ? '—' : n}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Styles réutilisés ──────────────────────────────────────────────────────
+
+const inputStyle = {
+  flex: 1, background: '#0f172a', border: '1px solid #334155',
+  borderRadius: 8, padding: '8px 10px', color: '#e2e8f0',
+  fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box',
+  minWidth: 0,
+}
+
+function invoiceBtnStyle(active) {
+  return {
+    flex: 1, padding: '8px 4px', borderRadius: 8, cursor: 'pointer',
+    fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+    border:     active ? '2px solid #a78bfa' : '1px solid #334155',
+    background: active ? 'rgba(167,139,250,0.12)' : '#0f172a',
+    color:      active ? '#c4b5fd' : '#94a3b8',
+  }
 }
