@@ -430,7 +430,7 @@ export default function Dashboard({ pilot }) {
     if (slotIds.length > 0) {
       const { data } = await supabase
         .from('bookings')
-        .select('*, passengers(*), pilot_slots(slot_date, slot_time)')
+        .select('*, passengers(*), pilot_slots(id, slot_date, slot_time, is_available)')
         .in('pilot_slot_id', slotIds)
         .in('status', ['pending', 'confirmed'])
         .order('created_at')
@@ -515,7 +515,7 @@ export default function Dashboard({ pilot }) {
     let bookingsData = []
     if (slotIds.length > 0) {
       const { data } = await supabase
-        .from('bookings').select('*, passengers(*), pilot_slots(slot_date, slot_time)')
+        .from('bookings').select('*, passengers(*), pilot_slots(id, slot_date, slot_time, is_available)')
         .in('pilot_slot_id', slotIds)
         .in('status', ['pending', 'confirmed'])
         .order('created_at')
