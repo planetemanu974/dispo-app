@@ -183,6 +183,7 @@ export default function Dashboard({ pilot }) {
   const [menuOpen, setMenuOpen]               = useState(false)
   const [colleaguePanelOpen, setColleaguePanelOpen] = useState(false)
   const [colleagueRequestSlot, setColleagueRequestSlot] = useState(null) // { date, time } — set when opened from "Pas de pilote"
+  const [fixedPilotPicker, setFixedPilotPicker] = useState(null) // { bookingId, slotLabel, date, time } — quick picker for fixed pilots
   const [showSettings, setShowSettings]       = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
   const [showAssign, setShowAssign]           = useState(false) // AssignColleague drawer
@@ -274,7 +275,7 @@ export default function Dashboard({ pilot }) {
       // Load colleagues for pilot dropdown in closure section
       const { data: cols } = await supabase
         .from('colleagues')
-        .select('id, name')
+        .select('id, name, is_direct, is_fixed')
         .eq('pilot_id', pilot.id)
         .order('name')
       if (cols) setColleagues(cols)
@@ -1327,6 +1328,70 @@ export default function Dashboard({ pilot }) {
         />
       )}
 
+      {/* ── Picker pilotes fixes (depuis "Pas de pilote") ─────────────────── */}
+      {fixedPilotPicker && (() => {
+        const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
+        const d = new Date((fixedPilotPicker.date || '') + 'T00:00:00')
+        const days = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi']
+        const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
+        const slotLabel = fixedPilotPicker.date
+          ? `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}${fixedPilotPicker.time ? ' à ' + fixedPilotPicker.time.slice(0,5) : ''}`
+          : 'ce créneau'
+
+        async function assignFixed(colleague) {
+          // Insert a booking_assignment with status 'accepted' directly
+          const { error } = await supabase
+            .from('booking_assignments')
+            .insert({
+              booking_id:   fixedPilotPicker.bookingId,
+              colleague_id: colleague.id,
+              pilot_id:     pilot.id,
+              status:       'accepted',
+              note:         'Assigné directement (pilote fixe)',
+            })
+          if (error) { alert('Erreur lors de l\'assignation.'); return }
+          setFixedPilotPicker(null)
+          loadWeek(weekStart)
+        }
+
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+            onClick={e => { if (e.target === e.currentTarget) setFixedPilotPicker(null) }}
+          >
+            <div style={{ background: '#0f172a', borderRadius: '20px 20px 0 0', padding: '20px 20px env(safe-area-inset-bottom, 20px)', width: '100%', maxWidth: 480 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <h3 style={{ margin: 0, color: '#f1f5f9', fontSize: 16, fontWeight: 700 }}>⭐ Assigner un pilote fixe</h3>
+                <button onClick={() => setFixedPilotPicker(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 22, cursor: 'pointer' }}>×</button>
+              </div>
+              <p style={{ color: '#64748b', fontSize: 13, marginTop: 0, marginBottom: 16 }}>📅 {slotLabel}</p>
+
+              {fixedPilots.map(fp => (
+                <button
+                  key={fp.id}
+                  onClick={() => assignFixed(fp)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', background: '#1c1a0e', border: '1px solid #78350f55', borderRadius: 10, padding: '13px 16px', marginBottom: 8, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  <span style={{ fontWeight: 700, color: '#fcd34d', fontSize: 15 }}>⭐ {fp.name}</span>
+                </button>
+              ))}
+
+              {/* Option : ouvrir le panneau complet pour envoyer un SMS */}
+              <button
+                onClick={() => {
+                  setFixedPilotPicker(null)
+                  setColleagueRequestSlot({ date: fixedPilotPicker.date, time: fixedPilotPicker.time })
+                  setColleaguePanelOpen(true)
+                }}
+                style={{ width: '100%', marginTop: 6, padding: '11px', background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                💬 Envoyer un SMS à un collègue
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ColleaguePanel — déclenché uniquement depuis le menu */}
       <ColleaguePanel
         pilot={pilot}
@@ -2011,12 +2076,18 @@ export default function Dashboard({ pilot }) {
                       <button
                         onClick={e => {
                           e.stopPropagation()
-                          setColleagueRequestSlot({
-                            date: bk.pilot_slots?.slot_date,
-                            time: bk.pilot_slots?.slot_time,
-                          })
-                          setSelectedSlotBookings([])
-                          setColleaguePanelOpen(true)
+                          const slotDate = bk.pilot_slots?.slot_date
+                          const slotTime = bk.pilot_slots?.slot_time
+                          const fixedPilots = colleagues.filter(c => c.is_direct && c.is_fixed)
+                          if (fixedPilots.length > 0) {
+                            // Show quick picker for fixed pilots
+                            setFixedPilotPicker({ bookingId: bk.id, date: slotDate, time: slotTime })
+                          } else {
+                            // No fixed pilots — open full ColleaguePanel with SMS
+                            setColleagueRequestSlot({ date: slotDate, time: slotTime })
+                            setSelectedSlotBookings([])
+                            setColleaguePanelOpen(true)
+                          }
                         }}
                         style={{ padding: '3px 8px', borderRadius: 6, background: '#dc2626', color: 'white', fontSize: '0.72rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                         🚨 Pas de pilote

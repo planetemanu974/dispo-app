@@ -192,7 +192,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct, notes')
+      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct, is_fixed, notes')
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -322,6 +322,18 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
     setDetailColleague(prev => ({ ...prev, active: newActive }))
+    loadColleagues()
+  }
+
+  // ── Basculer pilote fixe / indépendant ───────────────────────────────────
+  async function handleToggleFixed() {
+    const newFixed = !detailColleague.is_fixed
+    await supabase
+      .from('colleagues')
+      .update({ is_fixed: newFixed })
+      .eq('id', detailColleague.id)
+      .eq('pilot_id', pilot.id)
+    setDetailColleague(prev => ({ ...prev, is_fixed: newFixed }))
     loadColleagues()
   }
 
@@ -540,6 +552,21 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                   {/* Séparateur */}
                   <div style={{ borderTop: '1px solid #1e293b', margin: '12px 0 14px' }} />
 
+                  {/* ── Section : Pilotes fixes ─────────────────────────── */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>⭐ Pilotes fixes</span>
+                  </div>
+
+                  {!colLoading && (() => {
+                    const fixed = colleagues.filter(c => c.is_direct && c.is_fixed)
+                    return fixed.length === 0
+                      ? <p style={{ ...s.muted, padding: '6px 0 10px', textAlign: 'left', fontSize: 12 }}>Aucun pilote fixe. Promouvez un pilote indépendant depuis sa fiche.</p>
+                      : fixed.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} badge="⭐" />)
+                  })()}
+
+                  {/* Séparateur */}
+                  <div style={{ borderTop: '1px solid #1e293b', margin: '12px 0 14px' }} />
+
                   {/* ── Section : Pilotes indépendants ─────────────────── */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>👨‍✈️ Pilotes indépendants</span>
@@ -552,9 +579,9 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
                   </div>
 
                   {!colLoading && (() => {
-                    const directs = colleagues.filter(c => c.is_direct)
+                    const directs = colleagues.filter(c => c.is_direct && !c.is_fixed)
                     return directs.length === 0
-                      ? <p style={{ ...s.muted, padding: '10px 0', textAlign: 'left' }}>Aucun pilote ajouté.</p>
+                      ? <p style={{ ...s.muted, padding: '10px 0', textAlign: 'left' }}>Aucun pilote indépendant.</p>
                       : directs.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} />)
                   })()}
                 </div>
@@ -646,7 +673,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
           </h3>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 12 }}>
             {detailColleague.is_direct
-              ? '👨‍✈️ Pilote indépendant'
+              ? (detailColleague.is_fixed ? '⭐ Pilote fixe' : '👨‍✈️ Pilote indépendant')
               : (detailColleague.active
                   ? (detailColleague.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
                   : '🚫 Accès révoqué')}
@@ -781,13 +808,29 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
 
           {/* Actions selon le type */}
           {detailColleague.is_direct ? (
-            /* Pilote direct : uniquement supprimer */
-            <button
-              onClick={handleDeleteColleague}
-              style={{ width: '100%', marginTop: 10, padding: '10px', background: '#7f1d1d33', color: '#fca5a5', border: '1px solid #7f1d1d55', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🗑️ Supprimer ce pilote
-            </button>
+            /* Pilote direct : bascule fixe/indépendant + supprimer */
+            <>
+              <button
+                onClick={handleToggleFixed}
+                style={{
+                  width: '100%', marginTop: 10, padding: '11px',
+                  background: detailColleague.is_fixed ? '#1e293b' : '#451a0333',
+                  color: detailColleague.is_fixed ? '#94a3b8' : '#fcd34d',
+                  border: detailColleague.is_fixed ? '1px solid #334155' : '1px solid #92400e55',
+                  borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {detailColleague.is_fixed
+                  ? '👨‍✈️ Remettre en pilote indépendant'
+                  : '⭐ Passer en pilote fixe'}
+              </button>
+              <button
+                onClick={handleDeleteColleague}
+                style={{ width: '100%', marginTop: 8, padding: '10px', background: '#7f1d1d33', color: '#fca5a5', border: '1px solid #7f1d1d55', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🗑️ Supprimer ce pilote
+              </button>
+            </>
           ) : (
             /* Structure : révoquer / réactiver + supprimer */
             <>
@@ -892,27 +935,30 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot 
 }
 
 // ── Carte collègue réutilisable ───────────────────────────────────────────────
-function ColleagueCard({ c, onOpen }) {
+function ColleagueCard({ c, onOpen, badge }) {
   return (
     <button
       onClick={() => onOpen(c)}
       style={{
-        width: '100%', textAlign: 'left', background: '#1e293b',
-        border: '1px solid #334155', borderRadius: 10, padding: '12px 14px',
+        width: '100%', textAlign: 'left',
+        background: c.is_fixed ? '#1c1a0e' : '#1e293b',
+        border: c.is_fixed ? '1px solid #78350f55' : '1px solid #334155',
+        borderRadius: 10, padding: '12px 14px',
         marginBottom: 8, cursor: 'pointer', opacity: c.active ? 1 : 0.55,
         fontFamily: 'inherit',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14, marginBottom: 3 }}>
+          <div style={{ fontWeight: 700, color: c.is_fixed ? '#fcd34d' : '#f1f5f9', fontSize: 14, marginBottom: 3 }}>
+            {badge && <span style={{ marginRight: 4 }}>{badge}</span>}
             {c.name || <em style={{ color: '#64748b' }}>Sans nom</em>}
           </div>
           <div style={{ fontSize: 11, color: '#64748b' }}>
             {c.is_direct
               ? (c.notes
                   ? <span style={{ fontStyle: 'italic', color: '#f59e0b' }}>📝 {c.notes.length > 40 ? c.notes.slice(0, 38) + '…' : c.notes}</span>
-                  : (c.phone ? `📞 ${c.phone}` : '👨‍✈️ Pilote indépendant'))
+                  : (c.phone ? `📞 ${c.phone}` : (c.is_fixed ? '⭐ Pilote fixe' : '👨‍✈️ Pilote indépendant')))
               : (c.active
                   ? (c.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
                   : '🚫 Accès révoqué')}
