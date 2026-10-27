@@ -566,7 +566,9 @@ export default function Dashboard({ pilot }) {
       }
     } else {
       // ── Currently PRESENT → make ABSENT: insert new entry ─────────────────
+      // pilot_id is required by the table (RLS policy: pilot_id = auth.uid())
       const newEntry = {
+        pilot_id:     pilot.id,
         colleague_id: colleagueId,
         start_date:   dateStr,
         end_date:     dateStr,
