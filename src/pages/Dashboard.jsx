@@ -5,6 +5,7 @@ import ColleaguePanel from './ColleaguePanel'
 import Settings from './Settings'
 import History from './History'
 import AssignColleague from '../components/AssignColleague'
+import FlightClosure from '../components/FlightClosure'
 import { useSettings } from '../contexts/SettingsContext'
 import { buildInvoiceNumber, downloadInvoice, invoiceFilename } from '../lib/invoice'
 
@@ -2978,120 +2979,64 @@ export default function Dashboard({ pilot }) {
                 {/* ── CLÔTURE DU VOL ──────────────────────────────────────────── */}
                 {selectedBooking.status === 'confirmed' && (
                   selectedBooking.paid_at ? (
-                    /* Already closed — summary badge */
+                    /* Already closed — summary badge (reads closure_data if present) */
                     <div style={{ margin:'10px 0', padding:'12px 14px', background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:10 }}>
                       <div style={{ fontSize:11, fontWeight:700, color:'#4ade80', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>
                         ✅ Vol clôturé
                       </div>
-                      <div style={{ fontSize:13, color:'#94a3b8', display:'flex', flexWrap:'wrap', gap:'6px 16px' }}>
-                        <span>🧑‍✈️ {selectedBooking.flew_pilot_name || '—'}</span>
-                        <span>{{ card:'💳 Carte', cash:'💶 Espèces', wero:'📲 Wero' }[selectedBooking.payment_method] || selectedBooking.payment_method || '—'}</span>
-                        {selectedBooking.invoice_number && <span>🧾 {selectedBooking.invoice_number}</span>}
-                      </div>
+                      {selectedBooking.closure_data ? (
+                        /* Rich closure_data summary */
+                        <div style={{ fontSize:12, color:'#94a3b8', display:'flex', flexDirection:'column', gap:4 }}>
+                          {(selectedBooking.closure_data.passengers || []).map((p, i) => (
+                            <div key={p.id || i} style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                              <span style={{ color:'#e2e8f0', fontWeight:600 }}>{p.name || `Pax ${i+1}`}</span>
+                              <span>🧑‍✈️ {p.actual_pilot}</span>
+                              <span>✈️ {flightTypes.find(t => t.id === p.actual_flight_type)?.label || p.actual_flight_type}</span>
+                            </div>
+                          ))}
+                          {(selectedBooking.closure_data.payment_groups || []).map((g, i) => (
+                            <div key={i} style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:2 }}>
+                              <span>{{ cash:'💶 Espèces', check:'✅ Chèque', wero:'📲 Wero' }[g.method] || g.method}</span>
+                              {g.invoice_number && <span>🧾 {g.invoice_number}</span>}
+                              {(g.invoice_numbers || []).map(inv => (
+                                <span key={inv.number}>🧾 {inv.number}</span>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        /* Legacy single-pilot closure */
+                        <div style={{ fontSize:13, color:'#94a3b8', display:'flex', flexWrap:'wrap', gap:'6px 16px' }}>
+                          <span>🧑‍✈️ {selectedBooking.flew_pilot_name || '—'}</span>
+                          <span>{{ card:'💳 Carte', cash:'💶 Espèces', wero:'📲 Wero' }[selectedBooking.payment_method] || selectedBooking.payment_method || '—'}</span>
+                          {selectedBooking.invoice_number && <span>🧾 {selectedBooking.invoice_number}</span>}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     /* Not yet closed */
                     <div style={{ margin:'10px 0' }}>
                       {!showClosure ? (
                         <button
-                          onClick={() => { setShowClosure(true); setClosureData({ pilotName: 'Capitaine', paymentMethod: '', invoiceType: 'none' }) }}
+                          onClick={() => setShowClosure(true)}
                           style={{ width:'100%', padding:'11px', background:'linear-gradient(135deg,#0f2a4a,#0c1e35)', border:'1.5px solid #1d4ed8', borderRadius:10, color:'#93c5fd', fontWeight:700, fontSize:14, cursor:'pointer' }}>
                           🛬 Clôturer ce vol
                         </button>
                       ) : (
-                        <div style={{ background:'#0f172a', border:'1px solid #1e293b', borderRadius:12, padding:'14px 14px 10px', display:'flex', flexDirection:'column', gap:12 }}>
-                          <div style={{ fontSize:12, fontWeight:800, color:'#38bdf8', textTransform:'uppercase', letterSpacing:'.6px' }}>
-                            🛬 Clôture du vol
-                          </div>
-
-                          {/* Pilote ayant volé */}
-                          <div>
-                            <label style={{ fontSize:11, color:'#64748b', fontWeight:700, textTransform:'uppercase', letterSpacing:'.4px', display:'block', marginBottom:5 }}>
-                              Pilote ayant volé
-                            </label>
-                            <select
-                              value={closureData.pilotName}
-                              onChange={e => setClosureData(d => ({ ...d, pilotName: e.target.value }))}
-                              style={{ width:'100%', background:'#1e293b', border:'1px solid #334155', borderRadius:8, padding:'8px 10px', color:'#e2e8f0', fontSize:14 }}>
-                              <option value="Capitaine">✈️ Capitaine (moi)</option>
-                              {colleagues.map(c => (
-                                <option key={c.id} value={c.name}>{c.name}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Mode de paiement */}
-                          <div>
-                            <label style={{ fontSize:11, color:'#64748b', fontWeight:700, textTransform:'uppercase', letterSpacing:'.4px', display:'block', marginBottom:5 }}>
-                              Mode de paiement
-                            </label>
-                            <div style={{ display:'flex', gap:6 }}>
-                              {[
-                                { id:'card', icon:'💳', label:'Carte' },
-                                { id:'cash', icon:'💶', label:'Espèces' },
-                                { id:'wero', icon:'📲', label:'Wero' },
-                              ].map(pm => (
-                                <button key={pm.id}
-                                  onClick={() => setClosureData(d => ({ ...d, paymentMethod: pm.id }))}
-                                  style={{
-                                    flex:1, padding:'9px 4px', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700,
-                                    border: closureData.paymentMethod === pm.id ? '2px solid #38bdf8' : '1px solid #334155',
-                                    background: closureData.paymentMethod === pm.id ? 'rgba(56,189,248,0.12)' : '#1e293b',
-                                    color: closureData.paymentMethod === pm.id ? '#38bdf8' : '#94a3b8',
-                                  }}>
-                                  {pm.icon}<br />{pm.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Facture */}
-                          <div>
-                            <label style={{ fontSize:11, color:'#64748b', fontWeight:700, textTransform:'uppercase', letterSpacing:'.4px', display:'block', marginBottom:5 }}>
-                              Facture
-                            </label>
-                            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                              {[
-                                { id:'none',       icon:'🚫', label:'Pas de facture' },
-                                { id:'single',     icon:'🧾', label:'Facture commune', sub:'1 PDF — payeur : ' + (selectedBooking.contact_name || 'contact') },
-                                { id:'individual', icon:'📄', label:'Factures individuelles', sub:`${selectedBooking.passengers?.length || 1} PDF — 1 par passager` },
-                              ].map(inv => (
-                                <button key={inv.id}
-                                  onClick={() => setClosureData(d => ({ ...d, invoiceType: inv.id }))}
-                                  style={{
-                                    display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, cursor:'pointer', textAlign:'left',
-                                    border: closureData.invoiceType === inv.id ? '2px solid #38bdf8' : '1px solid #334155',
-                                    background: closureData.invoiceType === inv.id ? 'rgba(56,189,248,0.08)' : '#1e293b',
-                                  }}>
-                                  <span style={{ fontSize:18 }}>{inv.icon}</span>
-                                  <div>
-                                    <div style={{ fontSize:13, fontWeight:700, color: closureData.invoiceType === inv.id ? '#38bdf8' : '#e2e8f0' }}>{inv.label}</div>
-                                    {inv.sub && <div style={{ fontSize:11, color:'#64748b', marginTop:1 }}>{inv.sub}</div>}
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Action buttons */}
-                          <div style={{ display:'flex', gap:8, marginTop:4 }}>
-                            <button
-                              disabled={closureSaving || !closureData.paymentMethod}
-                              onClick={handleClosure}
-                              style={{
-                                flex:2, padding:'11px', borderRadius:10, border:'none', cursor: closureSaving || !closureData.paymentMethod ? 'not-allowed' : 'pointer',
-                                background: closureSaving || !closureData.paymentMethod ? '#1e293b' : 'linear-gradient(135deg,#1d4ed8,#2563eb)',
-                                color: closureSaving || !closureData.paymentMethod ? '#475569' : 'white', fontWeight:700, fontSize:14,
-                              }}>
-                              {closureSaving ? '⏳ Enregistrement…' : '✓ Clôturer'}
-                            </button>
-                            <button
-                              onClick={() => setShowClosure(false)}
-                              style={{ flex:1, padding:'11px', borderRadius:10, border:'1px solid #334155', background:'#1e293b', color:'#94a3b8', fontWeight:600, fontSize:13, cursor:'pointer' }}>
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
+                        <FlightClosure
+                          booking={selectedBooking}
+                          pilot={{ id: pilot.id, name: pilot.sms_name || 'Capitaine' }}
+                          colleagues={colleagues}
+                          flightTypes={flightTypes}
+                          bookingAssignments={bookingAssignments}
+                          onDone={(patch) => {
+                            setSelectedBooking(prev => ({ ...prev, ...patch }))
+                            setShowClosure(false)
+                            loadDay(selectedDate)
+                            loadWeek(weekStart)
+                          }}
+                          onCancel={() => setShowClosure(false)}
+                        />
                       )}
                     </div>
                   )
