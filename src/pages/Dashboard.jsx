@@ -1237,17 +1237,22 @@ export default function Dashboard({ pilot }) {
           )}
         </button>
 
-        {/* Toggle Semaine / Jour — prend l'espace restant */}
-        <div style={{ display:'flex', gap:6, flex:1, justifyContent:'center' }}>
+        {/* Toggle Semaine / Jour / Pilotes — prend l'espace restant */}
+        <div style={{ display:'flex', gap:5, flex:1, justifyContent:'center' }}>
           <button
-            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            style={{ flex:1, maxWidth:95, padding:'7px 6px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => setViewMode('week')}>
             📅 Semaine
           </button>
           <button
-            style={{ flex:1, maxWidth:120, padding:'7px 8px', fontSize:'0.82rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            style={{ flex:1, maxWidth:95, padding:'7px 6px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => { setViewMode('day'); loadDay(selectedDate); loadPlanning(selectedDate) }}>
             📋 Jour
+          </button>
+          <button
+            style={{ flex:1, maxWidth:95, padding:'7px 6px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='pilots' ? '#fff' : '#222', color: viewMode==='pilots' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            onClick={() => setViewMode('pilots')}>
+            🧑‍✈️ Pilotes
           </button>
         </div>
 
@@ -2288,6 +2293,208 @@ export default function Dashboard({ pilot }) {
           </div>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          PILOTS PLANNING VIEW
+         ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'pilots' && (() => {
+        // All fixed pilots sorted by fixed_order (includes main pilot at order=1)
+        const fixedPilots = colleagues
+          .filter(c => c.is_direct && c.is_fixed)
+          .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
+
+        // Collect all unique slot times across the week
+        const slotTimesSet = new Set()
+        weekDays.forEach(date => {
+          const { slots = [] } = weekData[date] || {}
+          slots.forEach(s => { if (s.slot_time) slotTimesSet.add(s.slot_time.slice(0,5)) })
+        })
+        const slotTimes = Array.from(slotTimesSet).sort()
+
+        return (
+          <div style={{ padding:'0 0 40px' }}>
+            {/* Navigation semaine */}
+            <div className="week-nav">
+              <button className="btn-ghost" onClick={() => changeWeek(-1)}>‹ Préc.</button>
+              <span className="week-nav-label">{weekRangeLabel()}</span>
+              <button className="btn-ghost" onClick={() => changeWeek(1)}>Suiv. ›</button>
+            </div>
+
+            {weekLoading ? <p className="loading">Chargement...</p> : (
+              <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+                <table style={{
+                  width:'100%', borderCollapse:'collapse', fontSize:'0.78rem',
+                  minWidth: 320
+                }}>
+                  <thead>
+                    <tr>
+                      {/* Pilot name column header */}
+                      <th style={{
+                        padding:'6px 8px', textAlign:'left', background:'#0f172a',
+                        color:'#94a3b8', fontWeight:700, borderBottom:'2px solid #1e293b',
+                        position:'sticky', left:0, zIndex:2, minWidth:90
+                      }}>Pilote</th>
+                      {/* Day columns */}
+                      {weekDays.map((date, colIdx) => {
+                        const d = new Date(date + 'T00:00:00')
+                        const isToday = date === TODAY
+                        return (
+                          <th key={date} style={{
+                            padding:'6px 4px', textAlign:'center', background: isToday ? '#172554' : '#0f172a',
+                            color: isToday ? '#93c5fd' : '#94a3b8', fontWeight:700,
+                            borderBottom:'2px solid #1e293b', borderLeft:'1px solid #1e293b',
+                            minWidth: slotTimes.length > 0 ? Math.max(40, slotTimes.length * 22) : 48
+                          }}>
+                            <div style={{ fontSize:'0.6rem', textTransform:'uppercase' }}>
+                              {DAY_LABELS[colIdx]}
+                            </div>
+                            <div style={{ fontSize:'0.85rem', fontWeight:800 }}>
+                              {d.getDate()}
+                            </div>
+                          </th>
+                        )
+                      })}
+                    </tr>
+                    {/* Sub-header: slot times */}
+                    {slotTimes.length > 1 && (
+                      <tr>
+                        <th style={{
+                          padding:'4px 8px', background:'#0f172a', borderBottom:'1px solid #1e293b',
+                          position:'sticky', left:0, zIndex:2
+                        }} />
+                        {weekDays.map(date => (
+                          <th key={date} style={{
+                            padding:'2px 2px', background:'#0a1020',
+                            borderBottom:'1px solid #1e293b', borderLeft:'1px solid #1e293b'
+                          }}>
+                            <div style={{ display:'flex', justifyContent:'center', gap:2 }}>
+                              {slotTimes.map(t => (
+                                <span key={t} style={{
+                                  fontSize:'0.55rem', color:'#475569', fontWeight:600,
+                                  minWidth:18, textAlign:'center'
+                                }}>{t}</span>
+                              ))}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    )}
+                  </thead>
+                  <tbody>
+                    {fixedPilots.map((pilot, rowIdx) => {
+                      const isMainPilot = pilot.fixed_order === 1
+                      return (
+                        <tr key={pilot.id} style={{ background: rowIdx % 2 === 0 ? '#0f172a' : '#111827' }}>
+                          {/* Pilot name cell */}
+                          <td style={{
+                            padding:'8px 8px', fontWeight:700, color: isMainPilot ? '#f8fafc' : '#cbd5e1',
+                            borderBottom:'1px solid #1e293b', whiteSpace:'nowrap',
+                            position:'sticky', left:0, background: rowIdx % 2 === 0 ? '#0f172a' : '#111827',
+                            zIndex:1
+                          }}>
+                            {pilot.name}
+                            {isMainPilot && (
+                              <span style={{ marginLeft:5, fontSize:'0.6rem', color:'#6366f1', fontWeight:800 }}>MOI</span>
+                            )}
+                          </td>
+                          {/* Day cells */}
+                          {weekDays.map(date => {
+                            const { slots: daySlots = [] } = weekData[date] || {}
+                            const isToday = date === TODAY
+
+                            if (slotTimes.length === 0) {
+                              // No slots at all for this day — show neutral cell
+                              return (
+                                <td key={date} style={{
+                                  padding:'6px 4px', textAlign:'center',
+                                  borderBottom:'1px solid #1e293b', borderLeft:'1px solid #1e293b',
+                                  background: isToday ? '#0d1b3e' : undefined
+                                }}>
+                                  <span style={{ color:'#334155', fontSize:'0.65rem' }}>—</span>
+                                </td>
+                              )
+                            }
+
+                            return (
+                              <td key={date} style={{
+                                padding:'6px 4px', textAlign:'center',
+                                borderBottom:'1px solid #1e293b', borderLeft:'1px solid #1e293b',
+                                background: isToday ? '#0d1b3e' : undefined
+                              }}>
+                                <div style={{ display:'flex', justifyContent:'center', gap:3, flexWrap:'wrap' }}>
+                                  {slotTimes.map(slotTime => {
+                                    // Check if this slot exists on this day
+                                    const slotExists = daySlots.some(s => s.slot_time?.slice(0,5) === slotTime)
+                                    const unavail = isColleagueUnavailable(pilot.id, date, slotTime + ':00')
+
+                                    if (!slotExists) {
+                                      // Slot doesn't exist this day
+                                      return (
+                                        <span key={slotTime} style={{
+                                          width:18, height:18, borderRadius:4,
+                                          background:'#1e293b', display:'inline-flex',
+                                          alignItems:'center', justifyContent:'center',
+                                          fontSize:'0.5rem', color:'#334155'
+                                        }}>–</span>
+                                      )
+                                    }
+
+                                    return (
+                                      <span key={slotTime} title={unavail ? `${pilot.name} absent — ${slotTime}` : `${pilot.name} présent — ${slotTime}`}
+                                        style={{
+                                          width:18, height:18, borderRadius:4,
+                                          background: unavail ? '#7f1d1d' : '#14532d',
+                                          border: `1px solid ${unavail ? '#dc2626' : '#16a34a'}`,
+                                          display:'inline-flex', alignItems:'center',
+                                          justifyContent:'center', fontSize:'0.6rem',
+                                          cursor:'default'
+                                        }}>
+                                        {unavail ? '✗' : '✓'}
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Legend */}
+                <div style={{
+                  display:'flex', gap:16, padding:'12px 16px', marginTop:8,
+                  fontSize:'0.75rem', color:'#94a3b8', flexWrap:'wrap'
+                }}>
+                  <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{
+                      width:14, height:14, borderRadius:3, background:'#14532d',
+                      border:'1px solid #16a34a', display:'inline-block'
+                    }} />
+                    Présent
+                  </span>
+                  <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{
+                      width:14, height:14, borderRadius:3, background:'#7f1d1d',
+                      border:'1px solid #dc2626', display:'inline-block'
+                    }} />
+                    Absent
+                  </span>
+                  <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{
+                      width:14, height:14, borderRadius:3, background:'#1e293b',
+                      display:'inline-block'
+                    }} />
+                    Pas de créneau
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Booking detail modal (shared by both views) ── */}
       {selectedBooking && (
