@@ -1883,7 +1883,7 @@ export default function Dashboard({ pilot }) {
                           onChange={e => updatePax({ lastName: e.target.value })} />
                       </div>
                     </div>
-                    {/* Catégorie + Vol */}
+                    {/* Catégorie uniquement — le vol est déterminé par les compteurs en haut */}
                     <div className="field-row" style={{ display:'flex', gap:8 }}>
                       <div style={{ flex:1 }}>
                         <label className="edit-label">Catégorie</label>
@@ -1899,14 +1899,10 @@ export default function Dashboard({ pilot }) {
                           ))}
                         </select>
                       </div>
-                      <div style={{ flex:1 }}>
-                        <label className="edit-label">Vol souhaité</label>
-                        <select className="edit-input" value={p.vol} disabled={isChild}
-                          onChange={e => updatePax({ vol: e.target.value })}>
-                          {flightTypes.map(ft => (
-                            <option key={ft.id} value={ft.id}>{ft.label} ({ft.price_eur} €)</option>
-                          ))}
-                        </select>
+                      <div style={{ flex:1, display:'flex', alignItems:'flex-end', paddingBottom:2 }}>
+                        <span style={{ fontSize:'0.8rem', color:'#64748b', background:'rgba(99,102,241,.08)', borderRadius:6, padding:'6px 10px', width:'100%', textAlign:'center' }}>
+                          {flightTypes.find(f => f.id === p.vol)?.label || p.vol}
+                        </span>
                       </div>
                     </div>
                     {isChild && (
