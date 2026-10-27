@@ -2227,12 +2227,15 @@ export default function Dashboard({ pilot }) {
                 </div>
                 <div className="modal-passengers">
                   {selectedBooking.passengers?.map((p, i) => {
-                    // Passenger 1 → main pilot; passengers 2+ → accepted colleagues (in order)
+                    // Passenger 1 → fixed pilot N°1 name; passengers 2+ → accepted colleagues (in order)
                     const acceptedAssigns = bookingAssignments
                       .filter(a => a.status === 'accepted')
                       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                    const sortedFixed = colleagues
+                      .filter(c => c.is_direct && c.is_fixed)
+                      .sort((a, b) => (a.fixed_order ?? 99) - (b.fixed_order ?? 99))
                     const pilotName = i === 0
-                      ? pilot.name
+                      ? (sortedFixed[0]?.name || pilot.name)  // N°1 fixed pilot (= main pilot)
                       : (acceptedAssigns[i - 1]?.colleagues?.name || null)
                     return (
                       <div key={p.id} className="modal-pax-card">
