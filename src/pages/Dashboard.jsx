@@ -162,6 +162,8 @@ export default function Dashboard({ pilot }) {
   const [weekLoading, setWeekLoading]         = useState(false)
   // Fixed pilot unavailability for current week (loaded in loadWeek)
   const [fixedUnavailability, setFixedUnavailability] = useState([])
+  // Slot clicked in week view for toggle-availability mini-modal
+  const [slotToggleTarget, setSlotToggleTarget]       = useState(null) // slot object | null
 
   // Day view state
   const [selectedDate, setSelectedDate]       = useState(null)
@@ -1765,7 +1767,10 @@ export default function Dashboard({ pilot }) {
                             className={status}
                             style={{ position:'absolute', left:4, right:4, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
-                              if (activeBks.length > 1) {
+                              if (!slot.is_available && activeBks.length === 0) {
+                                // Closed slot — open mini modal to reopen
+                                setSlotToggleTarget(slot)
+                              } else if (activeBks.length > 1) {
                                 // Multiple bookings on this slot — show selector
                                 setSelectedSlotBookings(activeBks)
                               } else if (firstActive) {
@@ -2239,6 +2244,38 @@ export default function Dashboard({ pilot }) {
                 {nbSaving ? 'Enregistrement...' : '✓ Confirmer la résa'}
               </button>
               <button className="btn-refuse" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mini modal: reopen a closed (grey) slot ─────────────────────── */}
+      {slotToggleTarget && (
+        <div className="modal-overlay" onClick={() => setSlotToggleTarget(null)}>
+          <div className="modal" style={{ maxWidth: 340 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 style={{ fontSize: '1rem' }}>🔒 Créneau fermé</h2>
+              <button className="btn-ghost" onClick={() => setSlotToggleTarget(null)}>✕</button>
+            </div>
+            <p style={{ color: '#94a3b8', padding: '0 0 20px', fontSize: '0.88rem', lineHeight: 1.5 }}>
+              <strong style={{ color: '#e2e8f0' }}>
+                {slotToggleTarget.slot_time?.slice(0, 5)}
+              </strong>{' '}
+              — ce créneau est marqué <strong style={{ color: '#fca5a5' }}>PAS DISPO</strong>.
+              <br />Voulez-vous le rouvrir ?
+            </p>
+            <div className="booking-actions">
+              <button
+                className="btn-confirm"
+                onClick={() => {
+                  toggleAvailability(slotToggleTarget)
+                  setSlotToggleTarget(null)
+                }}>
+                🔓 Rouvrir ce créneau
+              </button>
+              <button className="btn-refuse" onClick={() => setSlotToggleTarget(null)}>
+                Annuler
+              </button>
             </div>
           </div>
         </div>
@@ -2911,6 +2948,40 @@ export default function Dashboard({ pilot }) {
                       🗑 Annuler cette reservation
                     </button>
                   </div>
+                )}
+
+                {/* ── FERMER / ROUVRIR LE CRÉNEAU ─────────────────────────── */}
+                {selectedBooking.pilot_slots && (
+                  <button
+                    onClick={async () => {
+                      const slot = selectedBooking.pilot_slots
+                      const newAvail = !slot.is_available
+                      await supabase.from('pilot_slots')
+                        .update({ is_available: newAvail }).eq('id', slot.id)
+                      logActivity(pilot.id, 'slot_toggled', 'slot', slot.id, {
+                        slot_date: slot.slot_date, slot_time: slot.slot_time,
+                        is_available: newAvail, source: 'booking_modal'
+                      })
+                      // Update the selected booking's nested slot so the button reflects new state
+                      setSelectedBooking(prev => prev ? {
+                        ...prev,
+                        pilot_slots: { ...prev.pilot_slots, is_available: newAvail }
+                      } : null)
+                      loadWeek(weekStart)
+                    }}
+                    style={{
+                      width:'100%', marginTop:8, padding:'10px 14px',
+                      background: selectedBooking.pilot_slots.is_available
+                        ? 'rgba(127,29,29,0.25)' : 'rgba(20,83,45,0.25)',
+                      border: `1.5px solid ${selectedBooking.pilot_slots.is_available ? '#dc2626' : '#16a34a'}`,
+                      borderRadius:10, cursor:'pointer', fontWeight:700, fontSize:13,
+                      color: selectedBooking.pilot_slots.is_available ? '#fca5a5' : '#86efac',
+                      fontFamily:'inherit'
+                    }}>
+                    {selectedBooking.pilot_slots.is_available
+                      ? '🔒 Fermer ce créneau (PAS DISPO)'
+                      : '🔓 Rouvrir ce créneau (DISPO)'}
+                  </button>
                 )}
               </>
             )}
