@@ -350,15 +350,19 @@ export default function Dashboard({ pilot }) {
     let pendingAssignmentBookingIds  = new Set()  // orange — waiting for reply
     let refusedAssignmentBookingIds  = new Set()  // red    — refused, no replacement
     let acceptedAssignmentBookingIds = new Set()  // green  — colleague confirmed
+    const acceptedColleagueByBooking = {}         // bookingId → colleague name
     if (bookingIds.length > 0) {
       const { data: assignData } = await supabase
         .from('booking_assignments')
-        .select('booking_id, status')
+        .select('booking_id, status, colleagues(name)')
         .in('booking_id', bookingIds)
       ;(assignData || []).forEach(a => {
         if (a.status === 'pending')  pendingAssignmentBookingIds.add(a.booking_id)
         if (a.status === 'refused')  refusedAssignmentBookingIds.add(a.booking_id)
-        if (a.status === 'accepted') acceptedAssignmentBookingIds.add(a.booking_id)
+        if (a.status === 'accepted') {
+          acceptedAssignmentBookingIds.add(a.booking_id)
+          acceptedColleagueByBooking[a.booking_id] = a.colleagues?.name || '—'
+        }
       })
       // A booking with "refused" but also "pending" stays orange (replacement in progress)
       refusedAssignmentBookingIds.forEach(id => {
@@ -378,12 +382,13 @@ export default function Dashboard({ pilot }) {
       if (d && byDate[d]) byDate[d].bookings.push(b)
     })
 
-    // Attach assignment flags to each booking for slot colour logic
+    // Attach assignment flags + accepted colleague name to each booking
     Object.values(byDate).forEach(({ bookings }) => {
       bookings.forEach(b => {
         b._hasPendingAssignment  = pendingAssignmentBookingIds.has(b.id)
         b._hasRefusedAssignment  = refusedAssignmentBookingIds.has(b.id)
         b._hasAcceptedAssignment = acceptedAssignmentBookingIds.has(b.id)
+        b._acceptedColleagueName = acceptedColleagueByBooking[b.id] || null
       })
     })
 
@@ -1461,10 +1466,17 @@ export default function Dashboard({ pilot }) {
                         // 🔵 Blue   = available slot (no booking)
                         const hasPendingAssignment  = activeBks.some(b => b._hasPendingAssignment)
                         const hasRefusedAssignment  = activeBks.some(b => b._hasRefusedAssignment)
-                        const hasAcceptedAssignment = activeBks.some(b => b._hasAcceptedAssignment)
-                        // Needs a colleague when total pax > 1 (tandem: 1 pilot per passenger)
-                        // Not needed if a colleague already accepted
-                        const needsColleague = totalPaxW > 1 && !hasAcceptedAssignment && !hasPendingAssignment
+                        // Needs a colleague when:
+                        // - Single booking: total pax > 1 and no colleague assigned yet
+                        // - Multiple bookings: each booking needs its own pilot (Capitaine covers only one),
+                        //   so any booking without an accepted colleague is missing a pilot
+                        let needsColleague
+                        if (activeBks.length > 1) {
+                          // Multi-booking slot: every booking needs a colleague
+                          needsColleague = activeBks.some(b => !b._hasAcceptedAssignment && !b._hasPendingAssignment)
+                        } else {
+                          needsColleague = totalPaxW > 1 && !activeBks.some(b => b._hasAcceptedAssignment) && !hasPendingAssignment
+                        }
                         let wBg, wColor, wBorder
                         if (hasRefusedAssignment || needsColleague) {
                           wBg = '#dc2626'; wColor = 'white'; wBorder = '#991b1b' // red = needs replacement / no colleague yet
@@ -1988,6 +2000,22 @@ export default function Dashboard({ pilot }) {
                     <span style={{ padding: '3px 8px', borderRadius: 6, background: sc.bg, color: sc.color, fontSize: '0.72rem', fontWeight: 700 }}>
                       {sc.label}
                     </span>
+                    {/* Pilot badge — green if colleague accepted, red if missing */}
+                    {bk._acceptedColleagueName ? (
+                      <span style={{ padding: '3px 8px', borderRadius: 6, background: '#14532d', color: '#86efac', fontSize: '0.72rem', fontWeight: 700 }}>
+                        👨‍✈️ {bk._acceptedColleagueName}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          setSelectedSlotBookings([])
+                          setColleaguePanelOpen(true)
+                        }}
+                        style={{ padding: '3px 8px', borderRadius: 6, background: '#dc2626', color: 'white', fontSize: '0.72rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                        🚨 Pas de pilote
+                      </button>
+                    )}
                     <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
                       {paxCount} pax →
                     </span>
