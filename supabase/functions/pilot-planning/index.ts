@@ -195,6 +195,16 @@ Deno.serve(async (req) => {
           .single()
 
         if (error) return json({ error: error.message }, 500)
+
+        // Log activity so admin sees it in DERNIERS CHANGEMENTS
+        await supabase.from('activity_log').insert({
+          pilot_id,
+          action: 'pilot_unavail_added',
+          entity_type: 'unavailability',
+          entity_id: data.id,
+          details: { colleague_id, start_date, end_date: end_date || start_date, slot_time: slot_time || null },
+        })
+
         return json({ unavailability: data })
       }
 
@@ -202,11 +212,30 @@ Deno.serve(async (req) => {
         const { id } = body
         if (!id) return json({ error: 'Missing id' }, 400)
 
+        // Fetch the row before deleting so we can log details
+        const { data: row } = await supabase
+          .from('fixed_pilot_unavailability')
+          .select('*')
+          .eq('id', id)
+          .eq('colleague_id', colleague_id)
+          .single()
+
         await supabase
           .from('fixed_pilot_unavailability')
           .delete()
           .eq('id', id)
           .eq('colleague_id', colleague_id) // safety: can only delete own entries
+
+        // Log activity so admin sees the re-enabling in DERNIERS CHANGEMENTS
+        if (row) {
+          await supabase.from('activity_log').insert({
+            pilot_id,
+            action: 'pilot_unavail_removed',
+            entity_type: 'unavailability',
+            entity_id: id,
+            details: { colleague_id, start_date: row.start_date, end_date: row.end_date, slot_time: row.slot_time },
+          })
+        }
 
         return json({ success: true })
       }

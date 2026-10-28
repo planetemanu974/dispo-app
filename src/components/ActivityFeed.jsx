@@ -9,14 +9,16 @@ import { supabase } from '../lib/supabase'
 
 // ── Human-readable labels for activity_log action keys ───────────────────────
 const ACTION_LABELS = {
-  booking_created:   { icon: '📋', text: 'Réservation créée' },
-  booking_confirmed: { icon: '✅', text: 'Réservation confirmée' },
-  booking_refused:   { icon: '❌', text: 'Réservation refusée' },
-  booking_cancelled: { icon: '🚫', text: 'Réservation annulée' },
-  booking_edited:    { icon: '✏️', text: 'Réservation modifiée' },
-  slot_toggled:      { icon: '🔄', text: 'Créneau' },
-  bulk_slot_toggle:  { icon: '🔄', text: 'Créneaux (lot)' },
-  bulk_slot_delete:  { icon: '🗑️', text: 'Créneaux supprimés' },
+  booking_created:        { icon: '📋', text: 'Réservation créée' },
+  booking_confirmed:      { icon: '✅', text: 'Réservation confirmée' },
+  booking_refused:        { icon: '❌', text: 'Réservation refusée' },
+  booking_cancelled:      { icon: '🚫', text: 'Réservation annulée' },
+  booking_edited:         { icon: '✏️', text: 'Réservation modifiée' },
+  slot_toggled:           { icon: '🔄', text: 'Créneau' },
+  bulk_slot_toggle:       { icon: '🔄', text: 'Créneaux (lot)' },
+  bulk_slot_delete:       { icon: '🗑️', text: 'Créneaux supprimés' },
+  pilot_unavail_added:    { icon: '🚫', text: 'Indisponibilité' },
+  pilot_unavail_removed:  { icon: '✅', text: 'Disponibilité rétablie' },
 }
 
 // Format ISO timestamp → "mer. 29 oct. à 09:15"
@@ -76,6 +78,17 @@ function logDetail(action, details = {}) {
       parts2.push(unique.length === 1 ? unique[0] : `${unique[0]} → ${unique[unique.length - 1]}`)
     }
     return parts2.join(' · ')
+  }
+
+  // Pilot unavailability added/removed: show date range + slot time
+  if (action === 'pilot_unavail_added' || action === 'pilot_unavail_removed') {
+    if (details.start_date) {
+      const start = fmtDate(details.start_date)
+      const end   = details.end_date && details.end_date !== details.start_date ? fmtDate(details.end_date) : null
+      parts.push(end ? `${start} → ${end}` : start)
+    }
+    if (details.slot_time) parts.push(`· ${details.slot_time.slice(0, 5)}`)
+    return parts.join(' ')
   }
 
   // Booking actions: contact name + date + time + pax + status change
