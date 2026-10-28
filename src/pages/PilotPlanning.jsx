@@ -634,12 +634,12 @@ const s = {
     minHeight: 60,
   },
   gridCell: {
-    padding: 3, background: '#080e1a',
+    padding: 5, background: '#080e1a',
     borderRight: '1px solid #1e3a5f22', borderBottom: '1px solid #1e3a5f22',
-    cursor: 'pointer', minHeight: 60,
+    cursor: 'pointer', minHeight: 64,
   },
   cellBlock: {
-    height: '100%', minHeight: 54, borderRadius: 6,
+    height: '100%', minHeight: 54, borderRadius: 8,
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
     padding: '4px 2px', position: 'relative', gap: 3,
@@ -661,14 +661,14 @@ const s = {
   },
   checkCircleOn: { background: '#facc15', border: '1.5px solid #facc15', color: '#000' },
 
-  // Small status badge centered inside each cell
+  // Small status label centered inside each cell — no background box, just text
   cellBadge: {
-    fontSize: 8, fontWeight: 800, letterSpacing: '.05em',
-    padding: '2px 5px', borderRadius: 4, textTransform: 'uppercase',
+    fontSize: 8, fontWeight: 800, letterSpacing: '.07em',
+    textTransform: 'uppercase', lineHeight: 1,
   },
-  cellBadgeAvail:   { background: 'rgba(255,255,255,.22)', color: '#ffffff' },
-  cellBadgeUnavail: { background: 'rgba(100,116,139,.25)', color: '#94a3b8' },
-  cellBadgeBooked:  { background: 'rgba(255,255,255,.18)', color: '#86efac' },
+  cellBadgeAvail:   { color: 'rgba(255,255,255,.75)' },
+  cellBadgeUnavail: { color: '#64748b' },
+  cellBadgeBooked:  { color: '#86efac' },
 
   // ── Day view
   dayStrip: {
