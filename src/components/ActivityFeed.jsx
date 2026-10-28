@@ -51,17 +51,31 @@ function logDetail(action, details = {}) {
     return parts.join(' · ')
   }
 
-  // Bulk slot toggle: show count + what changed
+  // Bulk slot toggle: count + dates + times
   if (action === 'bulk_slot_toggle') {
-    const n = details.count || (details.slot_ids?.length ?? '?')
-    const etat = details.is_available === true ? 'ouverts' : details.is_available === false ? 'fermés' : ''
-    return `${n} créneau${n > 1 ? 'x' : ''} ${etat}`.trim()
+    const n = details.count ?? '?'
+    const parts2 = [`${n} créneau${n > 1 ? 'x' : ''}`]
+    if (details.dates?.length) {
+      const dateLabels = details.dates.map(d => fmtDate(d))
+      // If all same day, show once; otherwise show range
+      const unique = [...new Set(dateLabels)]
+      parts2.push(unique.length === 1 ? unique[0] : `${unique[0]} → ${unique[unique.length - 1]}`)
+    }
+    if (details.times?.length) {
+      parts2.push(details.times.join(', '))
+    }
+    return parts2.join(' · ')
   }
 
-  // Bulk slot delete: show count
+  // Bulk slot delete: count + dates
   if (action === 'bulk_slot_delete') {
-    const n = details.count || (details.slot_ids?.length ?? '?')
-    return `${n} créneau${n > 1 ? 'x' : ''} supprimé${n > 1 ? 's' : ''}`
+    const n = details.count ?? '?'
+    const parts2 = [`${n} créneau${n > 1 ? 'x' : ''} supprimé${n > 1 ? 's' : ''}`]
+    if (details.dates?.length) {
+      const unique = [...new Set(details.dates.map(d => fmtDate(d)))]
+      parts2.push(unique.length === 1 ? unique[0] : `${unique[0]} → ${unique[unique.length - 1]}`)
+    }
+    return parts2.join(' · ')
   }
 
   // Booking actions: contact name + date + time + pax + status change

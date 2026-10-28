@@ -719,8 +719,24 @@ export default function Dashboard({ pilot }) {
     await supabase.from('pilot_slots')
       .update({ is_available: isAvailable })
       .in('id', ids)
+
+    // Collect date+time info for all selected slots from weekData
+    const idSet = new Set(ids)
+    const affectedSlots = Object.values(weekData)
+      .flatMap(day => day.slots || [])
+      .filter(s => idSet.has(s.id))
+      .map(s => ({ date: s.slot_date, time: s.slot_time }))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+
+    // Build a readable summary: unique dates + time range
+    const dates = [...new Set(affectedSlots.map(s => s.date))]
+    const times = [...new Set(affectedSlots.map(s => s.time.slice(0, 5)))]
+
     logActivity(pilot.id, 'bulk_slot_toggle', 'slot', null, {
-      slot_ids: ids, is_available: isAvailable, count: ids.length
+      is_available: isAvailable,
+      count: ids.length,
+      dates,          // e.g. ['2026-10-28', '2026-10-29']
+      times,          // e.g. ['08:00', '09:15', '10:30']
     })
     setSelectedSlotIds(new Set())
     setSelectMode(false)
@@ -753,9 +769,21 @@ export default function Dashboard({ pilot }) {
       if (!ok) return
     }
 
+    // Collect date+time info before deletion
+    const idSet2 = new Set(ids)
+    const deletedSlots = Object.values(weekData)
+      .flatMap(day => day.slots || [])
+      .filter(s => idSet2.has(s.id))
+      .map(s => ({ date: s.slot_date, time: s.slot_time }))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+    const deletedDates = [...new Set(deletedSlots.map(s => s.date))]
+    const deletedTimes = [...new Set(deletedSlots.map(s => s.time.slice(0, 5)))]
+
     await supabase.from('pilot_slots').delete().in('id', ids)
     logActivity(pilot.id, 'bulk_slot_delete', 'slot', null, {
-      slot_ids: ids, count: ids.length
+      count: ids.length,
+      dates: deletedDates,
+      times: deletedTimes,
     })
     setSelectedSlotIds(new Set())
     setSelectMode(false)
