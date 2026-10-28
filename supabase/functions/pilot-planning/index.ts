@@ -240,9 +240,13 @@ Deno.serve(async (req) => {
             slot_time:  row?.slot_time  ?? null,
           },
         })
-        console.log('activity_log insert result:', JSON.stringify(logResult.error))
-
-        return json({ success: true })
+        // DEBUG: return error details so we can diagnose in browser network tab
+        return json({
+          success: true,
+          _debug: logResult.error
+            ? { code: logResult.error.code, message: logResult.error.message, details: logResult.error.details }
+            : null,
+        })
       }
 
       return json({ error: 'Unknown action' }, 400)
