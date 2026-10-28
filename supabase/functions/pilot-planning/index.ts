@@ -227,12 +227,13 @@ Deno.serve(async (req) => {
           .eq('colleague_id', colleague_id) // safety: can only delete own entries
 
         // Log activity so admin sees the re-enabling in DERNIERS CHANGEMENTS
+        // entity_id is null because the row has already been deleted (no FK to violate)
         if (row) {
           await supabase.from('activity_log').insert({
             pilot_id,
             action: 'pilot_unavail_removed',
             entity_type: 'unavailability',
-            entity_id: id,
+            entity_id: null,
             details: { colleague_id, start_date: row.start_date, end_date: row.end_date, slot_time: row.slot_time },
           })
         }
