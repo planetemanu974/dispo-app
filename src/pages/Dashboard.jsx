@@ -2705,7 +2705,7 @@ export default function Dashboard({ pilot }) {
                             padding:'6px 4px', textAlign:'center', background: isToday ? '#172554' : '#0f172a',
                             color: isToday ? '#93c5fd' : '#94a3b8', fontWeight:700,
                             borderBottom:'2px solid #1e293b', borderLeft:'1px solid #1e293b',
-                            minWidth: slotTimes.length > 0 ? Math.max(40, slotTimes.length * 22) : 48
+                            minWidth: slotTimes.length > 0 ? Math.max(40, slotTimes.length * 20) : 48
                           }}>
                             <div style={{ fontSize:'0.6rem', textTransform:'uppercase' }}>
                               {DAY_LABELS[colIdx]}
@@ -2783,7 +2783,7 @@ export default function Dashboard({ pilot }) {
                                 borderBottom:'1px solid #1e293b', borderLeft:'1px solid #1e293b',
                                 background: isToday ? '#0d1b3e' : undefined
                               }}>
-                                <div style={{ display:'flex', justifyContent:'center', gap:3, flexWrap:'wrap' }}>
+                                <div style={{ display:'flex', justifyContent:'center', gap:2, flexWrap:'nowrap' }}>
                                   {slotTimes.map(slotTime => {
                                     // Check if this slot exists on this day
                                     const slotExists = daySlots.some(s => s.slot_time?.slice(0,5) === slotTime)
@@ -2837,11 +2837,11 @@ export default function Dashboard({ pilot }) {
                                         title={cellTitle}
                                         onClick={() => togglePilotAvailability(pilot.id, date, slotTime)}
                                         style={{
-                                          width:22, height:22, borderRadius:5,
+                                          width:18, height:18, borderRadius:4,
                                           background: cellBg,
                                           border: `1px solid ${cellBorder}`,
                                           display:'inline-flex', alignItems:'center',
-                                          justifyContent:'center', fontSize:'0.7rem',
+                                          justifyContent:'center', fontSize:'0.62rem',
                                           cursor:'pointer',
                                           transition:'filter 0.1s, transform 0.1s',
                                           userSelect:'none'
