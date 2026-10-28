@@ -1100,9 +1100,15 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
                 const planningUrl = `${window.location.origin}/pilot-planning/${planningToken}`
                 return (
                   <div style={{ marginTop: 14, padding: '12px', background: '#0f2027', border: '1px solid #1d4ed844', borderRadius: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
-                      📅 Planning personnel
-                    </div>
+                    <a
+                      href={planningUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8, textDecoration: 'none', cursor: 'pointer' }}
+                      title="Ouvrir le planning personnel"
+                    >
+                      📅 Planning personnel ↗
+                    </a>
                     <div style={{ fontSize: 11, color: '#64748b', wordBreak: 'break-all', marginBottom: 8 }}>
                       {planningUrl}
                     </div>
