@@ -151,6 +151,33 @@ export default function PilotPlanning() {
     setSelectedDay(next)
   }
 
+  // ── single-cell toggle: tap DISPO → pas dispo, tap PAS DISPO → dispo ────────
+  async function toggleCellAvail(dateStr, slotTime, status) {
+    if (status === 'booked' || saving) return
+    setSaving(true)
+    try {
+      if (status === 'available') {
+        // Mark this slot unavailable
+        await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
+          body: JSON.stringify({ token, action: 'add_unavail', start_date: dateStr, end_date: dateStr, slot_time: slotTime }),
+        })
+      } else if (status === 'unavailable') {
+        // Remove all unavailability entries covering this slot
+        const matches = getUnavailForSlot(unavailability, dateStr, slotTime)
+        for (const u of matches) {
+          await fetch(FUNCTION_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
+            body: JSON.stringify({ token, action: 'remove_unavail', id: u.id }),
+          })
+        }
+      }
+      await fetchPlanning(weekStart)
+    } finally { setSaving(false) }
+  }
+
   // ── unavailability actions ────────────────────────────────────────────────
   async function addUnavail(body) {
     setSaving(true)
@@ -243,17 +270,21 @@ export default function PilotPlanning() {
 
       {/* ── Top header ──────────────────────────────────────────────────── */}
       <div style={s.topBar}>
-        <div style={s.logoWrap}>
-          <img src="/logo-icon.png" alt="Logo" style={{ height: 32, display: 'block' }}
+        {/* Left: logo + pilot name */}
+        <div style={s.topLeft}>
+          <img src="/logo-icon.png" alt="Logo" style={{ height: 32, display: 'block', flexShrink: 0 }}
             onError={e => { e.target.style.display = 'none' }} />
+          <span style={s.pilotName}>{colleague?.name}</span>
         </div>
+        {/* Center: view toggle */}
         <div style={s.viewToggle}>
           <button style={{ ...s.toggleBtn, ...(viewMode === 'week' ? s.toggleBtnActive : {}) }}
             onClick={() => setViewMode('week')}>📅 Semaine</button>
           <button style={{ ...s.toggleBtn, ...(viewMode === 'day' ? s.toggleBtnActive : {}) }}
             onClick={() => setViewMode('day')}>📆 Jour</button>
         </div>
-        <div style={s.pilotName}>{colleague?.name}</div>
+        {/* Right spacer — mirrors left to keep toggle truly centred */}
+        <div style={s.topRight} />
       </div>
 
       {/* ── Navigation bar ──────────────────────────────────────────────── */}
@@ -301,7 +332,8 @@ export default function PilotPlanning() {
                       if (selectMode) {
                         if (!isBooked) toggleSlotSelect(dateStr, slotTime)
                       } else {
-                        setSelectedDay(dateStr); setViewMode('day')
+                        // Tap dispo → pas dispo, tap pas dispo → dispo, tap booké → rien
+                        toggleCellAvail(dateStr, slotTime, status)
                       }
                     }
 
@@ -563,14 +595,19 @@ const s = {
     borderRadius: '50%', animation: 'spin 1s linear infinite',
   },
 
-  // ── Top bar
+  // ── Top bar (grid: left | center | right for true centering)
   topBar: {
-    display: 'flex', alignItems: 'center', gap: 10,
+    display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8,
     padding: '10px 16px',
     background: '#0d1525', borderBottom: '1px solid #1e3a5f44',
   },
-  logoWrap: { width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center' },
+  // Left group: logo + pilot name side by side
+  topLeft: {
+    display: 'flex', alignItems: 'center', gap: 10,
+    overflow: 'hidden',
+  },
   viewToggle: { display: 'flex', gap: 4 },
+  topRight: { flex: 1 }, // spacer mirrors topLeft
   toggleBtn: {
     padding: '7px 11px', background: 'transparent',
     border: '1px solid #1e3a5f', borderRadius: 8,
@@ -579,8 +616,8 @@ const s = {
   },
   toggleBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#ffffff' },
   pilotName: {
-    flex: 1, fontSize: 13, fontWeight: 800, color: '#ffffff',
-    textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    fontSize: 13, fontWeight: 800, color: '#ffffff',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
 
   // ── Nav bar
