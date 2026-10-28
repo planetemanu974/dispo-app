@@ -1,0 +1,193 @@
+// ActivityFeed.jsx
+// Live feed of recent planning changes shown below the admin calendar.
+// Merges activity_log (admin actions) + fixed_pilot_unavailability inserts
+// (pilots marking themselves unavailable from their own planning page).
+// Auto-refreshes silently every 30 seconds.
+
+import React, { useEffect, useState, useCallback } from 'react'
+import { supabase } from '../supabaseClient'
+
+// ── Human-readable labels for activity_log action keys ───────────────────────
+const ACTION_LABELS = {
+  booking_created:   { icon: '📋', text: 'Réservation créée' },
+  booking_confirmed: { icon: '✅', text: 'Réservation confirmée' },
+  booking_refused:   { icon: '❌', text: 'Réservation refusée' },
+  booking_cancelled: { icon: '🚫', text: 'Réservation annulée' },
+  booking_edited:    { icon: '✏️', text: 'Réservation modifiée' },
+  slot_toggled:      { icon: '🔄', text: 'Créneau modifié' },
+  bulk_slot_toggle:  { icon: '🔄', text: 'Créneaux modifiés (lot)' },
+  bulk_slot_delete:  { icon: '🗑️', text: 'Créneaux supprimés' },
+}
+
+// Format ISO timestamp → "mer. 29 oct. à 09:15"
+function fmtDT(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return (
+    d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) +
+    ' à ' +
+    d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  )
+}
+
+// Format a date string (YYYY-MM-DD) → "mer. 29 oct."
+function fmtDate(str) {
+  if (!str) return ''
+  return new Date(str + 'T00:00:00').toLocaleDateString('fr-FR', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  })
+}
+
+// Build a short detail string from an activity_log details object
+function logDetail(action, details = {}) {
+  const parts = []
+  if (details.contact_name) parts.push(details.contact_name)
+  if (details.slot_date)    parts.push(fmtDate(details.slot_date))
+  if (details.slot_time)    parts.push(details.slot_time.slice(0, 5))
+  if (details.pax_count)    parts.push(`${details.pax_count} pax`)
+  if (details.new_status)   parts.push(`→ ${details.new_status}`)
+  return parts.join(' · ')
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function ActivityFeed({ pilotId }) {
+  const [entries, setEntries] = useState([])
+
+  const load = useCallback(async () => {
+    if (!pilotId) return
+
+    // 1. Admin's own activity log (most recent 12 entries)
+    const { data: logs } = await supabase
+      .from('activity_log')
+      .select('id, action, details, created_at')
+      .eq('pilot_id', pilotId)
+      .order('created_at', { ascending: false })
+      .limit(12)
+
+    // 2. Colleague unavailability inserts — sorted by created_at
+    //    (captures when a pilot marks themselves unavailable from their planning page)
+    const { data: unavails } = await supabase
+      .from('fixed_pilot_unavailability')
+      .select('id, start_date, end_date, slot_time, created_at, colleagues(name)')
+      .eq('pilot_id', pilotId)
+      .order('created_at', { ascending: false })
+      .limit(12)
+
+    const logItems = (logs || []).map(l => {
+      const { icon, text } = ACTION_LABELS[l.action] || { icon: '•', text: l.action }
+      return {
+        id: `log-${l.id}`,
+        at: l.created_at,
+        icon,
+        label: text,
+        detail: logDetail(l.action, l.details || {}),
+        source: 'admin',
+      }
+    })
+
+    const unavailItems = (unavails || []).map(u => {
+      const name = u.colleagues?.name || 'Pilote'
+      const range =
+        u.start_date === u.end_date
+          ? fmtDate(u.start_date)
+          : `${fmtDate(u.start_date)} → ${fmtDate(u.end_date)}`
+      const time = u.slot_time ? ` · ${u.slot_time.slice(0, 5)}` : ''
+      return {
+        id: `unavail-${u.id}`,
+        at: u.created_at,
+        icon: '🚫',
+        label: `${name} — Indispo`,
+        detail: range + time,
+        source: 'pilot',
+      }
+    })
+
+    // Merge, sort newest-first, keep 15
+    const all = [...logItems, ...unavailItems]
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, 15)
+    setEntries(all)
+  }, [pilotId])
+
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 30_000)
+    return () => clearInterval(id)
+  }, [load])
+
+  if (!entries.length) return null
+
+  return (
+    <div style={{
+      padding: '4px 12px 28px',
+      maxWidth: 900,
+      margin: '0 auto',
+    }}>
+      {/* Section header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+      }}>
+        <span style={{
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          color: '#64748b',
+          letterSpacing: '0.07em',
+          textTransform: 'uppercase',
+        }}>
+          Derniers changements
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'rgba(100,116,139,0.2)' }} />
+      </div>
+
+      {/* Entry list */}
+      <div style={{
+        borderRadius: 10,
+        overflow: 'hidden',
+        border: '1px solid rgba(100,116,139,0.15)',
+      }}>
+        {entries.map((e, i) => (
+          <div
+            key={e.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '7px 12px',
+              background: i % 2 === 0
+                ? 'rgba(30,41,59,0.45)'
+                : 'rgba(15,23,42,0.3)',
+              fontSize: '0.76rem',
+              lineHeight: 1.4,
+            }}
+          >
+            {/* Timestamp */}
+            <span style={{
+              flex: '0 0 auto',
+              color: '#64748b',
+              fontVariantNumeric: 'tabular-nums',
+              minWidth: 145,
+              fontSize: '0.72rem',
+            }}>
+              {fmtDT(e.at)}
+            </span>
+
+            {/* Icon + label */}
+            <span style={{ flex: '0 0 auto' }}>{e.icon}</span>
+            <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{e.label}</span>
+
+            {/* Detail */}
+            {e.detail && (
+              <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                — {e.detail}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

@@ -7,6 +7,7 @@ import History from './History'
 import Comptabilite from './Comptabilite'
 import AssignColleague from '../components/AssignColleague'
 import FlightClosure from '../components/FlightClosure'
+import ActivityFeed from '../components/ActivityFeed'
 import { useSettings } from '../contexts/SettingsContext'
 import { buildInvoiceNumber, downloadInvoice, invoiceFilename } from '../lib/invoice'
 
@@ -2904,6 +2905,11 @@ export default function Dashboard({ pilot }) {
           </div>
         )
       })()}
+
+      {/* ── Activity feed: last changes, shown below the week/day/pilots views ── */}
+      {(viewMode === 'week' || viewMode === 'day') && (
+        <ActivityFeed pilotId={pilot.id} />
+      )}
 
       {/* ── Booking detail modal (shared by both views) ── */}
       {selectedBooking && (
