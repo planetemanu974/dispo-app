@@ -412,14 +412,16 @@ export default function PilotPlanning() {
             </div>
           </div>
 
-          <div style={{ padding: '10px 16px 4px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button style={s.vacationBtn}
+          <div style={{ padding: '10px 16px 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button style={{ ...s.vacationBtn, flex: 1 }}
               onClick={() => { setRangeStart(''); setRangeEnd(''); setShowRangeModal(true) }}>
               🏖️ Marquer indispo sur une période
             </button>
             {!selectMode && (
-              <button style={s.selectInlineBtn} onClick={() => setSelectMode(true)}>
-                ☑ Sélectionner des créneaux
+              <button
+                onClick={() => setSelectMode(true)}
+                style={{ padding:'4px 10px', borderRadius:8, border:'1.5px solid #475569', background:'rgba(71,85,105,0.15)', color:'#94a3b8', fontWeight:700, fontSize:'0.72rem', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+                ☐ Sélectionner
               </button>
             )}
           </div>
