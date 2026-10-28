@@ -83,6 +83,65 @@ Deno.serve(async (req) => {
         return true
       })
 
+      // ── Self-pilot detection ─────────────────────────────────────────────
+      // If the colleague IS the main pilot (same phone number → same person),
+      // their planning page must also show their OWN confirmed bookings as BOOKÉ.
+      // Colleagues only appear in booking_assignments when they are called in as
+      // backup; the pilot who owns the slot is never inserted there for their own
+      // flights, which is why MANU1 would otherwise show all DISPO.
+
+      // Fetch pilot's phone to compare
+      const { data: pilotContact } = await supabase
+        .from('pilots')
+        .select('phone, name')
+        .eq('id', pilotId)
+        .single()
+
+      const normalizePhone = (p: string) => (p || '').replace(/\D/g, '')
+      const colleaguePhone = (tokenRow.colleagues as any)?.phone || ''
+      const isSelfPilot =
+        pilotContact?.phone &&
+        colleaguePhone &&
+        normalizePhone(pilotContact.phone) === normalizePhone(colleaguePhone)
+
+      // If self-pilot: synthesise BOOKÉ entries from pilot_slots + confirmed bookings
+      let selfPilotAssignments: any[] = []
+      if (isSelfPilot) {
+        const { data: pilotSlotsRaw } = await supabase
+          .from('pilot_slots')
+          .select('id, slot_date, slot_time, bookings(id, status, passengers(*))')
+          .eq('pilot_id', pilotId)
+          .gte('slot_date', startStr)
+          .lte('slot_date', endStr)
+
+        // One synthetic assignment per confirmed booking in the week
+        selfPilotAssignments = (pilotSlotsRaw || []).flatMap((ps: any) => {
+          const confirmedBookings = ((ps.bookings as any[]) || []).filter(
+            (b: any) => b.status === 'confirmed'
+          )
+          return confirmedBookings.map((b: any) => ({
+            id: `self-${b.id}`,
+            status: 'accepted',
+            slot_date: ps.slot_date,
+            slot_time: ps.slot_time,
+            bookings: {
+              id: b.id,
+              pilot_slot_id: ps.id,
+              passengers: b.passengers || [],
+              pilot_slots: {
+                slot_date: ps.slot_date,
+                slot_time: ps.slot_time,
+              },
+            },
+          }))
+        })
+      }
+
+      // Merge colleague assignments + self-pilot entries.
+      // Self-pilot entries are appended AFTER dedup, so they won't clash with
+      // any manually-created assignment rows for the same booking.
+      const allAssignments = [...dedupedAssignments, ...selfPilotAssignments]
+
       // Fetch unavailability for this colleague in the week range
       const { data: unavailability } = await supabase
         .from('fixed_pilot_unavailability')
@@ -95,7 +154,7 @@ Deno.serve(async (req) => {
       return json({
         colleague: tokenRow.colleagues,
         week_start: startStr,
-        assignments: dedupedAssignments,
+        assignments: allAssignments,
         unavailability: unavailability || [],
       })
     }
