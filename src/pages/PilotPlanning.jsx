@@ -6,7 +6,7 @@
 //   • Multi-select mode: select multiple slots → bulk mark unavailable
 //   • Booked slots show "Booké" (not pax count)
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL
@@ -113,20 +113,33 @@ export default function PilotPlanning() {
   const [selectedSlots, setSelectedSlots] = useState(new Set())   // keys: "dateStr|slotTime"
 
   // ── fetch ─────────────────────────────────────────────────────────────────
-  const fetchPlanning = useCallback(async (week) => {
-    setLoading(true); setError(null)
+  // silent=true → background refresh (no spinner, no error banner reset)
+  const fetchPlanning = useCallback(async (week, silent = false) => {
+    if (!silent) { setLoading(true); setError(null) }
     try {
       const res  = await fetch(`${FUNCTION_URL}?token=${token}&week=${week}`, { headers: AUTH_HEADERS })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Erreur réseau'); return }
+      if (!res.ok) {
+        if (!silent) setError(data.error || 'Erreur réseau')
+        return
+      }
       setColleague(data.colleague)
       setAssignments(data.assignments || [])
       setUnavailability(data.unavailability || [])
-    } catch { setError('Impossible de charger le planning.') }
-    finally { setLoading(false) }
+    } catch { if (!silent) setError('Impossible de charger le planning.') }
+    finally   { if (!silent) setLoading(false) }
   }, [token])
 
+  // Initial load when week changes
   useEffect(() => { fetchPlanning(weekStart) }, [fetchPlanning, weekStart])
+
+  // Auto-refresh every 60 s — keeps the page live without manual reload
+  const weekStartRef = useRef(weekStart)
+  useEffect(() => { weekStartRef.current = weekStart }, [weekStart])
+  useEffect(() => {
+    const id = setInterval(() => fetchPlanning(weekStartRef.current, true), 60_000)
+    return () => clearInterval(id)
+  }, [fetchPlanning])
 
   // ── navigation ────────────────────────────────────────────────────────────
   function prevWeek() {
