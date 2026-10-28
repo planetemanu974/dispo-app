@@ -564,28 +564,30 @@ export default function PilotPlanning() {
           ════════════════════════════════════════════════════════════════════ */}
       {selectMode && (
         <div style={s.bulkBar}>
-          <button style={s.bulkCancelBtn} onClick={cancelSelectMode}>
-            Annuler
-          </button>
           <span style={s.bulkCount}>
             {selectionCount === 0
-              ? 'Touchez des créneaux'
+              ? '0 créneaux sélectionnés'
               : `${selectionCount} créneau${selectionCount > 1 ? 'x' : ''} sélectionné${selectionCount > 1 ? 's' : ''}`}
           </span>
-          <button
-            style={{ ...s.bulkDispoBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
-            disabled={selectionCount === 0 || saving}
-            onClick={markSelectedDispo}
-          >
-            {saving ? '…' : '✓ DISPO'}
-          </button>
-          <button
-            style={{ ...s.bulkConfirmBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
-            disabled={selectionCount === 0 || saving}
-            onClick={markSelectedUnavail}
-          >
-            {saving ? '…' : '✕ PAS DISPO'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              style={{ ...s.bulkDispoBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
+              disabled={selectionCount === 0 || saving}
+              onClick={markSelectedDispo}
+            >
+              {saving ? '…' : '✓ DISPO'}
+            </button>
+            <button
+              style={{ ...s.bulkConfirmBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
+              disabled={selectionCount === 0 || saving}
+              onClick={markSelectedUnavail}
+            >
+              {saving ? '…' : '✕ PAS DISPO'}
+            </button>
+            <button style={s.bulkCancelBtn} onClick={cancelSelectMode}>
+              Annuler
+            </button>
+          </div>
         </div>
       )}
 
@@ -730,12 +732,12 @@ const s = {
   // Yellow outline highlight when a slot is selected in select mode
   cellSelected: { outline: '2px solid #facc15', outlineOffset: '-2px' },
 
-  // Checkbox circle (top-right inside cell, visible in select mode only)
+  // Checkbox square (top-right inside cell, visible in select mode only) — matches admin dashboard
   checkCircle: {
     position: 'absolute', top: 4, right: 4,
-    width: 16, height: 16, borderRadius: '50%',
-    border: '1.5px solid rgba(255,255,255,.6)',
-    background: 'rgba(0,0,0,.3)',
+    width: 14, height: 14, borderRadius: 3,
+    border: '1.5px solid rgba(255,255,255,.5)',
+    background: 'rgba(0,0,0,.25)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     color: '#fff', flexShrink: 0,
   },
@@ -875,20 +877,20 @@ const s = {
   // ── Bulk action bar (fixed bottom, full-width, select mode)
   bulkBar: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
-    display: 'flex', alignItems: 'center', gap: 10,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
     padding: '12px 16px',
     background: '#0d1525', borderTop: '1px solid #1e3a5f',
     zIndex: 200,
   },
   bulkCancelBtn: {
-    padding: '10px 14px', background: 'transparent',
+    padding: '9px 14px', background: 'transparent',
     border: '1px solid #334155', borderRadius: 8,
     color: '#94a3b8', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
     whiteSpace: 'nowrap',
   },
   bulkCount: {
-    flex: 1, textAlign: 'center',
     fontSize: 13, color: '#e2e8f0', fontWeight: 600,
+    whiteSpace: 'nowrap',
   },
   bulkDispoBtn: {
     padding: '10px 16px',
