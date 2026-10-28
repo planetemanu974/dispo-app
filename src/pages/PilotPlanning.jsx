@@ -564,30 +564,26 @@ export default function PilotPlanning() {
           ════════════════════════════════════════════════════════════════════ */}
       {selectMode && (
         <div style={s.bulkBar}>
-          <span style={s.bulkCount}>
-            {selectionCount === 0
-              ? '0 créneaux sélectionnés'
-              : `${selectionCount} créneau${selectionCount > 1 ? 'x' : ''} sélectionné${selectionCount > 1 ? 's' : ''}`}
+          <span style={{ color:'#94a3b8', fontSize:'0.78rem', fontWeight:600, marginRight:4 }}>
+            {selectionCount} créneau{selectionCount !== 1 ? 'x' : ''} sélectionné{selectionCount !== 1 ? 's' : ''}
           </span>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button
-              style={{ ...s.bulkDispoBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
-              disabled={selectionCount === 0 || saving}
-              onClick={markSelectedDispo}
-            >
-              {saving ? '…' : '✓ DISPO'}
-            </button>
-            <button
-              style={{ ...s.bulkConfirmBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
-              disabled={selectionCount === 0 || saving}
-              onClick={markSelectedUnavail}
-            >
-              {saving ? '…' : '✕ PAS DISPO'}
-            </button>
-            <button style={s.bulkCancelBtn} onClick={cancelSelectMode}>
-              Annuler
-            </button>
-          </div>
+          <button
+            onClick={markSelectedDispo}
+            disabled={selectionCount === 0 || saving}
+            style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #16a34a', background:'rgba(20,83,45,0.3)', color:'#86efac', fontWeight:700, fontSize:'0.78rem', cursor: selectionCount === 0 ? 'not-allowed' : 'pointer', opacity: selectionCount === 0 || saving ? 0.5 : 1, fontFamily:'inherit' }}>
+            {saving ? '…' : '✓ DISPO'}
+          </button>
+          <button
+            onClick={markSelectedUnavail}
+            disabled={selectionCount === 0 || saving}
+            style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #dc2626', background:'rgba(127,29,29,0.3)', color:'#fca5a5', fontWeight:700, fontSize:'0.78rem', cursor: selectionCount === 0 ? 'not-allowed' : 'pointer', opacity: selectionCount === 0 || saving ? 0.5 : 1, fontFamily:'inherit' }}>
+            {saving ? '…' : '✗ PAS DISPO'}
+          </button>
+          <button
+            onClick={cancelSelectMode}
+            style={{ padding:'5px 12px', borderRadius:8, border:'1.5px solid #475569', background:'rgba(71,85,105,0.2)', color:'#94a3b8', fontWeight:700, fontSize:'0.78rem', cursor:'pointer', fontFamily:'inherit' }}>
+            Annuler
+          </button>
         </div>
       )}
 
@@ -875,34 +871,13 @@ const s = {
   },
 
   // ── Bulk action bar (fixed bottom, full-width, select mode)
+  // Bulk bar — same layout as admin dashboard week-legend
   bulkBar: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-    padding: '12px 16px',
+    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+    padding: '10px 16px',
     background: '#0d1525', borderTop: '1px solid #1e3a5f',
     zIndex: 200,
-  },
-  bulkCancelBtn: {
-    padding: '9px 14px', background: 'transparent',
-    border: '1px solid #334155', borderRadius: 8,
-    color: '#94a3b8', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-    whiteSpace: 'nowrap',
-  },
-  bulkCount: {
-    fontSize: 13, color: '#e2e8f0', fontWeight: 600,
-    whiteSpace: 'nowrap',
-  },
-  bulkDispoBtn: {
-    padding: '10px 16px',
-    background: '#14532d', border: '1px solid #16a34a', borderRadius: 8,
-    color: '#86efac', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-    whiteSpace: 'nowrap',
-  },
-  bulkConfirmBtn: {
-    padding: '10px 16px',
-    background: '#7f1d1d', border: '1px solid #991b1b', borderRadius: 8,
-    color: '#fca5a5', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-    whiteSpace: 'nowrap',
   },
 
   // ── Modal
