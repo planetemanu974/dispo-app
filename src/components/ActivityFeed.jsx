@@ -128,13 +128,26 @@ export default function ActivityFeed({ pilotId }) {
       .order('created_at', { ascending: false })
       .limit(12)
 
-    // 2. Colleague unavailability inserts — sorted by created_at
-    //    (captures when a pilot marks themselves unavailable from their planning page)
-    const { data: unavails } = await supabase
+    // 2a. Active colleague unavailabilities (pilot marked themselves unavailable)
+    const { data: activeUnavails } = await supabase
       .from('fixed_pilot_unavailability')
       .select('id, start_date, end_date, slot_time, created_at, colleagues(name)')
       .eq('pilot_id', pilotId)
+      .is('removed_at', null)
       .order('created_at', { ascending: false })
+      .limit(12)
+
+    // 2b. Recently re-enabled availabilities (pilot unchecked within last 7 days)
+    //     Uses soft-delete: removed_at is set instead of deleting the row,
+    //     so we can reliably show "Disponibilité rétablie" events.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: removedUnavails } = await supabase
+      .from('fixed_pilot_unavailability')
+      .select('id, start_date, end_date, slot_time, removed_at, colleagues(name)')
+      .eq('pilot_id', pilotId)
+      .not('removed_at', 'is', null)
+      .gte('removed_at', sevenDaysAgo)
+      .order('removed_at', { ascending: false })
       .limit(12)
 
     const logItems = (logs || []).map(l => {
@@ -162,7 +175,8 @@ export default function ActivityFeed({ pilotId }) {
       }
     })
 
-    const unavailItems = (unavails || []).map(u => {
+    // Active unavailabilities → "🚫 Indisponibilité"
+    const unavailItems = (activeUnavails || []).map(u => {
       const name = u.colleagues?.name || 'Pilote'
       const range =
         u.start_date === u.end_date
@@ -176,12 +190,31 @@ export default function ActivityFeed({ pilotId }) {
         label: 'Indisponibilité',
         detail: range + time,
         source: 'pilot',
-        author: name, // pilot's name from the colleagues join
+        author: name,
       }
     })
 
-    // Merge, sort newest-first, keep 15
-    const all = [...logItems, ...unavailItems]
+    // Recently removed unavailabilities → "✅ Disponibilité rétablie"
+    const removedItems = (removedUnavails || []).map(u => {
+      const name = u.colleagues?.name || 'Pilote'
+      const range =
+        u.start_date === u.end_date
+          ? fmtDate(u.start_date)
+          : `${fmtDate(u.start_date)} → ${fmtDate(u.end_date)}`
+      const time = u.slot_time ? ` · ${u.slot_time.slice(0, 5)}` : ''
+      return {
+        id: `removed-${u.id}`,
+        at: u.removed_at,
+        icon: '✅',
+        label: 'Disponibilité rétablie',
+        detail: range + time,
+        source: 'pilot',
+        author: name,
+      }
+    })
+
+    // Merge all sources, sort newest-first, keep 15
+    const all = [...logItems, ...unavailItems, ...removedItems]
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, 15)
     setEntries(all)

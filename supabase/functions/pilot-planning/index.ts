@@ -143,6 +143,7 @@ Deno.serve(async (req) => {
       const allAssignments = [...dedupedAssignments, ...selfPilotAssignments]
 
       // Fetch unavailability for this colleague in the week range
+      // Exclude soft-deleted rows (removed by the pilot via remove_unavail)
       const { data: unavailability } = await supabase
         .from('fixed_pilot_unavailability')
         .select('*')
@@ -150,6 +151,7 @@ Deno.serve(async (req) => {
         .eq('pilot_id', pilotId)
         .lte('start_date', endStr)
         .gte('end_date', startStr)
+        .is('removed_at', null)
 
       return json({
         colleague: tokenRow.colleagues,
@@ -212,23 +214,23 @@ Deno.serve(async (req) => {
         const { id } = body
         if (!id) return json({ error: 'Missing id' }, 400)
 
-        // Fetch the row before deleting so we can log details
-        const { data: row } = await supabase
+        // Soft-delete: mark the row as removed rather than deleting it.
+        // This lets ActivityFeed reliably show "Disponibilité rétablie" by
+        // querying recently-removed rows directly from fixed_pilot_unavailability,
+        // without depending on an activity_log insert that could fail silently.
+        const { data: row, error: updateError } = await supabase
           .from('fixed_pilot_unavailability')
-          .select('*')
+          .update({ removed_at: new Date().toISOString() })
           .eq('id', id)
-          .eq('colleague_id', colleague_id)
+          .eq('colleague_id', colleague_id) // safety: can only remove own entries
+          .is('removed_at', null)            // idempotent: ignore already-removed rows
+          .select()
           .single()
 
-        await supabase
-          .from('fixed_pilot_unavailability')
-          .delete()
-          .eq('id', id)
-          .eq('colleague_id', colleague_id) // safety: can only delete own entries
+        if (updateError) return json({ error: updateError.message }, 500)
 
-        // Log activity so admin sees the re-enabling in DERNIERS CHANGEMENTS
-        // Always log, even if the pre-delete select returned nothing
-        const logResult = await supabase.from('activity_log').insert({
+        // Also write to activity_log for audit trail (best-effort, no hard failure)
+        await supabase.from('activity_log').insert({
           pilot_id,
           action: 'pilot_unavail_removed',
           entity_type: 'unavailability',
@@ -240,13 +242,8 @@ Deno.serve(async (req) => {
             slot_time:  row?.slot_time  ?? null,
           },
         })
-        // DEBUG: return error details so we can diagnose in browser network tab
-        return json({
-          success: true,
-          _debug: logResult.error
-            ? { code: logResult.error.code, message: logResult.error.message, details: logResult.error.details }
-            : null,
-        })
+
+        return json({ success: true })
       }
 
       return json({ error: 'Unknown action' }, 400)

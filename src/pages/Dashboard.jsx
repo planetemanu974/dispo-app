@@ -546,12 +546,14 @@ export default function Dashboard({ pilot }) {
     })
 
     // Load fixed pilot unavailability for this week
+    // Exclude soft-deleted rows (removed_at IS NULL = still active)
     const { data: unavailData } = await supabase
       .from('fixed_pilot_unavailability')
       .select('id, colleague_id, start_date, end_date, slot_time')
       .eq('pilot_id', pilot.id)
       .lte('start_date', days[days.length - 1])
       .gte('end_date', days[0])
+      .is('removed_at', null)
     setFixedUnavailability(unavailData || [])
 
     setWeekData(byDate)

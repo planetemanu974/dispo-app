@@ -215,11 +215,6 @@ export default function PilotPlanning() {
         headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
         body: JSON.stringify({ token, action: 'remove_unavail', id }),
       })
-      const data = await res.json()
-      // DEBUG: show activity_log insert error if any
-      if (data._debug) {
-        alert('DEBUG activity_log error:\n' + JSON.stringify(data._debug, null, 2))
-      }
       if (res.ok) await fetchPlanning(weekStart)
     } finally { setSaving(false) }
   }
