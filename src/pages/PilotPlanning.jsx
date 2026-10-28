@@ -240,6 +240,30 @@ export default function PilotPlanning() {
     }
   }
 
+  // Bulk: mark all selected slots available (remove unavailability entries)
+  async function markSelectedDispo() {
+    if (!selectedSlots.size) return
+    setSaving(true)
+    try {
+      for (const key of selectedSlots) {
+        const [dateStr, slotTime] = key.split('|')
+        const matches = getUnavailForSlot(unavailability, dateStr, slotTime)
+        for (const u of matches) {
+          await fetch(FUNCTION_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
+            body: JSON.stringify({ token, action: 'remove_unavail', id: u.id }),
+          })
+        }
+      }
+      await fetchPlanning(weekStart)
+    } finally {
+      setSaving(false)
+      setSelectedSlots(new Set())
+      setSelectMode(false)
+    }
+  }
+
   function toggleSlotSelect(dateStr, slotTime) {
     const key = `${dateStr}|${slotTime}`
     setSelectedSlots(prev => {
@@ -551,11 +575,18 @@ export default function PilotPlanning() {
               : `${selectionCount} créneau${selectionCount > 1 ? 'x' : ''} sélectionné${selectionCount > 1 ? 's' : ''}`}
           </span>
           <button
+            style={{ ...s.bulkDispoBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
+            disabled={selectionCount === 0 || saving}
+            onClick={markSelectedDispo}
+          >
+            {saving ? '…' : '✓ DISPO'}
+          </button>
+          <button
             style={{ ...s.bulkConfirmBtn, opacity: selectionCount === 0 || saving ? .4 : 1 }}
             disabled={selectionCount === 0 || saving}
             onClick={markSelectedUnavail}
           >
-            {saving ? '…' : '🚫 PAS DISPO'}
+            {saving ? '…' : '✕ PAS DISPO'}
           </button>
         </div>
       )}
@@ -864,6 +895,12 @@ const s = {
   bulkCount: {
     flex: 1, textAlign: 'center',
     fontSize: 13, color: '#e2e8f0', fontWeight: 600,
+  },
+  bulkDispoBtn: {
+    padding: '10px 16px',
+    background: '#14532d', border: '1px solid #16a34a', borderRadius: 8,
+    color: '#86efac', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
   },
   bulkConfirmBtn: {
     padding: '10px 16px',
