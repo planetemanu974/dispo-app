@@ -5,7 +5,7 @@
 // Auto-refreshes silently every 30 seconds.
 
 import React, { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../supabaseClient'
+import { supabase } from '../lib/supabase'
 
 // ── Human-readable labels for activity_log action keys ───────────────────────
 const ACTION_LABELS = {
