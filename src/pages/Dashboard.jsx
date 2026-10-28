@@ -2717,7 +2717,7 @@ export default function Dashboard({ pilot }) {
                         )
                       })}
                     </tr>
-                    {/* Sub-header: slot times */}
+                    {/* Sub-header: slot times — fixed 18px width per slot, no overflow */}
                     {slotTimes.length > 1 && (
                       <tr>
                         <th style={{
@@ -2732,9 +2732,12 @@ export default function Dashboard({ pilot }) {
                             <div style={{ display:'flex', justifyContent:'center', gap:2 }}>
                               {slotTimes.map(t => (
                                 <span key={t} style={{
-                                  fontSize:'0.55rem', color:'#475569', fontWeight:600,
-                                  minWidth:18, textAlign:'center'
-                                }}>{t}</span>
+                                  fontSize:'0.48rem', color:'#475569', fontWeight:600,
+                                  width:18, minWidth:18, maxWidth:18,
+                                  textAlign:'center', overflow:'hidden',
+                                  display:'inline-block',
+                                  lineHeight:1.2
+                                }}>{t.slice(0,2)}h</span>
                               ))}
                             </div>
                           </th>
