@@ -874,7 +874,7 @@ const s = {
   // Bulk bar — same layout as admin dashboard week-legend
   bulkBar: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
-    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+    display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 6,
     padding: '10px 16px',
     background: '#0d1525', borderTop: '1px solid #1e3a5f',
     zIndex: 200,
