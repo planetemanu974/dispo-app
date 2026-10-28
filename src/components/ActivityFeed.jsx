@@ -53,6 +53,18 @@ function logDetail(action, details = {}) {
 
 export default function ActivityFeed({ pilotId }) {
   const [entries, setEntries] = useState([])
+  const [adminName, setAdminName] = useState('')
+
+  // Fetch the admin's own name once on mount
+  useEffect(() => {
+    if (!pilotId) return
+    supabase
+      .from('colleagues')
+      .select('name')
+      .eq('id', pilotId)
+      .single()
+      .then(({ data }) => { if (data?.name) setAdminName(data.name) })
+  }, [pilotId])
 
   const load = useCallback(async () => {
     if (!pilotId) return
@@ -83,6 +95,7 @@ export default function ActivityFeed({ pilotId }) {
         label: text,
         detail: logDetail(l.action, l.details || {}),
         source: 'admin',
+        author: null, // filled in render using adminName state
       }
     })
 
@@ -97,9 +110,10 @@ export default function ActivityFeed({ pilotId }) {
         id: `unavail-${u.id}`,
         at: u.created_at,
         icon: '🚫',
-        label: `${name} — Indispo`,
+        label: 'Indisponibilité',
         detail: range + time,
         source: 'pilot',
+        author: name, // pilot's name from the colleagues join
       }
     })
 
@@ -181,10 +195,32 @@ export default function ActivityFeed({ pilotId }) {
 
             {/* Detail */}
             {e.detail && (
-              <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                 — {e.detail}
               </span>
             )}
+
+            {/* Author badge */}
+            {(() => {
+              const name = e.source === 'admin' ? (adminName || 'Admin') : e.author
+              const isAdmin = e.source === 'admin'
+              return (
+                <span style={{
+                  flex: '0 0 auto',
+                  marginLeft: 'auto',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  padding: '1px 7px',
+                  borderRadius: 10,
+                  background: isAdmin ? 'rgba(59,130,246,0.15)' : 'rgba(249,115,22,0.15)',
+                  color: isAdmin ? '#93c5fd' : '#fdba74',
+                  border: `1px solid ${isAdmin ? 'rgba(59,130,246,0.3)' : 'rgba(249,115,22,0.3)'}`,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {name}
+                </span>
+              )
+            })()}
           </div>
         ))}
       </div>
