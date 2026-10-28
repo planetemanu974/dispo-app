@@ -14,8 +14,8 @@ const ACTION_LABELS = {
   booking_refused:   { icon: '❌', text: 'Réservation refusée' },
   booking_cancelled: { icon: '🚫', text: 'Réservation annulée' },
   booking_edited:    { icon: '✏️', text: 'Réservation modifiée' },
-  slot_toggled:      { icon: '🔄', text: 'Créneau modifié' },
-  bulk_slot_toggle:  { icon: '🔄', text: 'Créneaux modifiés (lot)' },
+  slot_toggled:      { icon: '🔄', text: 'Créneau' },
+  bulk_slot_toggle:  { icon: '🔄', text: 'Créneaux (lot)' },
   bulk_slot_delete:  { icon: '🗑️', text: 'Créneaux supprimés' },
 }
 
@@ -41,6 +41,30 @@ function fmtDate(str) {
 // Build a short detail string from an activity_log details object
 function logDetail(action, details = {}) {
   const parts = []
+
+  // Slot toggle: show date + time + what changed (ouvert/fermé)
+  if (action === 'slot_toggled') {
+    if (details.slot_date) parts.push(fmtDate(details.slot_date))
+    if (details.slot_time) parts.push(details.slot_time.slice(0, 5))
+    if (details.is_available === true)  parts.push('→ ouvert')
+    if (details.is_available === false) parts.push('→ fermé')
+    return parts.join(' · ')
+  }
+
+  // Bulk slot toggle: show count + what changed
+  if (action === 'bulk_slot_toggle') {
+    const n = details.count || (details.slot_ids?.length ?? '?')
+    const etat = details.is_available === true ? 'ouverts' : details.is_available === false ? 'fermés' : ''
+    return `${n} créneau${n > 1 ? 'x' : ''} ${etat}`.trim()
+  }
+
+  // Bulk slot delete: show count
+  if (action === 'bulk_slot_delete') {
+    const n = details.count || (details.slot_ids?.length ?? '?')
+    return `${n} créneau${n > 1 ? 'x' : ''} supprimé${n > 1 ? 's' : ''}`
+  }
+
+  // Booking actions: contact name + date + time + pax + status change
   if (details.contact_name) parts.push(details.contact_name)
   if (details.slot_date)    parts.push(fmtDate(details.slot_date))
   if (details.slot_time)    parts.push(details.slot_time.slice(0, 5))
@@ -87,13 +111,25 @@ export default function ActivityFeed({ pilotId }) {
       .limit(12)
 
     const logItems = (logs || []).map(l => {
-      const { icon, text } = ACTION_LABELS[l.action] || { icon: '•', text: l.action }
+      const d = l.details || {}
+      let { icon, text } = ACTION_LABELS[l.action] || { icon: '•', text: l.action }
+      // For slot toggles, include the new state in the label itself
+      if (l.action === 'slot_toggled') {
+        text = d.is_available === true  ? 'Créneau ouvert'
+             : d.is_available === false ? 'Créneau fermé'
+             : 'Créneau modifié'
+      }
+      if (l.action === 'bulk_slot_toggle') {
+        text = d.is_available === true  ? 'Créneaux ouverts (lot)'
+             : d.is_available === false ? 'Créneaux fermés (lot)'
+             : 'Créneaux modifiés (lot)'
+      }
       return {
         id: `log-${l.id}`,
         at: l.created_at,
         icon,
         label: text,
-        detail: logDetail(l.action, l.details || {}),
+        detail: logDetail(l.action, d),
         source: 'admin',
         author: null, // filled in render using adminName state
       }
