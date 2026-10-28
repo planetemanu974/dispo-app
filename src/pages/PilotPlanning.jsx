@@ -61,8 +61,9 @@ function formatDateFull(isoStr) {
 
 function getAssignmentForSlot(assignments, dateStr, slotTime) {
   return assignments.find(a => {
-    const d = a.slot_date || a.bookings?.pilot_slots?.slot_date
-    const t = a.slot_time || a.bookings?.pilot_slots?.slot_time
+    // Prefer canonical pilot_slots date over the denormalized booking_assignments.slot_date
+    const d = a.bookings?.pilot_slots?.slot_date || a.slot_date
+    const t = a.bookings?.pilot_slots?.slot_time || a.slot_time
     return d === dateStr && t && t.slice(0, 5) === slotTime
   })
 }

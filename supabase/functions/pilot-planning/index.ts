@@ -49,8 +49,10 @@ Deno.serve(async (req) => {
       const startStr = monday.toISOString().slice(0, 10)
       const endStr   = sunday.toISOString().slice(0, 10)
 
-      // Fetch assignments for this colleague during the week
-      const { data: assignments } = await supabase
+      // Fetch ALL accepted assignments for this colleague (no date filter here).
+      // We filter by week in JS using the CANONICAL slot_date from pilot_slots —
+      // not the denormalized booking_assignments.slot_date which may be stale/wrong.
+      const { data: rawAssignments } = await supabase
         .from('booking_assignments')
         .select(`
           id, status, slot_date, slot_time,
@@ -59,8 +61,13 @@ Deno.serve(async (req) => {
         .eq('colleague_id', colleagueId)
         .eq('pilot_id', pilotId)
         .eq('status', 'accepted')
-        .gte('slot_date', startStr)
-        .lte('slot_date', endStr)
+
+      // Filter to the requested week using canonical pilot_slots.slot_date.
+      // Falls back to the denormalized field only when no booking is joined.
+      const weekRaw = (rawAssignments || []).filter(a => {
+        const d = (a.bookings as any)?.pilot_slots?.slot_date ?? a.slot_date
+        return d && d >= startStr && d <= endStr
+      })
 
       // Deduplicate: if the same booking appears multiple times (duplicate rows in
       // booking_assignments from concurrent auto-assign calls), keep only the most
@@ -68,7 +75,7 @@ Deno.serve(async (req) => {
       // 20261028_fix_assignment_duplicates.sql) prevents new duplicates, but rows
       // created before that migration may still exist in older data.
       const seenBookingIds = new Set<string>()
-      const dedupedAssignments = (assignments || []).filter(a => {
+      const dedupedAssignments = weekRaw.filter(a => {
         const bId = (a.bookings as { id?: string } | null)?.id
         if (!bId) return true          // no booking joined – keep as-is
         if (seenBookingIds.has(bId)) return false
