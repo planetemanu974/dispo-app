@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getSlotsForDate } from '../utils/rules'
 import ColleaguePanel from './ColleaguePanel'
@@ -225,6 +225,38 @@ export default function Dashboard({ pilot }) {
     })
   }, [])
 
+  // ── Real-time pilot availability alerts ──────────────────────────────────
+  // When a fixed pilot marks themselves unavailable, show a dismissible banner
+  // without requiring the admin to refresh the page.
+  const [pilotAlerts, setPilotAlerts] = useState([])   // [{ id, msg }]
+  // Keep a ref so the subscription closure always sees the latest colleagues list.
+  const colleaguesRef = useRef([])
+
+  useEffect(() => {
+    if (!pilot?.id) return
+    const channel = supabase
+      .channel(`pilot-unavail-${pilot.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'fixed_pilot_unavailability', filter: `pilot_id=eq.${pilot.id}` },
+        (payload) => {
+          const row  = payload.new
+          const col  = colleaguesRef.current.find(c => c.id === row.colleague_id)
+          const name = col?.name || 'Un pilote fixe'
+          const dateStr = row.start_date
+            ? new Date(row.start_date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+            : '?'
+          const timeStr = row.slot_time ? ` à ${row.slot_time.slice(0, 5)}` : ''
+          const msg = `🚫 ${name} s'est rendu indisponible le ${dateStr}${timeStr}`
+          setPilotAlerts(prev => [{ id: Date.now(), msg }, ...prev])
+          // Also refresh week data so the pilots grid reflects the change immediately
+          loadWeek(weekStart)
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [pilot?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // 14-day planning strip state
   const [planning, setPlanning]               = useState({})
   const [planningLoading, setPlanningLoading] = useState(false)
@@ -316,8 +348,10 @@ export default function Dashboard({ pilot }) {
             return norm ? { ...c, fixed_order: norm.fixed_order } : c
           })
           setColleagues(updated)
+          colleaguesRef.current = updated
         } else {
           setColleagues(cols)
+          colleaguesRef.current = cols
         }
       }
     }
@@ -1393,6 +1427,31 @@ export default function Dashboard({ pilot }) {
           title="Paramètres"
         >⚙️</button>
       </header>
+
+      {/* ── Pilot availability alerts (real-time) ──────────────────────────────── */}
+      {pilotAlerts.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 12px 0' }}>
+          {pilotAlerts.map(alert => (
+            <div key={alert.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.35)',
+              borderRadius: 8, padding: '9px 12px', gap: 10,
+            }}>
+              <span style={{ fontSize: 13, color: '#fde047', fontWeight: 600, flex: 1 }}>
+                {alert.msg}
+              </span>
+              <button
+                onClick={() => setPilotAlerts(prev => prev.filter(a => a.id !== alert.id))}
+                style={{
+                  background: 'none', border: 'none', color: '#fde047', fontSize: 16,
+                  cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0,
+                }}
+                title="Fermer"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Page Paramètres — overlay plein écran */}
       {showSettings && (
