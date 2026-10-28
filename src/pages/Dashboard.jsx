@@ -2033,21 +2033,16 @@ export default function Dashboard({ pilot }) {
                                 {fixedPilotsAvail.map(c => {
                                   const unavail = isColleagueUnavailable(c.id, slot.slot_date, slot.slot_time)
                                   return (
-                                    <div key={c.id}
+                                    <span key={c.id}
                                       title={unavail ? `${c.name} — indisponible` : `${c.name} — disponible`}
                                       style={{
-                                        width: 13, height: 13,
-                                        borderRadius: '50%',
-                                        background: unavail ? 'transparent' : 'rgba(255,255,255,0.85)',
-                                        border: `1px solid ${unavail ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'}`,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '0.48rem', fontWeight: 900,
-                                        color: unavail ? 'transparent' : wBg,
+                                        fontSize: '0.55rem', fontWeight: 900,
+                                        color: unavail ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.9)',
                                         flexShrink: 0,
                                         lineHeight: 1,
                                       }}>
                                       {c.fixed_order}
-                                    </div>
+                                    </span>
                                   )
                                 })}
                               </div>
