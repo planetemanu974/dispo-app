@@ -62,6 +62,20 @@ Deno.serve(async (req) => {
         .gte('slot_date', startStr)
         .lte('slot_date', endStr)
 
+      // Deduplicate: if the same booking appears multiple times (duplicate rows in
+      // booking_assignments from concurrent auto-assign calls), keep only the most
+      // recent one per booking_id.  The partial UNIQUE index (migration
+      // 20261028_fix_assignment_duplicates.sql) prevents new duplicates, but rows
+      // created before that migration may still exist in older data.
+      const seenBookingIds = new Set<string>()
+      const dedupedAssignments = (assignments || []).filter(a => {
+        const bId = (a.bookings as { id?: string } | null)?.id
+        if (!bId) return true          // no booking joined – keep as-is
+        if (seenBookingIds.has(bId)) return false
+        seenBookingIds.add(bId)
+        return true
+      })
+
       // Fetch unavailability for this colleague in the week range
       const { data: unavailability } = await supabase
         .from('fixed_pilot_unavailability')
@@ -74,7 +88,7 @@ Deno.serve(async (req) => {
       return json({
         colleague: tokenRow.colleagues,
         week_start: startStr,
-        assignments: assignments || [],
+        assignments: dedupedAssignments,
         unavailability: unavailability || [],
       })
     }
