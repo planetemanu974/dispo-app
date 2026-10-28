@@ -2683,10 +2683,10 @@ export default function Dashboard({ pilot }) {
             </div>
 
             {weekLoading ? <p className="loading">Chargement...</p> : (
-              <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+              <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:4 }}>
                 <table style={{
-                  width:'100%', borderCollapse:'collapse', fontSize:'0.78rem',
-                  minWidth: 320
+                  borderCollapse:'collapse', fontSize:'0.78rem',
+                  tableLayout:'auto'
                 }}>
                   <thead>
                     <tr>

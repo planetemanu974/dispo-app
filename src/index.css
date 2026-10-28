@@ -54,6 +54,7 @@ body {
   margin: 0;
   background: #000;
   color: #f1f5f9;
+  overflow-x: hidden; /* prevent horizontal page scroll; inner tables use overflow-x:auto */
 }
 
 #root {
