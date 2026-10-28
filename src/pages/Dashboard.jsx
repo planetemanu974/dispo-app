@@ -1429,30 +1429,7 @@ export default function Dashboard({ pilot }) {
         >⚙️</button>
       </header>
 
-      {/* ── Pilot availability alerts (real-time) ──────────────────────────────── */}
-      {pilotAlerts.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 12px 0' }}>
-          {pilotAlerts.map(alert => (
-            <div key={alert.id} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.35)',
-              borderRadius: 8, padding: '9px 12px', gap: 10,
-            }}>
-              <span style={{ fontSize: 13, color: '#fde047', fontWeight: 600, flex: 1 }}>
-                {alert.msg}
-              </span>
-              <button
-                onClick={() => setPilotAlerts(prev => prev.filter(a => a.id !== alert.id))}
-                style={{
-                  background: 'none', border: 'none', color: '#fde047', fontSize: 16,
-                  cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0,
-                }}
-                title="Fermer"
-              >✕</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Pilot availability alerts removed — ActivityFeed below the calendar now covers this */}
 
       {/* Page Paramètres — overlay plein écran */}
       {showSettings && (
