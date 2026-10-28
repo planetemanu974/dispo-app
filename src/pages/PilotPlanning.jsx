@@ -412,11 +412,16 @@ export default function PilotPlanning() {
             </div>
           </div>
 
-          <div style={{ padding: '10px 16px 4px' }}>
+          <div style={{ padding: '10px 16px 4px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button style={s.vacationBtn}
               onClick={() => { setRangeStart(''); setRangeEnd(''); setShowRangeModal(true) }}>
               🏖️ Marquer indispo sur une période
             </button>
+            {!selectMode && (
+              <button style={s.selectInlineBtn} onClick={() => setSelectMode(true)}>
+                ☑ Sélectionner des créneaux
+              </button>
+            )}
           </div>
         </>
       )}
@@ -552,14 +557,7 @@ export default function PilotPlanning() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          FAB — "✓ Sélectionner" button (bottom-right, week view only)
-          ════════════════════════════════════════════════════════════════════ */}
-      {viewMode === 'week' && !selectMode && (
-        <button style={s.fabSelect} onClick={() => setSelectMode(true)}>
-          ✓ Sélectionner
-        </button>
-      )}
+      {/* FAB removed — select button is now inline below the vacation button */}
 
       {/* ════════════════════════════════════════════════════════════════════
           BULK ACTION BAR — pinned bottom when select mode is active
@@ -867,15 +865,11 @@ const s = {
     color: '#f87171', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
   },
 
-  // ── FAB: Sélectionner (fixed bottom-right)
-  fabSelect: {
-    position: 'fixed', bottom: 20, right: 16,
-    padding: '12px 18px', borderRadius: 24,
-    background: '#1d4ed8', border: 'none',
-    color: '#fff', fontSize: 14, fontWeight: 800,
-    cursor: 'pointer', fontFamily: 'inherit',
-    boxShadow: '0 4px 20px rgba(29,78,216,.5)',
-    zIndex: 100,
+  // ── Inline select button (below vacation btn)
+  selectInlineBtn: {
+    width: '100%', padding: '11px',
+    background: '#0f1f3d', border: '1px solid #1e3a5f', borderRadius: 10,
+    color: '#93c5fd', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
   },
 
   // ── Bulk action bar (fixed bottom, full-width, select mode)
