@@ -887,6 +887,7 @@ export default function Dashboard({ pilot }) {
     const emptyPax = (cat, vol) => ({ firstName: '', lastName: '', cat: cat || 'under75', vol: vol || flightTypes[0]?.id || 'discovery' })
     setNbForm({
       mode:             'client',   // 'client' = a customer | 'partner' = colleague / structure not in the database
+      partnerCustom:    false,      // true = typing a name not in the saved list
       partnerName:      '',         // free text, e.g. "Antoine" or "Parapente des îles"
       contactFirstName: '',
       contactLastName:  '',
@@ -2396,15 +2397,32 @@ export default function Dashboard({ pilot }) {
               {nbForm.mode === 'partner' ? (
                 <>
                   <label className="edit-label">Pour qui ? (collègue ou structure) *</label>
-                  <input className="edit-input" list="nb-partner-names" placeholder="Ex : Antoine, Parapente des îles"
-                    value={nbForm.partnerName}
-                    onChange={e => setNbForm(f => ({ ...f, partnerName: e.target.value }))} />
-                  <datalist id="nb-partner-names">
-                    {colleagues.map(c => <option key={c.id} value={c.name} />)}
-                  </datalist>
-                  <label className="edit-label">Téléphone (facultatif — aucun SMS n'est envoyé)</label>
-                  <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
-                    onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
+                  {/* Saved structures first, then direct pilots; "other" lets you type a new name */}
+                  <select className="edit-input"
+                    value={nbForm.partnerCustom ? '__other__' : nbForm.partnerName}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === '__other__') setNbForm(f => ({ ...f, partnerCustom: true, partnerName: '' }))
+                      else setNbForm(f => ({ ...f, partnerCustom: false, partnerName: v }))
+                    }}>
+                    <option value="">— Choisir —</option>
+                    {colleagues.some(c => !c.is_direct) && (
+                      <optgroup label="Structures">
+                        {colleagues.filter(c => !c.is_direct).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </optgroup>
+                    )}
+                    {colleagues.some(c => c.is_direct) && (
+                      <optgroup label="Pilotes">
+                        {colleagues.filter(c => c.is_direct).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </optgroup>
+                    )}
+                    <option value="__other__">✏️ Autre (nouveau nom)…</option>
+                  </select>
+                  {nbForm.partnerCustom && (
+                    <input className="edit-input" autoFocus placeholder="Ex : Antoine, Parapente des îles"
+                      value={nbForm.partnerName}
+                      onChange={e => setNbForm(f => ({ ...f, partnerName: e.target.value }))} />
+                  )}
                 </>
               ) : (
                 <>
@@ -2426,7 +2444,8 @@ export default function Dashboard({ pilot }) {
                 </>
               )}
 
-              {/* Quick-fill: 4 compact dropdowns — auto-builds passenger rows */}
+              {/* Quick-fill: 4 compact dropdowns — auto-builds passenger rows (client bookings only) */}
+              {nbForm.mode !== 'partner' && <>
               <label className="edit-label">Répartition des vols</label>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:4 }}>
                 {/* Personnes */}
@@ -2522,10 +2541,11 @@ export default function Dashboard({ pilot }) {
                   </select>
                 </div>
               </div>
+              </>}
             </div>
 
-            {/* Passengers — catégorie + vol par personne */}
-            <div className="edit-section">
+            {/* Passengers — catégorie + vol par personne (client bookings only) */}
+            {nbForm.mode !== 'partner' && <div className="edit-section">
               <div className="edit-section-title">Passagers</div>
               {nbForm.passengers.map((p, i) => {
                 const isChild = p.cat === 'under14'
@@ -2591,7 +2611,7 @@ export default function Dashboard({ pilot }) {
                   + Ajouter un passager
                 </button>
               )}
-            </div>
+            </div>}
 
             {/* Notes */}
             <div className="edit-section">
@@ -2608,8 +2628,8 @@ export default function Dashboard({ pilot }) {
               <button className="btn-refuse" onClick={() => { setNewBookingSlot(null); setNbForm(null) }}>Annuler</button>
             </div>
 
-            {/* Close slot from new-booking form — available even without a booking */}
-            <button
+            {/* Close slot from new-booking form — available even without a booking (client mode only) */}
+            {nbForm.mode !== 'partner' && <button
               onClick={() => {
                 if (!window.confirm('Fermer ce créneau (PAS DISPO) sans réservation ?')) return
                 toggleAvailability(newBookingSlot.slot)
@@ -2624,7 +2644,7 @@ export default function Dashboard({ pilot }) {
                 color:'#fca5a5', fontFamily:'inherit'
               }}>
               🔒 Fermer ce créneau plutôt (PAS DISPO)
-            </button>
+            </button>}
           </div>
         </div>
       )}
