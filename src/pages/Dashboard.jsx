@@ -319,7 +319,7 @@ export default function Dashboard({ pilot }) {
       // Load colleagues for pilot dropdown in closure section
       const { data: cols } = await supabase
         .from('colleagues')
-        .select('id, name, is_direct, is_fixed, fixed_order, created_at')
+        .select('*') // '*' keeps working before migration 021 (logo_url) is applied
         .eq('pilot_id', pilot.id)
         .order('name')
       if (cols) {
@@ -1383,6 +1383,13 @@ export default function Dashboard({ pilot }) {
     return 'week-slot--free'
   }
 
+  // Logo of the structure a partner (COL-) booking was made for, if one was uploaded
+  function structureLogo(bk) {
+    if (!bk || !String(bk.booking_ref || '').startsWith('COL-')) return null
+    const n = (bk.contact_name || '').trim().toLowerCase()
+    return colleagues.find(c => !c.is_direct && c.logo_url && (c.name || '').trim().toLowerCase() === n)?.logo_url || null
+  }
+
   // Label shown inside a week slot block
   function slotWeekLabel(slot, bookingsForSlot) {
     const active = bookingsForSlot.filter(b => b.status === 'pending' || b.status === 'confirmed')
@@ -2090,8 +2097,14 @@ export default function Dashboard({ pilot }) {
                                 </button>
                               )}
                             </div>
-                            {/* Row 2: passenger name */}
-                            {name && (
+                            {/* Row 2: structure logo (partner bookings) or passenger name */}
+                            {structureLogo(firstActive) && (
+                              <div style={{ flex:1, minHeight:0, padding:'1px 2px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                <img src={structureLogo(firstActive)} alt={firstActive.contact_name}
+                                  style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', background:'rgba(255,255,255,0.92)', borderRadius:4, padding:1 }} />
+                              </div>
+                            )}
+                            {name && !structureLogo(firstActive) && (
                               <span style={{ fontSize:'0.65rem', fontWeight:800, padding:'0 4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block' }}>
                                 {name}
                               </span>
@@ -2711,6 +2724,7 @@ export default function Dashboard({ pilot }) {
                   }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#e2e8f0', marginBottom: 3 }}>
+                      {structureLogo(bk) && <img src={structureLogo(bk)} alt="" style={{ height: 22, verticalAlign: 'middle', marginRight: 8, background: '#fff', borderRadius: 4, padding: 1 }} />}
                       {bk.contact_name || '—'}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>

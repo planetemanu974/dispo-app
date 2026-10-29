@@ -201,7 +201,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, email, active, invite_used, invite_token, created_at, is_direct, is_fixed, fixed_order, notes')
+      .select('*') // '*' so the list keeps loading even before migration 021 (logo_url) is applied
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -392,6 +392,39 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
     loadColleagues()
     // Mettre à jour les données locales du modal (sans fermer)
     setColleagues(prev => prev.map(c => c.id === detailColleague.id ? { ...c, ...detailColleague } : c))
+  }
+
+  // ── Structure logo: resized client-side, stored as a small data URL ──────
+  function handleLogoFile(file) {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = async () => {
+        const MAX = 160
+        const ratio = Math.min(1, MAX / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width  = Math.max(1, Math.round(img.width  * ratio))
+        canvas.height = Math.max(1, Math.round(img.height * ratio))
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        await saveLogo(canvas.toDataURL('image/png'))
+      }
+      img.onerror = () => alert('Image illisible. Essayez un PNG ou un JPG.')
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function saveLogo(dataUrl) {
+    const { error } = await supabase.from('colleagues')
+      .update({ logo_url: dataUrl })
+      .eq('id', detailColleague.id).eq('pilot_id', pilot.id)
+    if (error) {
+      alert('Logo non enregistré : ' + error.message + '\n(La migration 021 doit être appliquée dans Supabase.)')
+      return
+    }
+    setDetailColleague(prev => ({ ...prev, logo_url: dataUrl }))
+    setColleagues(prev => prev.map(c => c.id === detailColleague.id ? { ...c, logo_url: dataUrl } : c))
   }
 
   async function handleToggleActive() {
@@ -869,6 +902,30 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
                   ? (detailColleague.invite_used ? '✅ Compte actif' : '⏳ Invitation non utilisée')
                   : '🚫 Accès révoqué')}
           </p>
+
+          {/* Logo of the structure — shown on the planning instead of its name */}
+          {!detailColleague.is_direct && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 64, height: 64, borderRadius: 10, background: '#fff', border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                {detailColleague.logo_url
+                  ? <img src={detailColleague.logo_url} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  : <span style={{ fontSize: 11, color: '#94a3b8' }}>Logo</span>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ padding: '8px 12px', background: '#1e3a5f', color: '#93c5fd', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  🖼️ {detailColleague.logo_url ? 'Changer le logo' : 'Ajouter le logo'}
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { handleLogoFile(e.target.files?.[0]); e.target.value = '' }} />
+                </label>
+                {detailColleague.logo_url && (
+                  <button type="button" onClick={() => saveLogo(null)}
+                    style={{ padding: '6px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Retirer
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSaveDetail}>
             <label style={s.label}>{detailColleague.is_direct ? 'Prénom / Nom' : 'Nom de la structure'}</label>

@@ -109,10 +109,20 @@ Deno.serve(async (req) => {
       if (isSelfPilot) {
         const { data: pilotSlotsRaw } = await supabase
           .from('pilot_slots')
-          .select('id, slot_date, slot_time, bookings(id, status, passengers(*))')
+          .select('id, slot_date, slot_time, bookings(id, status, booking_ref, contact_name, passengers(*))')
           .eq('pilot_id', pilotId)
           .gte('slot_date', startStr)
           .lte('slot_date', endStr)
+
+        // Structure logos (partner bookings made for a structure) — best effort:
+        // the column only exists once migration 021 is applied.
+        const logoByName: Record<string, string> = {}
+        try {
+          const { data: logoRows } = await supabase
+            .from('colleagues').select('name, logo_url')
+            .eq('pilot_id', pilotId).not('logo_url', 'is', null)
+          for (const r of logoRows || []) logoByName[String(r.name || '').trim().toLowerCase()] = r.logo_url
+        } catch (_) { /* ignore */ }
 
         // One synthetic assignment per confirmed booking in the week
         selfPilotAssignments = (pilotSlotsRaw || []).flatMap((ps: any) => {
@@ -128,6 +138,9 @@ Deno.serve(async (req) => {
               id: b.id,
               pilot_slot_id: ps.id,
               passengers: b.passengers || [],
+              logo_url: String(b.booking_ref || '').startsWith('COL-')
+                ? (logoByName[String(b.contact_name || '').trim().toLowerCase()] || null)
+                : null,
               pilot_slots: {
                 slot_date: ps.slot_date,
                 slot_time: ps.slot_time,

@@ -425,7 +425,12 @@ export default function PilotPlanning() {
                           }}>
                             {status === 'available'   && 'DISPO'}
                             {status === 'unavailable' && 'PAS DISPO'}
-                            {status === 'booked'      && 'BOOKÉ'}
+                            {status === 'booked' && (
+                              getAssignmentForSlot(assignments, dateStr, slotTime)?.bookings?.logo_url
+                                ? <img src={getAssignmentForSlot(assignments, dateStr, slotTime).bookings.logo_url} alt="BOOKÉ"
+                                    style={{ display: 'block', maxWidth: 34, maxHeight: 44, objectFit: 'contain', background: 'rgba(255,255,255,0.92)', borderRadius: 4, padding: 1 }} />
+                                : 'BOOKÉ'
+                            )}
                           </div>
                         </div>
                       </div>
