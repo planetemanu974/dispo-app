@@ -212,7 +212,12 @@ export default function FlightClosure({
 
   // ── Validation ────────────────────────────────────────────────────────
   const validCards = cards.filter(c => hasFlights(c) && c.method)
-  const canSave    = validCards.length > 0
+  // Partner booking (colleague / structure): no payment handled by the pilot,
+  // only the flights done are recorded (flight type required on each line).
+  const isPartner  = String(booking.booking_ref || '').startsWith('COL-')
+  const canSave    = isPartner
+    ? pilotFlights.length > 0 && pilotFlights.every(pf => pf.flight_type_id)
+    : validCards.length > 0
   const grandTotal = cards.reduce((s, c) => s + cardTotal(c, flightTypes), 0)
 
   // ── Sauvegarde ────────────────────────────────────────────────────────
@@ -232,7 +237,7 @@ export default function FlightClosure({
       const allItems = [...flightTypes, ...MEDIA_PACKS]
 
       // Construire les groupes de paiement
-      const paymentGroups = cards
+      const paymentGroups = (isPartner ? [] : cards)
         .filter(c => hasFlights(c) && c.method)
         .map(c => {
           const flight_lines = Object.entries(c.quantities)
@@ -432,16 +437,24 @@ export default function FlightClosure({
         </button>
       </div>
 
+      {isPartner && (
+        <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>
+          🤝 Vol pour {booking.contact_name} — aucun paiement à saisir.
+        </div>
+      )}
+
       {/* Séparateur */}
+      {!isPartner && (
       <div style={{
         fontSize: 11, fontWeight: 800, color: '#38bdf8',
         textTransform: 'uppercase', letterSpacing: '.6px',
       }}>
         💳 Paiements
       </div>
+      )}
 
       {/* ── SECTION 2 : CARTES DE PAIEMENT ───────────────────────────── */}
-      {cards.map((card, cardIndex) => (
+      {!isPartner && cards.map((card, cardIndex) => (
         <PaymentCard
           key={card.id}
           card={card}
@@ -459,7 +472,7 @@ export default function FlightClosure({
       ))}
 
       {/* Ajouter un paiement */}
-      <button
+      {!isPartner && <button
         onClick={addCard}
         style={{
           padding: '10px', borderRadius: 10, cursor: 'pointer',
@@ -467,7 +480,7 @@ export default function FlightClosure({
           color: '#64748b', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
         }}>
         + Ajouter un paiement
-      </button>
+      </button>}
 
       {/* ── TOTAL GÉNÉRAL ─────────────────────────────────────────────── */}
       {cards.length > 1 && grandTotal > 0 && (
