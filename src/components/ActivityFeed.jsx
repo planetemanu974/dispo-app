@@ -16,6 +16,7 @@ const ACTION_LABELS = {
   booking_created:        { icon: '📋', text: 'Réservation créée' },
   booking_confirmed:      { icon: '✅', text: 'Réservation confirmée' },
   booking_refused:        { icon: '❌', text: 'Réservation refusée' },
+  booking_payment_saved:  { icon: '🛬', text: 'Vol clôturé' },
   booking_cancelled:      { icon: '🚫', text: 'Réservation annulée' },
   booking_edited:         { icon: '✏️', text: 'Réservation modifiée' },
   slot_toggled:           { icon: '🔄', text: 'Créneau' },
