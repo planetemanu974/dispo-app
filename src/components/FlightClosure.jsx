@@ -295,7 +295,7 @@ export default function FlightClosure({
       const firstInvNum   = paymentGroups.find(g => g.invoice_number)?.invoice_number || null
 
       const { error: dbErr } = await supabase.from('bookings').update({
-        payment_method: primaryMethod,
+        payment_method: primaryMethod || null,  // NULL for partner bookings (check constraint rejects '')
         invoice_type:   'custom',
         invoice_number: firstInvNum,
         paid_at:        new Date().toISOString(),
