@@ -618,13 +618,17 @@ export default function Dashboard({ pilot }) {
       setFixedUnavailability(prev => prev.filter(u => !idsToDelete.includes(u.id)))
       // Soft-delete (removed_at) instead of DELETE so ActivityFeed can show
       // "Disponibilité rétablie" in DERNIERS CHANGEMENTS.
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('fixed_pilot_unavailability')
         .update({ removed_at: new Date().toISOString() })
         .in('id', idsToDelete)
         .is('removed_at', null)
-      if (error) {
-        console.error('togglePilotAvailability delete error:', error)
+        .select('id')
+      // RLS can reject an UPDATE without raising an error (0 rows returned),
+      // so treat "nothing updated" as a failure too — and tell the user.
+      if (error || !updated || updated.length === 0) {
+        console.error('togglePilotAvailability update error:', error)
+        alert('Impossible de rétablir la disponibilité : ' + (error?.message || 'modification refusée par la base (droits RLS).'))
         loadWeek(weekStart)  // revert on error
       }
     } else {
@@ -647,6 +651,7 @@ export default function Dashboard({ pilot }) {
         .single()
       if (error) {
         console.error('togglePilotAvailability insert error:', error)
+        alert('Impossible de marquer le pilote absent : ' + error.message)
         setFixedUnavailability(prev => prev.filter(u => u.id !== tempId))
         loadWeek(weekStart)  // revert on error
       } else {

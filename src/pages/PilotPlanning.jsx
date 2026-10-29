@@ -181,11 +181,15 @@ export default function PilotPlanning() {
         // Remove all unavailability entries covering this slot
         const matches = getUnavailForSlot(unavailability, dateStr, slotTime)
         for (const u of matches) {
-          await fetch(FUNCTION_URL, {
+          const r = await fetch(FUNCTION_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...AUTH_HEADERS },
             body: JSON.stringify({ token, action: 'remove_unavail', id: u.id }),
           })
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}))
+            alert(d.error || 'Erreur lors du rétablissement de la disponibilité')
+          }
         }
       }
       await fetchPlanning(weekStart)
