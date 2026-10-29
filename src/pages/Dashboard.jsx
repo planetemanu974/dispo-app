@@ -2355,7 +2355,7 @@ export default function Dashboard({ pilot }) {
                               if (slot.is_available && !window.confirm(`Fermer le créneau ${slot.slot_time.slice(0, 5)} (PAS DISPO) ?`)) return
                               toggleAvailability(slot)
                             }}>
-                            {slot.is_available ? '🔒 Fermer' : '🔓 Rouvrir'}
+                            {slot.is_available ? '🔒 PAS DISPO' : '🔓 DISPO'}
                           </button>
                         )}
                       </div>
@@ -2682,7 +2682,7 @@ export default function Dashboard({ pilot }) {
                   toggleAvailability(slotToggleTarget)
                   setSlotToggleTarget(null)
                 }}>
-                🔓 Rouvrir ce créneau
+                🔓 Remettre DISPO
               </button>
               <button className="btn-refuse" onClick={() => setSlotToggleTarget(null)}>
                 Annuler
