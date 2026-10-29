@@ -721,6 +721,28 @@ export default function Dashboard({ pilot }) {
     loadWeek(weekStart)
   }
 
+  // ── Activity feed shortcuts ───────────────────────────────────────────────
+  // Tapping a "Réservation …" entry opens that booking's detail card.
+  // Returns false when the booking no longer exists (caller falls back to the day).
+  async function openBookingFromFeed(bookingId) {
+    const { data } = await supabase
+      .from('bookings')
+      .select('*, passengers(*), pilot_slots(id, slot_date, slot_time, is_available)')
+      .eq('id', bookingId)
+      .maybeSingle()
+    if (!data) return false
+    setSelectedBooking(data)
+    return true
+  }
+
+  // Tapping any other entry jumps to the day view of the day it is about.
+  function openDayFromFeed(date) {
+    setSelectedDate(date)
+    setViewMode('day')
+    loadDay(date)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   // ── applyBulkAvailability ─────────────────────────────────────────────────
   // Sets is_available on all selectedSlotIds in one Supabase call, then exits select mode.
   async function applyBulkAvailability(isAvailable) {
@@ -2926,7 +2948,7 @@ export default function Dashboard({ pilot }) {
 
       {/* ── Activity feed: last changes, shown below the week/day/pilots views ── */}
       {(viewMode === 'week' || viewMode === 'day') && (
-        <ActivityFeed pilotId={pilot.id} />
+        <ActivityFeed pilotId={pilot.id} onOpenBooking={openBookingFromFeed} onOpenDay={openDayFromFeed} />
       )}
 
       {/* ── Booking detail modal (shared by both views) ── */}

@@ -1,7 +1,11 @@
 // ActivityFeed.jsx
 // Live feed of recent planning changes shown below the admin calendar.
-// Merges activity_log (admin actions) + fixed_pilot_unavailability inserts
-// (pilots marking themselves unavailable from their own planning page).
+// Merges three sources:
+//   1. activity_log                         → admin actions (bookings, slots…)
+//   2. fixed_pilot_unavailability (active)  → pilot marked himself unavailable
+//   3. fixed_pilot_unavailability (removed) → pilot re-enabled availability (soft-delete)
+// Every entry shows WHO / WHAT / WHEN in full (wrapping, never truncated) and is
+// tappable: a booking entry opens that booking, any other entry jumps to its day.
 // Auto-refreshes silently every 30 seconds.
 
 import React, { useEffect, useState, useCallback } from 'react'
@@ -41,7 +45,7 @@ function fmtDate(str) {
 }
 
 // Build a short detail string from an activity_log details object
-function logDetail(action, details = {}) {
+function logDetail(action, details = {}, colleagueName = null) {
   const parts = []
 
   // Slot toggle: show date + time + what changed (ouvert/fermé)
@@ -58,14 +62,10 @@ function logDetail(action, details = {}) {
     const n = details.count ?? '?'
     const parts2 = [`${n} créneau${n > 1 ? 'x' : ''}`]
     if (details.dates?.length) {
-      const dateLabels = details.dates.map(d => fmtDate(d))
-      // If all same day, show once; otherwise show range
-      const unique = [...new Set(dateLabels)]
+      const unique = [...new Set(details.dates.map(d => fmtDate(d)))]
       parts2.push(unique.length === 1 ? unique[0] : `${unique[0]} → ${unique[unique.length - 1]}`)
     }
-    if (details.times?.length) {
-      parts2.push(details.times.join(', '))
-    }
+    if (details.times?.length) parts2.push(details.times.join(', '))
     return parts2.join(' · ')
   }
 
@@ -80,15 +80,16 @@ function logDetail(action, details = {}) {
     return parts2.join(' · ')
   }
 
-  // Pilot unavailability added/removed: show date range + slot time
+  // Pilot unavailability added/removed: pilot + date range + slot time
   if (action === 'pilot_unavail_added' || action === 'pilot_unavail_removed') {
+    if (colleagueName) parts.push(colleagueName)
     if (details.start_date) {
       const start = fmtDate(details.start_date)
       const end   = details.end_date && details.end_date !== details.start_date ? fmtDate(details.end_date) : null
       parts.push(end ? `${start} → ${end}` : start)
     }
-    if (details.slot_time) parts.push(`· ${details.slot_time.slice(0, 5)}`)
-    return parts.join(' ')
+    parts.push(details.slot_time ? details.slot_time.slice(0, 5) : 'journée entière')
+    return parts.join(' · ')
   }
 
   // Booking actions: contact name + date + time + pax + status change
@@ -100,9 +101,43 @@ function logDetail(action, details = {}) {
   return parts.join(' · ')
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// The day an activity_log entry is about (used to jump to that day when tapped)
+function logDate(action, d = {}) {
+  return d.slot_date || d.start_date || d.dates?.[0] || null
+}
 
-export default function ActivityFeed({ pilotId }) {
+// Merge consecutive rows created/removed by the same pilot within 10 s into ONE
+// entry (a "whole day" request is stored as several rows by the server).
+function groupRows(rows, atKey) {
+  const groups = []
+  for (const r of rows) {
+    const g = groups[groups.length - 1]
+    if (g && g.colleagueId === r.colleague_id &&
+        Math.abs(new Date(g.at) - new Date(r[atKey])) < 10_000) {
+      g.rows.push(r)
+    } else {
+      groups.push({ colleagueId: r.colleague_id, at: r[atKey], name: r.colleagues?.name, rows: [r] })
+    }
+  }
+  return groups
+}
+
+function groupDetail(name, rows) {
+  const starts = rows.map(r => r.start_date).sort()
+  const first  = starts[0]
+  const last   = rows.map(r => r.end_date).sort().pop()
+  const times  = [...new Set(rows.filter(r => r.slot_time).map(r => r.slot_time.slice(0, 5)))].sort()
+  const allDay = rows.some(r => !r.slot_time)
+  const day    = first === last ? fmtDate(first) : `${fmtDate(first)} → ${fmtDate(last)}`
+  const when   = allDay ? (times.length ? `journée entière + ${times.join(', ')}` : 'journée entière') : times.join(', ')
+  return [name, day, when].filter(Boolean).join(' · ')
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+// onOpenBooking(bookingId) → Promise<boolean>  (true when the booking was opened)
+// onOpenDay(dateStr)       → jump to that day in the day view
+
+export default function ActivityFeed({ pilotId, onOpenBooking, onOpenDay }) {
   const [entries, setEntries] = useState([])
   const [adminName, setAdminName] = useState('')
 
@@ -120,98 +155,107 @@ export default function ActivityFeed({ pilotId }) {
   const load = useCallback(async () => {
     if (!pilotId) return
 
-    // 1. Admin's own activity log (most recent 12 entries)
+    // Colleague names, to say WHICH pilot an unavailability is about
+    const { data: cols } = await supabase
+      .from('colleagues').select('id, name').eq('pilot_id', pilotId)
+    const colName = Object.fromEntries((cols || []).map(c => [c.id, c.name]))
+
+    // 1. Admin's own activity log (most recent 15 entries)
     const { data: logs } = await supabase
       .from('activity_log')
-      .select('id, action, details, created_at')
+      .select('id, action, entity_type, entity_id, details, created_at')
       .eq('pilot_id', pilotId)
       .order('created_at', { ascending: false })
-      .limit(12)
+      .limit(15)
 
     // 2a. Active colleague unavailabilities (pilot marked themselves unavailable)
     const { data: activeUnavails } = await supabase
       .from('fixed_pilot_unavailability')
-      .select('id, start_date, end_date, slot_time, created_at, colleagues(name)')
+      .select('id, colleague_id, start_date, end_date, slot_time, created_at, colleagues(name)')
       .eq('pilot_id', pilotId)
       .is('removed_at', null)
       .order('created_at', { ascending: false })
-      .limit(12)
+      .limit(30)
 
-    // 2b. Recently re-enabled availabilities (pilot unchecked within last 7 days)
-    //     Uses soft-delete: removed_at is set instead of deleting the row,
-    //     so we can reliably show "Disponibilité rétablie" events.
+    // 2b. Recently re-enabled availabilities (soft-deleted within last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const { data: removedUnavails } = await supabase
       .from('fixed_pilot_unavailability')
-      .select('id, start_date, end_date, slot_time, removed_at, colleagues(name)')
+      .select('id, colleague_id, start_date, end_date, slot_time, created_at, removed_at, colleagues(name)')
       .eq('pilot_id', pilotId)
       .not('removed_at', 'is', null)
       .gte('removed_at', sevenDaysAgo)
       .order('removed_at', { ascending: false })
-      .limit(12)
+      .limit(30)
 
-    const logItems = (logs || []).map(l => {
-      const d = l.details || {}
-      let { icon, text } = ACTION_LABELS[l.action] || { icon: '•', text: l.action }
-      // For slot toggles, include the new state in the label itself
-      if (l.action === 'slot_toggled') {
-        text = d.is_available === true  ? 'Créneau ouvert'
-             : d.is_available === false ? 'Créneau fermé'
-             : 'Créneau modifié'
-      }
-      if (l.action === 'bulk_slot_toggle') {
-        text = d.is_available === true  ? 'Créneaux ouverts (lot)'
-             : d.is_available === false ? 'Créneaux fermés (lot)'
-             : 'Créneaux modifiés (lot)'
-      }
-      return {
-        id: `log-${l.id}`,
-        at: l.created_at,
-        icon,
-        label: text,
-        detail: logDetail(l.action, d),
-        source: 'admin',
-        author: null, // filled in render using adminName state
-      }
-    })
+    const near = (a, b) => Math.abs(new Date(a) - new Date(b)) < 15_000
 
-    // Active unavailabilities → "🚫 Indisponibilité"
-    const unavailItems = (activeUnavails || []).map(u => {
-      const name = u.colleagues?.name || 'Pilote'
-      const range =
-        u.start_date === u.end_date
-          ? fmtDate(u.start_date)
-          : `${fmtDate(u.start_date)} → ${fmtDate(u.end_date)}`
-      const time = u.slot_time ? ` · ${u.slot_time.slice(0, 5)}` : ''
-      return {
-        id: `unavail-${u.id}`,
-        at: u.created_at,
-        icon: '🚫',
-        label: 'Indisponibilité',
-        detail: range + time,
-        source: 'pilot',
-        author: name,
-      }
-    })
+    // Table-derived entries (grouped)
+    const unavailItems = groupRows(activeUnavails || [], 'created_at').map(g => ({
+      id: `unavail-${g.rows[0].id}`,
+      at: g.at,
+      icon: '🚫',
+      label: 'Indisponibilité',
+      detail: groupDetail(null, g.rows),
+      source: 'pilot',
+      author: g.name || 'Pilote',
+      target: { type: 'day', date: g.rows.map(r => r.start_date).sort()[0] },
+    }))
+    const removedItems = groupRows(removedUnavails || [], 'removed_at').map(g => ({
+      id: `removed-${g.rows[0].id}`,
+      at: g.at,
+      icon: '✅',
+      label: 'Disponibilité rétablie',
+      detail: groupDetail(null, g.rows),
+      source: 'pilot',
+      author: g.name || 'Pilote',
+      target: { type: 'day', date: g.rows.map(r => r.start_date).sort()[0] },
+    }))
 
-    // Recently removed unavailabilities → "✅ Disponibilité rétablie"
-    const removedItems = (removedUnavails || []).map(u => {
-      const name = u.colleagues?.name || 'Pilote'
-      const range =
-        u.start_date === u.end_date
-          ? fmtDate(u.start_date)
-          : `${fmtDate(u.start_date)} → ${fmtDate(u.end_date)}`
-      const time = u.slot_time ? ` · ${u.slot_time.slice(0, 5)}` : ''
-      return {
-        id: `removed-${u.id}`,
-        at: u.removed_at,
-        icon: '✅',
-        label: 'Disponibilité rétablie',
-        detail: range + time,
-        source: 'pilot',
-        author: name,
-      }
-    })
+    // activity_log entries. Pilot unavailability events are ALSO written to the log by the
+    // server: drop those already covered by a table-derived entry (same pilot, same moment).
+    const allRows = [...(activeUnavails || []), ...(removedUnavails || [])]
+    const logItems = (logs || [])
+      .filter(l => {
+        if (l.action === 'pilot_unavail_added') {
+          return !allRows.some(r => r.colleague_id === l.details?.colleague_id && near(r.created_at, l.created_at))
+        }
+        if (l.action === 'pilot_unavail_removed') {
+          return !(removedUnavails || []).some(r => r.colleague_id === l.details?.colleague_id && near(r.removed_at, l.created_at))
+        }
+        return true
+      })
+      .map(l => {
+        const d = l.details || {}
+        const isPilotEvent = l.action === 'pilot_unavail_added' || l.action === 'pilot_unavail_removed'
+        const who = isPilotEvent ? (colName[d.colleague_id] || 'Pilote') : null
+        let { icon, text } = ACTION_LABELS[l.action] || { icon: '•', text: l.action }
+        // For slot toggles, include the new state in the label itself
+        if (l.action === 'slot_toggled') {
+          text = d.is_available === true  ? 'Créneau ouvert'
+               : d.is_available === false ? 'Créneau fermé'
+               : 'Créneau modifié'
+        }
+        if (l.action === 'bulk_slot_toggle') {
+          text = d.is_available === true  ? 'Créneaux ouverts (lot)'
+               : d.is_available === false ? 'Créneaux fermés (lot)'
+               : 'Créneaux modifiés (lot)'
+        }
+        const date = logDate(l.action, d)
+        let target = null
+        if (l.entity_type === 'booking' && l.entity_id) target = { type: 'booking', id: l.entity_id, date }
+        else if (date) target = { type: 'day', date }
+        return {
+          id: `log-${l.id}`,
+          at: l.created_at,
+          icon,
+          label: text,
+          detail: logDetail(l.action, d, who),
+          source: isPilotEvent ? 'pilot' : 'admin',
+          author: isPilotEvent ? who : null, // admin name filled in at render time
+          target,
+        }
+      })
 
     // Merge all sources, sort newest-first, keep 15
     const all = [...logItems, ...unavailItems, ...removedItems]
@@ -226,6 +270,20 @@ export default function ActivityFeed({ pilotId }) {
     return () => clearInterval(id)
   }, [load])
 
+  // Tap on an entry → open the booking, or jump to the day it is about
+  async function handleOpen(entry) {
+    const t = entry.target
+    if (!t) return
+    if (t.type === 'booking') {
+      const opened = onOpenBooking ? await onOpenBooking(t.id) : false
+      if (opened) return
+      if (t.date && onOpenDay) { onOpenDay(t.date); return }
+      window.alert("Cette réservation n'existe plus.")
+      return
+    }
+    if (t.type === 'day' && t.date && onOpenDay) onOpenDay(t.date)
+  }
+
   if (!entries.length) return null
 
   return (
@@ -233,6 +291,7 @@ export default function ActivityFeed({ pilotId }) {
       padding: '4px 12px 28px',
       maxWidth: 900,
       margin: '0 auto',
+      boxSizing: 'border-box',
     }}>
       {/* Section header */}
       <div style={{
@@ -259,51 +318,31 @@ export default function ActivityFeed({ pilotId }) {
         overflow: 'hidden',
         border: '1px solid rgba(100,116,139,0.15)',
       }}>
-        {entries.map((e, i) => (
-          <div
-            key={e.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '7px 12px',
-              background: i % 2 === 0
-                ? 'rgba(30,41,59,0.45)'
-                : 'rgba(15,23,42,0.3)',
-              fontSize: '0.76rem',
-              lineHeight: 1.4,
-            }}
-          >
-            {/* Timestamp */}
-            <span style={{
-              flex: '0 0 auto',
-              color: '#64748b',
-              fontVariantNumeric: 'tabular-nums',
-              minWidth: 145,
-              fontSize: '0.72rem',
-            }}>
-              {fmtDT(e.at)}
-            </span>
-
-            {/* Icon + label */}
-            <span style={{ flex: '0 0 auto' }}>{e.icon}</span>
-            <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{e.label}</span>
-
-            {/* Detail */}
-            {e.detail && (
-              <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                — {e.detail}
-              </span>
-            )}
-
-            {/* Author badge */}
-            {(() => {
-              const name = e.source === 'admin' ? (adminName || 'Admin') : e.author
-              const isAdmin = e.source === 'admin'
-              return (
+        {entries.map((e, i) => {
+          const isAdmin = e.source === 'admin'
+          const name = isAdmin ? (adminName || 'Admin') : e.author
+          const tappable = !!e.target
+          return (
+            <div
+              key={e.id}
+              role={tappable ? 'button' : undefined}
+              onClick={tappable ? () => handleOpen(e) : undefined}
+              style={{
+                padding: '8px 12px',
+                background: i % 2 === 0 ? 'rgba(30,41,59,0.45)' : 'rgba(15,23,42,0.3)',
+                textAlign: 'left',
+                cursor: tappable ? 'pointer' : 'default',
+                textTransform: 'none',
+              }}
+            >
+              {/* Line 1: icon + label … who */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <span style={{ flex: '0 0 auto', fontSize: '0.85rem' }}>{e.icon}</span>
+                <span style={{ flex: 1, minWidth: 0, color: '#e2e8f0', fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.3 }}>
+                  {e.label}
+                </span>
                 <span style={{
                   flex: '0 0 auto',
-                  marginLeft: 'auto',
                   fontSize: '0.68rem',
                   fontWeight: 700,
                   padding: '1px 7px',
@@ -315,10 +354,23 @@ export default function ActivityFeed({ pilotId }) {
                 }}>
                   {name}
                 </span>
-              )
-            })()}
-          </div>
-        ))}
+                {tappable && <span style={{ flex: '0 0 auto', color: '#64748b', fontSize: '1rem', lineHeight: 1 }}>›</span>}
+              </div>
+
+              {/* Line 2: full detail (wraps, never cut) */}
+              {e.detail && (
+                <div style={{ marginTop: 3, paddingLeft: 26, color: '#cbd5e1', fontSize: '0.76rem', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+                  {e.detail}
+                </div>
+              )}
+
+              {/* Line 3: when */}
+              <div style={{ marginTop: 2, paddingLeft: 26, color: '#64748b', fontSize: '0.68rem', fontVariantNumeric: 'tabular-nums' }}>
+                {fmtDT(e.at)}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
