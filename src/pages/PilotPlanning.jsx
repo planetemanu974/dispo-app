@@ -332,21 +332,22 @@ export default function PilotPlanning() {
 
       {/* ── Top header ──────────────────────────────────────────────────── */}
       <div style={s.topBar}>
-        {/* Left: logo + pilot name */}
+        {/* Left: logo with the app name underneath, then the pilot's name */}
         <div style={s.topLeft}>
-          <img src="/logo-icon.png" alt="Logo" style={{ height: 32, display: 'block', flexShrink: 0 }}
-            onError={e => { e.target.style.display = 'none' }} />
+          <div style={s.logoWrap}>
+            <img src="/logo-icon.png" alt="Logo" style={{ height: 28, display: 'block' }}
+              onError={e => { e.target.style.display = 'none' }} />
+            <span style={s.logoTagline}>DISPO / PAS DISPO</span>
+          </div>
           <span style={s.pilotName}>{colleague?.name}</span>
         </div>
-        {/* Center: view toggle */}
+        {/* Right: view toggle */}
         <div style={s.viewToggle}>
           <button style={{ ...s.toggleBtn, ...(viewMode === 'week' ? s.toggleBtnActive : {}) }}
             onClick={() => setViewMode('week')}>📅 Semaine</button>
           <button style={{ ...s.toggleBtn, ...(viewMode === 'day' ? s.toggleBtnActive : {}) }}
             onClick={() => setViewMode('day')}>📆 Jour</button>
         </div>
-        {/* Right spacer — mirrors left to keep toggle truly centred */}
-        <div style={s.topRight} />
       </div>
 
       {/* ── Navigation bar ──────────────────────────────────────────────── */}
@@ -680,19 +681,25 @@ const s = {
 
   // ── Top bar (grid: left | center | right for true centering)
   topBar: {
-    display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8,
-    padding: '10px 16px',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+    padding: '8px 12px',
     background: '#0d1525', borderBottom: '1px solid #1e3a5f44',
   },
-  // Left group: logo + pilot name side by side
+  // Left group: logo (+ app name below it) and the pilot's name side by side
   topLeft: {
-    display: 'flex', alignItems: 'center', gap: 10,
-    overflow: 'hidden',
+    display: 'flex', alignItems: 'center', gap: 8,
+    flex: 1, minWidth: 0,
   },
-  viewToggle: { display: 'flex', gap: 4 },
-  topRight: { flex: 1 }, // spacer mirrors topLeft
+  logoWrap: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0,
+  },
+  logoTagline: {
+    fontSize: 7, fontWeight: 800, letterSpacing: '.05em', lineHeight: 1,
+    color: '#94a3b8', whiteSpace: 'nowrap',
+  },
+  viewToggle: { display: 'flex', gap: 4, flexShrink: 0 },
   toggleBtn: {
-    padding: '7px 11px', background: 'transparent',
+    padding: '7px 9px', background: 'transparent',
     border: '1px solid #1e3a5f', borderRadius: 8,
     color: '#64748b', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
     whiteSpace: 'nowrap',
@@ -751,18 +758,21 @@ const s = {
     fontSize: 10, fontWeight: 600, color: '#475569',
     background: '#0a1220', minWidth: 0,
     borderRight: '1px solid #1e3a5f22', borderBottom: '1px solid #1e3a5f22',
-    minHeight: 60,
+    height: 64, boxSizing: 'border-box',
   },
+  // Every cell is exactly 64px tall; the coloured block fills it minus a 4px
+  // margin on every side → identical blocks, 8px gap between them, no overlap.
   gridCell: {
-    padding: 2, background: '#080e1a', minWidth: 0,
+    display: 'flex', boxSizing: 'border-box',
+    height: 64, padding: 4, background: '#080e1a', minWidth: 0,
     borderRight: '1px solid #1e3a5f22', borderBottom: '1px solid #1e3a5f22',
-    cursor: 'pointer', minHeight: 64,
+    cursor: 'pointer',
   },
   cellBlock: {
-    height: '100%', minHeight: 54, borderRadius: 8,
+    flex: 1, minWidth: 0, minHeight: 0, boxSizing: 'border-box', borderRadius: 8,
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
-    padding: '4px 2px', position: 'relative', gap: 3,
+    padding: '2px', position: 'relative', gap: 3, overflow: 'hidden',
   },
   cellAvail:    { background: '#2563eb' },
   cellUnavail:  { background: '#1e2a3a', border: '1px solid #334155' },
