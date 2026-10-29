@@ -2022,26 +2022,24 @@ export default function Dashboard({ pilot }) {
                               </span>
                             )}
                             {/* Row 3: pax count OR "pas dispo" label */}
-                            {/* "+N" (places left) sits on the pax row: the time row is too narrow on phones */}
-                            {(pax !== null || (firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague')) && (
-                              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:2, padding:'0 3px 0 4px', minWidth:0 }}>
-                                {pax !== null && (
-                                  <span style={{ fontSize:'0.6rem', fontWeight:700, opacity:0.85, whiteSpace:'nowrap' }}>{pax} pax</span>
-                                )}
-                                {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
-                                  <button
-                                    style={{
-                                      background:'rgba(255,255,255,0.35)', color:'white',
-                                      border:'1px solid rgba(255,255,255,0.5)', borderRadius:4,
-                                      fontSize:'0.6rem', fontWeight:900,
-                                      padding:'0 3px', lineHeight:1.3,
-                                      cursor:'pointer', flexShrink:0, marginLeft:'auto',
-                                    }}
-                                    onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
-                                    title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
-                                    +{remainingW}
-                                  </button>
-                                )}
+                            {pax !== null && (
+                              <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85, whiteSpace:'nowrap' }}>{pax} pax</span>
+                            )}
+                            {/* "+N" (places left) on its own line: a column is only ~40px wide on a phone */}
+                            {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
+                              <div style={{ padding:'1px 4px 0', display:'flex' }}>
+                                <button
+                                  style={{
+                                    background:'rgba(255,255,255,0.35)', color:'white',
+                                    border:'1px solid rgba(255,255,255,0.5)', borderRadius:4,
+                                    fontSize:'0.58rem', fontWeight:900,
+                                    padding:'0 5px', lineHeight:1.2,
+                                    cursor:'pointer', flexShrink:0,
+                                  }}
+                                  onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
+                                  title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
+                                  +{remainingW}
+                                </button>
                               </div>
                             )}
                             {!slot.is_available && activeBks.length === 0 && (
