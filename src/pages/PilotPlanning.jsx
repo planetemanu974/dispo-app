@@ -630,6 +630,9 @@ const s = {
     color: '#e2e8f0',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     paddingBottom: 80,
+    overflowX: 'hidden',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
   },
   centered: {
     minHeight: '100dvh', display: 'flex', flexDirection: 'column',
@@ -684,8 +687,8 @@ const s = {
   gridScroll: { overflowX: 'auto' },
   grid: {
     display: 'grid',
-    gridTemplateColumns: '44px repeat(7, 1fr)',
-    minWidth: 480,
+    // minmax(0, 1fr): columns may shrink so all 7 days fit a 360-400px phone
+    gridTemplateColumns: '36px repeat(7, minmax(0, 1fr))',
     borderTop: '1px solid #1e3a5f22',
   },
   gridCorner: {
@@ -712,13 +715,13 @@ const s = {
   gridHourLabel: {
     display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
     padding: '8px 6px 0 0',
-    fontSize: 11, fontWeight: 600, color: '#475569',
-    background: '#0a1220',
+    fontSize: 10, fontWeight: 600, color: '#475569',
+    background: '#0a1220', minWidth: 0,
     borderRight: '1px solid #1e3a5f22', borderBottom: '1px solid #1e3a5f22',
     minHeight: 60,
   },
   gridCell: {
-    padding: 5, background: '#080e1a',
+    padding: 2, background: '#080e1a', minWidth: 0,
     borderRight: '1px solid #1e3a5f22', borderBottom: '1px solid #1e3a5f22',
     cursor: 'pointer', minHeight: 64,
   },

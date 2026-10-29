@@ -50,10 +50,19 @@
   }
 }
 
+/* The app is dark everywhere: paint the canvas black too, so no white strip
+   can ever show beside the page, and never allow sideways scrolling. */
+html:root {
+  background: #000;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background: #000;
   color: #f1f5f9;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 #root {

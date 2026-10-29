@@ -2105,16 +2105,11 @@ export default function Dashboard({ pilot }) {
               </button>
             </div>
           ) : (
-            /* ── Normal legend ── */
-            <div className="week-legend">
-              <span className="legend-item"><span className="legend-dot legend-dot--free" />Libre</span>
-              <span className="legend-item"><span className="legend-dot legend-dot--pending" />En attente</span>
-              <span className="legend-item"><span className="legend-dot legend-dot--confirmed" />Confirmé</span>
-              <span className="legend-item"><span className="legend-dot" style={{ background:'#ea580c' }} />Collègue ?</span>
-              <span className="legend-item"><span className="legend-dot" style={{ background:'#dc2626' }} />Pilote manquant</span>
+            /* ── Colour legend removed (colours speak for themselves) — only the bulk-select button stays ── */
+            <div className="week-legend" style={{ justifyContent:'flex-end' }}>
               <button
                 onClick={() => setSelectMode(true)}
-                style={{ marginLeft:'auto', padding:'4px 10px', borderRadius:8, border:'1.5px solid #475569', background:'rgba(71,85,105,0.15)', color:'#94a3b8', fontWeight:700, fontSize:'0.72rem', cursor:'pointer', fontFamily:'inherit' }}>
+                style={{ padding:'4px 10px', borderRadius:8, border:'1.5px solid #475569', background:'rgba(71,85,105,0.15)', color:'#94a3b8', fontWeight:700, fontSize:'0.72rem', cursor:'pointer', fontFamily:'inherit' }}>
                 ☐ Sélectionner
               </button>
             </div>
@@ -2279,9 +2274,15 @@ export default function Dashboard({ pilot }) {
                         {/* DISPO toggle on the right (only for non-booked slots) */}
                         {!activeBooking && (
                           <button
-                            style={{ alignSelf:'stretch', padding:'0 12px', background: slot.is_available ? '#22c55e' : '#94a3b8', color:'white', border:'none', fontSize:'0.65rem', fontWeight:800, letterSpacing:'0.05em', cursor:'pointer', borderLeft:'1px solid rgba(255,255,255,0.3)', whiteSpace:'nowrap' }}
-                            onClick={e => { e.stopPropagation(); toggleAvailability(slot) }}>
-                            {slot.is_available ? 'DISPO' : 'PAS\nDISPO'}
+                            style={{ alignSelf:'stretch', padding:'0 10px', background: slot.is_available ? 'rgba(15,23,42,0.35)' : 'rgba(15,23,42,0.5)', color:'white', border:'none', fontSize:'0.62rem', fontWeight:800, letterSpacing:'0.04em', cursor:'pointer', borderLeft:'1px solid rgba(255,255,255,0.3)', whiteSpace:'nowrap' }}
+                            onClick={e => {
+                              e.stopPropagation()
+                              // Closing a free slot needs a confirmation: a stray tap on a
+                              // free slot must never silently turn it into PAS DISPO.
+                              if (slot.is_available && !window.confirm(`Fermer le créneau ${slot.slot_time.slice(0, 5)} (PAS DISPO) ?`)) return
+                              toggleAvailability(slot)
+                            }}>
+                            {slot.is_available ? '🔒 Fermer' : '🔓 Rouvrir'}
                           </button>
                         )}
                       </div>
@@ -2512,6 +2513,7 @@ export default function Dashboard({ pilot }) {
             {/* Close slot from new-booking form — available even without a booking */}
             <button
               onClick={() => {
+                if (!window.confirm('Fermer ce créneau (PAS DISPO) sans réservation ?')) return
                 toggleAvailability(newBookingSlot.slot)
                 setNewBookingSlot(null)
                 setNbForm(null)
