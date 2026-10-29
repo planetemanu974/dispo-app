@@ -61,6 +61,8 @@ function newPilotFlight(pilotName = '') {
     pilot_name:     pilotName,
     flight_type_id: '',
     media_pack:     'none',
+    note:           '',   // free note (e.g. first name)
+    email:          '',   // to send photos
   }
 }
 
@@ -114,6 +116,8 @@ function parseExistingPilotFlights(closureData) {
     pilot_name:     entry.pilot_name || '',
     flight_type_id: entry.flight_type_id || '',
     media_pack:     entry.media_pack || 'none',
+    note:           entry.note || '',
+    email:          entry.email || '',
   }))
 }
 
@@ -217,6 +221,14 @@ export default function FlightClosure({
     if (!canSave) return
     setSaving(true)
     try {
+      // Light e-mail validation (optional field)
+      const badEmail = pilotFlights.find(pf => pf.email && pf.email.trim() && !/^\S+@\S+\.\S+$/.test(pf.email.trim()))
+      if (badEmail) {
+        alert('Adresse e-mail invalide : ' + badEmail.email)
+        setSaving(false)
+        return
+      }
+
       const allItems = [...flightTypes, ...MEDIA_PACKS]
 
       // Construire les groupes de paiement
@@ -269,6 +281,8 @@ export default function FlightClosure({
           pilot_name:     pf.pilot_name,
           flight_type_id: pf.flight_type_id,
           media_pack:     pf.media_pack,
+          note:           (pf.note || '').trim(),
+          email:          (pf.email || '').trim(),
         }))
 
       // Persistance
@@ -542,13 +556,18 @@ function PilotFlightRow({ pf, idx, pilotNames, flightTypes, canRemove, onChange,
     onChange('pilot_name', pilotNames[0] || '')
   }
 
+  const noteInputStyle = {
+    background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
+    padding: '7px 8px', fontFamily: 'inherit', fontSize: 12,
+    color: '#e2e8f0', minWidth: 0, flex: 1,
+  }
+
   return (
+    <div style={{ borderBottom: '1px solid #1e293b', padding: '4px 0' }}>
     <div style={{
       display: 'flex',
       alignItems: 'center',
       gap: 5,
-      padding: '4px 0',
-      borderBottom: '1px solid #1e293b',
     }}>
       {/* Numéro */}
       <span style={{ fontSize: 11, color: '#334155', fontWeight: 700, minWidth: 16, textAlign: 'right', flexShrink: 0 }}>
@@ -654,6 +673,15 @@ function PilotFlightRow({ pf, idx, pilotNames, flightTypes, canRemove, onChange,
       ) : (
         <span style={{ width: 22, flexShrink: 0 }} />
       )}
+    </div>
+    {/* Note + e-mail (to send photos) */}
+    <div style={{ display: 'flex', gap: 5, marginTop: 4, paddingLeft: 21, paddingRight: 22 }}>
+      <input type="text" value={pf.note || ''} placeholder="📝 Prénom / note"
+        onChange={e => onChange('note', e.target.value)} style={noteInputStyle} />
+      <input type="email" inputMode="email" autoCapitalize="none" value={pf.email || ''}
+        placeholder="✉️ E-mail (photos)"
+        onChange={e => onChange('email', e.target.value)} style={{ ...noteInputStyle, flex: 1.3 }} />
+    </div>
     </div>
   )
 }

@@ -884,6 +884,8 @@ export default function Dashboard({ pilot }) {
     setNewBookingSlot({ slot, date })
     const emptyPax = (cat, vol) => ({ firstName: '', lastName: '', cat: cat || 'under75', vol: vol || flightTypes[0]?.id || 'discovery' })
     setNbForm({
+      mode:             'client',   // 'client' = a customer | 'partner' = colleague / structure not in the database
+      partnerName:      '',         // free text, e.g. "Antoine" or "Parapente des îles"
       contactFirstName: '',
       contactLastName:  '',
       contactPhone:     '',
@@ -899,21 +901,29 @@ export default function Dashboard({ pilot }) {
   // ── submitNewBooking ──────────────────────────────────────────────────────
   async function submitNewBooking() {
     if (!nbForm || !newBookingSlot) return
-    const contactName = `${nbForm.contactFirstName.trim()} ${nbForm.contactLastName.trim()}`.trim()
-    if (!contactName) { alert('Nom du contact requis'); return }
-    if (!nbForm.contactPhone.trim()) { alert('Téléphone requis'); return }
+    // "partner" = booking taken for a colleague / structure that is not in the database
+    // (free-text name, phone optional, no confirmation SMS to the customer).
+    const isPartner = nbForm.mode === 'partner'
+    const contactName = isPartner
+      ? nbForm.partnerName.trim()
+      : `${nbForm.contactFirstName.trim()} ${nbForm.contactLastName.trim()}`.trim()
+    if (!contactName) { alert(isPartner ? 'Nom du collègue ou de la structure requis' : 'Nom du contact requis'); return }
+    if (!isPartner && !nbForm.contactPhone.trim()) { alert('Téléphone requis'); return }
         // Block bookings on past slots
     const slotDateTime = new Date(`${newBookingSlot.slot.slot_date}T${newBookingSlot.slot.slot_time}`)
     if (slotDateTime < new Date()) { alert('Ce créneau est déjà passé.'); return } 
     setNbSaving(true)
 
-    const ref = 'MAN-' + Date.now().toString(36).toUpperCase().slice(-6)
+    // 'COL-' prefix = booking made for a colleague / structure (easy to filter later for invoicing)
+    const ref = (isPartner ? 'COL-' : 'MAN-') + Date.now().toString(36).toUpperCase().slice(-6)
+    const partnerNote = isPartner ? `🤝 Pour ${contactName}` : ''
+    const bookingNotes = [partnerNote, nbForm.notes.trim()].filter(Boolean).join('\n') || null
 
     const { data: bk, error: bkErr } = await supabase.from('bookings').insert({
       pilot_slot_id: newBookingSlot.slot.id,
       contact_name:  contactName,
       contact_phone: nbForm.contactPhone.trim(),
-      notes:         nbForm.notes.trim() || null,
+      notes:         bookingNotes,
       status:        'confirmed',
       source:        'manual',
       booking_ref:   ref,
@@ -971,7 +981,7 @@ export default function Dashboard({ pilot }) {
             pilot_slot_id: extraSlot.id,
             contact_name:  contactName,
             contact_phone: nbForm.contactPhone.trim(),
-            notes:         `Lié à ${ref} — créneau ${i + 2}/${maxBlocks}`,
+            notes:         `${partnerNote ? partnerNote + ' · ' : ''}Lié à ${ref} — créneau ${i + 2}/${maxBlocks}`,
             status:        'confirmed',
             source:        'manual',
             booking_ref:   ref + '-' + (i + 2),
@@ -1001,7 +1011,8 @@ export default function Dashboard({ pilot }) {
     }
 
     // ── Send confirmation SMS to client ──────────────────────────────────────
-    if (nbForm.contactPhone.trim()) {
+    // Never for a colleague / structure booking: the SMS text is written for a customer.
+    if (!isPartner && nbForm.contactPhone.trim()) {
       const slotDate = newBookingSlot.slot.slot_date || newBookingSlot.date
       const slotTime = newBookingSlot.slot.slot_time?.slice(0, 5) || ''
       const dateLabel = new Date(slotDate + 'T00:00:00').toLocaleDateString('fr-FR', {
@@ -2336,23 +2347,60 @@ export default function Dashboard({ pilot }) {
               &nbsp;· {newBookingSlot.slot.slot_time.slice(0,5)} – {slotEndTime(newBookingSlot.slot.slot_time)}
             </div>
 
-            {/* Contact — prénom + nom séparés */}
+            {/* Who is this booking for? A customer, or a colleague / structure not in the database */}
+            <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+              {[
+                { id:'client',  label:'👤 Client' },
+                { id:'partner', label:'🤝 Collègue / structure' },
+              ].map(m => (
+                <button key={m.id} type="button"
+                  onClick={() => setNbForm(f => ({ ...f, mode: m.id }))}
+                  style={{
+                    flex:1, padding:'8px 6px', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
+                    fontWeight:700, fontSize:'0.8rem', whiteSpace:'nowrap',
+                    border: nbForm.mode === m.id ? '1.5px solid #3b82f6' : '1.5px solid #334155',
+                    background: nbForm.mode === m.id ? 'rgba(59,130,246,0.18)' : 'transparent',
+                    color: nbForm.mode === m.id ? '#fff' : '#94a3b8',
+                  }}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Contact */}
             <div className="edit-section">
-              <div className="field-row" style={{ display:'flex', gap:8 }}>
-                <div style={{ flex:1 }}>
-                  <label className="edit-label">Prénom *</label>
-                  <input className="edit-input" placeholder="Marie" value={nbForm.contactFirstName}
-                    onChange={e => setNbForm(f => ({ ...f, contactFirstName: e.target.value }))} />
-                </div>
-                <div style={{ flex:1 }}>
-                  <label className="edit-label">Nom *</label>
-                  <input className="edit-input" placeholder="Dupont" value={nbForm.contactLastName}
-                    onChange={e => setNbForm(f => ({ ...f, contactLastName: e.target.value }))} />
-                </div>
-              </div>
-              <label className="edit-label">Téléphone *</label>
-              <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
-                onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
+              {nbForm.mode === 'partner' ? (
+                <>
+                  <label className="edit-label">Pour qui ? (collègue ou structure) *</label>
+                  <input className="edit-input" list="nb-partner-names" placeholder="Ex : Antoine, Parapente des îles"
+                    value={nbForm.partnerName}
+                    onChange={e => setNbForm(f => ({ ...f, partnerName: e.target.value }))} />
+                  <datalist id="nb-partner-names">
+                    {colleagues.map(c => <option key={c.id} value={c.name} />)}
+                  </datalist>
+                  <label className="edit-label">Téléphone (facultatif — aucun SMS n'est envoyé)</label>
+                  <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
+                    onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
+                </>
+              ) : (
+                <>
+                  <div className="field-row" style={{ display:'flex', gap:8 }}>
+                    <div style={{ flex:1 }}>
+                      <label className="edit-label">Prénom *</label>
+                      <input className="edit-input" placeholder="Marie" value={nbForm.contactFirstName}
+                        onChange={e => setNbForm(f => ({ ...f, contactFirstName: e.target.value }))} />
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <label className="edit-label">Nom *</label>
+                      <input className="edit-input" placeholder="Dupont" value={nbForm.contactLastName}
+                        onChange={e => setNbForm(f => ({ ...f, contactLastName: e.target.value }))} />
+                    </div>
+                  </div>
+                  <label className="edit-label">Téléphone *</label>
+                  <input className="edit-input" type="tel" placeholder="Ex: 0692 12 34 56" value={nbForm.contactPhone}
+                    onChange={e => setNbForm(f => ({ ...f, contactPhone: e.target.value }))} />
+                </>
+              )}
 
               {/* Quick-fill: 4 compact dropdowns — auto-builds passenger rows */}
               <label className="edit-label">Répartition des vols</label>
@@ -3196,6 +3244,17 @@ export default function Dashboard({ pilot }) {
                             <span>🧑‍✈️ {selectedBooking.flew_pilot_name || '—'}</span>
                             <span>{{ card:'💳 Carte', cash:'💶 Espèces', wero:'📲 Wero' }[selectedBooking.payment_method] || selectedBooking.payment_method || '—'}</span>
                             {selectedBooking.invoice_number && <span>🧾 {selectedBooking.invoice_number}</span>}
+                          </div>
+                        )}
+                        {/* Notes / e-mails saisis par vol (pour envoyer les photos) */}
+                        {(selectedBooking.closure_data?.pilot_flights || []).some(pf => pf.note || pf.email) && (
+                          <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(34,197,94,0.15)', display:'flex', flexDirection:'column', gap:4 }}>
+                            {selectedBooking.closure_data.pilot_flights.filter(pf => pf.note || pf.email).map((pf, i) => (
+                              <div key={pf.id || i} style={{ fontSize:12, color:'#94a3b8', display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                                {pf.note && <span style={{ color:'#e2e8f0', fontWeight:600 }}>📝 {pf.note}</span>}
+                                {pf.email && <a href={`mailto:${pf.email}`} style={{ color:'#7dd3fc', wordBreak:'break-all' }}>✉️ {pf.email}</a>}
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
