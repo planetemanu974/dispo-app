@@ -2054,7 +2054,8 @@ export default function Dashboard({ pilot }) {
                                       title={unavail ? `${c.name} — indisponible` : `${c.name} — disponible`}
                                       style={{
                                         fontSize: '0.55rem', fontWeight: 900,
-                                        color: unavail ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.9)',
+                                        // Absent pilot: number stays in place (keeps the others aligned) but is invisible
+                                        color: unavail ? 'transparent' : 'rgba(255,255,255,0.9)',
                                         flexShrink: 0,
                                         lineHeight: 1,
                                       }}>
