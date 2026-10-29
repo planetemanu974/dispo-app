@@ -321,7 +321,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
       // Load all closed bookings to find flights performed by this colleague
       supabase
         .from('bookings')
-        .select('id, booking_ref, closure_data, pilot_slots(slot_date, slot_time)')
+        .select('id, booking_ref, contact_name, closure_data, pilot_slots(slot_date, slot_time)')
         .eq('pilot_id', pilot.id)
         .not('closure_data', 'is', null)
         .order('created_at', { ascending: false })
@@ -330,8 +330,25 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
 
     // Extract flights where this colleague appears in pilot_flights[]
     const flights = []
+    const norm = n => (n || '').trim().toLowerCase()
     for (const b of bookingsRes.data || []) {
       const pilotFlights = b.closure_data?.pilot_flights || []
+      // Partner booking (COL-…) made FOR this colleague / structure: every recorded flight counts
+      if (String(b.booking_ref || '').startsWith('COL-') && norm(b.contact_name) === norm(c.name)) {
+        const done = pilotFlights.filter(pf => pf.flight_type_id)
+        if (done.length) {
+          flights.push({
+            booking_id:     b.id,
+            booking_ref:    b.booking_ref,
+            date:           b.pilot_slots?.slot_date,
+            time:           b.pilot_slots?.slot_time,
+            flight_type_id: done[0].flight_type_id,
+            media_pack:     done.some(pf => pf.media_pack && pf.media_pack !== 'none') ? 'yes' : null,
+            count:          done.length,
+          })
+        }
+        continue
+      }
       // A colleague may appear multiple times (multi-pax booking) — deduplicate by booking
       const match = pilotFlights.find(pf => pf.pilot_name === c.name)
       if (match) {
