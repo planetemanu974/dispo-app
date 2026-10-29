@@ -39,8 +39,8 @@ export default function Structures({ pilot, flightTypes }) {
       setLoading(true)
       const { data, error: err } = await supabase
         .from('bookings')
-        .select('id, booking_ref, contact_name, paid_at, closure_data, pilot_slots ( slot_date )')
-        .eq('pilot_id', pilot.id)
+        .select('id, booking_ref, contact_name, paid_at, closure_data, pilot_slots!inner ( slot_date, pilot_id )')
+        .eq('pilot_slots.pilot_id', pilot.id)
         .like('booking_ref', 'COL-%')
         .not('closure_data', 'is', null)
         .limit(500)

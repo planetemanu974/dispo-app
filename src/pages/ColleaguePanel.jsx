@@ -321,8 +321,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
       // Load all closed bookings to find flights performed by this colleague
       supabase
         .from('bookings')
-        .select('id, booking_ref, contact_name, closure_data, pilot_slots(slot_date, slot_time)')
-        .eq('pilot_id', pilot.id)
+        .select('id, booking_ref, contact_name, closure_data, pilot_slots!inner(slot_date, slot_time, pilot_id)')
+        .eq('pilot_slots.pilot_id', pilot.id)
         .not('closure_data', 'is', null)
         .order('created_at', { ascending: false })
         .limit(300),

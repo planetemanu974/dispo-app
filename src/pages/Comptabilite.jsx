@@ -71,10 +71,10 @@ export default function Comptabilite({ pilot, flightTypes }) {
           paid_at,
           payment_method, invoice_number, invoice_type,
           closure_data,
-          passengers,
-          pilot_slots ( slot_date, slot_time )
+          passengers ( * ),
+          pilot_slots!inner ( slot_date, slot_time, pilot_id )
         `)
-        .eq('pilot_id', pilot.id)
+        .eq('pilot_slots.pilot_id', pilot.id)
         .or('paid_at.not.is.null,closure_data.not.is.null')
         .order('paid_at', { ascending: false, nullsFirst: false })
         .limit(300)
