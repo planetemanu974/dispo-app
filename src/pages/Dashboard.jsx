@@ -616,10 +616,13 @@ export default function Dashboard({ pilot }) {
       const idsToDelete = matching.map(e => e.id)
       // Optimistic update
       setFixedUnavailability(prev => prev.filter(u => !idsToDelete.includes(u.id)))
+      // Soft-delete (removed_at) instead of DELETE so ActivityFeed can show
+      // "Disponibilité rétablie" in DERNIERS CHANGEMENTS.
       const { error } = await supabase
         .from('fixed_pilot_unavailability')
-        .delete()
+        .update({ removed_at: new Date().toISOString() })
         .in('id', idsToDelete)
+        .is('removed_at', null)
       if (error) {
         console.error('togglePilotAvailability delete error:', error)
         loadWeek(weekStart)  // revert on error
