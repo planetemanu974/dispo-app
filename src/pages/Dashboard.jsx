@@ -911,9 +911,11 @@ export default function Dashboard({ pilot }) {
       : `${nbForm.contactFirstName.trim()} ${nbForm.contactLastName.trim()}`.trim()
     if (!contactName) { alert(isPartner ? 'Nom du collègue ou de la structure requis' : 'Nom du contact requis'); return }
     if (!isPartner && !nbForm.contactPhone.trim()) { alert('Téléphone requis'); return }
-        // Block bookings on past slots
+    // Past slots need confirmation
     const slotDateTime = new Date(`${newBookingSlot.slot.slot_date}T${newBookingSlot.slot.slot_time}`)
-    if (slotDateTime < new Date()) { alert('Ce créneau est déjà passé.'); return } 
+    // Past slot: allow it after an explicit confirmation (e.g. to log a flight already done)
+    if (slotDateTime < new Date() &&
+        !window.confirm('Ce créneau est déjà passé.\n\nVoulez-vous vraiment créer cette réservation ?')) return 
     setNbSaving(true)
 
     // 'COL-' prefix = booking made for a colleague / structure (easy to filter later for invoicing)
