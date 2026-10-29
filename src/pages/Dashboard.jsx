@@ -1455,26 +1455,27 @@ export default function Dashboard({ pilot }) {
         {/* Bouton logo → ouvre le menu (badge jaune si mise à jour dispo) */}
         <button onClick={() => setMenuOpen(true)}
           style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0, position:'relative' }}>
-          <img src="/logo-icon.png" alt="Menu" style={{ height:36, display:'block' }} />
+          {/* Full logo (icon + "DispoPasDispo" wordmark), white on transparent */}
+          <img src="/logo-full.png" alt="Dispo Pas Dispo — menu" style={{ height:40, width:'auto', display:'block' }} />
           {updateReady && (
             <span style={{ position:'absolute', top:0, right:0, width:10, height:10, background:'#eab308', borderRadius:'50%', border:'2px solid white' }} />
           )}
         </button>
 
         {/* Toggle Semaine / Jour / Pilotes — prend l'espace restant */}
-        <div style={{ display:'flex', gap:5, flex:1, justifyContent:'center' }}>
+        <div style={{ display:'flex', gap:4, flex:1, minWidth:0, justifyContent:'center' }}>
           <button
-            style={{ flex:1, maxWidth:95, padding:'7px 6px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => setViewMode('week')}>
             📅 Semaine
           </button>
           <button
-            style={{ flex:1, maxWidth:95, padding:'7px 6px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => { setViewMode('day'); loadDay(selectedDate); loadPlanning(selectedDate) }}>
             📋 Jour
           </button>
           <button
-            style={{ flex:1, maxWidth:95, padding:'7px 6px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='pilots' ? '#fff' : '#222', color: viewMode==='pilots' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='pilots' ? '#fff' : '#222', color: viewMode==='pilots' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => setViewMode('pilots')}>
             🧑‍✈️ Pilotes
           </button>
