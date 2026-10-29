@@ -68,7 +68,7 @@ export default function Comptabilite({ pilot, flightTypes }) {
         .from('bookings')
         .select(`
           id, booking_ref, contact_name,
-          flight_date, paid_at,
+          paid_at,
           payment_method, invoice_number, invoice_type,
           closure_data,
           passengers,
@@ -84,7 +84,6 @@ export default function Comptabilite({ pilot, flightTypes }) {
       const result = []
       for (const b of data || []) {
         const bookingDate = b.pilot_slots?.slot_date
-          || b.flight_date
           || b.paid_at?.slice(0, 10)
           || localDateStr()
 

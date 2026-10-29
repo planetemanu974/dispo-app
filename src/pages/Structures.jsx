@@ -39,7 +39,7 @@ export default function Structures({ pilot, flightTypes }) {
       setLoading(true)
       const { data, error: err } = await supabase
         .from('bookings')
-        .select('id, booking_ref, contact_name, flight_date, closure_data, pilot_slots ( slot_date )')
+        .select('id, booking_ref, contact_name, paid_at, closure_data, pilot_slots ( slot_date )')
         .eq('pilot_id', pilot.id)
         .like('booking_ref', 'COL-%')
         .not('closure_data', 'is', null)
@@ -58,7 +58,7 @@ export default function Structures({ pilot, flightTypes }) {
   const groups = useMemo(() => {
     const map = new Map()
     for (const b of rows) {
-      const date = b.pilot_slots?.slot_date || b.flight_date || ''
+      const date = b.pilot_slots?.slot_date || b.paid_at?.slice(0, 10) || ''
       if (!date || monthKey(date) !== month) continue
       const key = normName(b.contact_name)
       if (!map.has(key)) map.set(key, { name: b.contact_name || '—', flights: [] })
@@ -74,7 +74,7 @@ export default function Structures({ pilot, flightTypes }) {
 
   return (
     <div style={{ padding: '16px 14px', color: '#e2e8f0' }}>
-      <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>🤝 Structures</h2>
+      <h2 style={{ margin: '0 0 12px', fontSize: 18, color: '#e2e8f0' }}>🤝 Structures</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <button onClick={() => setMonth(m => shiftMonth(m, -1))} style={navBtn}>‹</button>
