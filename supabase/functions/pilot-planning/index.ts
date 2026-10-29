@@ -183,31 +183,74 @@ Deno.serve(async (req) => {
       if (action === 'add_unavail') {
         const { start_date, end_date, slot_time } = body
         if (!start_date) return json({ error: 'Missing start_date' }, 400)
+        const endDate: string = end_date || start_date
+        if (endDate < start_date) return json({ error: 'La date de fin précède la date de début.' }, 400)
 
-        const { data, error } = await supabase
+        // ── Booked slots are LOCKED ────────────────────────────────────────
+        // A pilot can never become "unavailable" on a slot where he is already
+        // booked. Full-day and period requests are therefore expanded: days
+        // without any booking stay a single row, days with bookings get one
+        // row per non-booked slot only.
+        const dates = eachDate(start_date, endDate)
+        if (dates.length > 366) return json({ error: 'Période trop longue (366 jours max).' }, 400)
+
+        const booked = await getBookedKeys(supabase, colleague_id, pilot_id, start_date, endDate)
+        const wanted = slot_time ? String(slot_time).slice(0, 5) : null
+
+        // rows = [{ start, end, time }] to insert
+        const rows: { start: string; end: string; time: string | null }[] = []
+        let skipped = 0
+
+        if (wanted) {
+          // One specific slot time, over one or several days
+          const free = dates.filter(d => {
+            const isBooked = booked.has(`${d}|${wanted}`)
+            if (isBooked) skipped++
+            return !isBooked
+          })
+          for (const [s, e] of groupContiguous(free)) rows.push({ start: s, end: e, time: slot_time })
+        } else {
+          // Whole day(s)
+          const daysWithoutBooking: string[] = []
+          for (const d of dates) {
+            const bookedTimes = ALL_SLOTS.filter(t => booked.has(`${d}|${t}`))
+            if (bookedTimes.length === 0) { daysWithoutBooking.push(d); continue }
+            // Day has bookings: close only the free slots, one row each
+            skipped += bookedTimes.length
+            for (const t of ALL_SLOTS) {
+              if (!booked.has(`${d}|${t}`)) rows.push({ start: d, end: d, time: t + ':00' })
+            }
+          }
+          for (const [s, e] of groupContiguous(daysWithoutBooking)) rows.push({ start: s, end: e, time: null })
+        }
+
+        if (rows.length === 0) {
+          return json({ error: 'Ce créneau est déjà réservé : il ne peut pas être marqué indisponible.' }, 409)
+        }
+
+        const { data: inserted, error } = await supabase
           .from('fixed_pilot_unavailability')
-          .insert({
+          .insert(rows.map(r => ({
             colleague_id,
             pilot_id,
-            start_date,
-            end_date: end_date || start_date,
-            slot_time: slot_time || null,
-          })
+            start_date: r.start,
+            end_date: r.end,
+            slot_time: r.time,
+          })))
           .select()
-          .single()
 
         if (error) return json({ error: error.message }, 500)
 
-        // Log activity so admin sees it in DERNIERS CHANGEMENTS
+        // Log activity so admin sees it in DERNIERS CHANGEMENTS (best-effort)
         await supabase.from('activity_log').insert({
           pilot_id,
           action: 'pilot_unavail_added',
           entity_type: 'unavailability',
-          entity_id: data.id,
-          details: { colleague_id, start_date, end_date: end_date || start_date, slot_time: slot_time || null },
+          entity_id: inserted?.[0]?.id ?? null,
+          details: { colleague_id, start_date, end_date: endDate, slot_time: slot_time || null },
         })
 
-        return json({ unavailability: data })
+        return json({ unavailability: inserted?.[0] ?? null, created: inserted?.length ?? 0, skipped_booked: skipped })
       }
 
       if (action === 'remove_unavail') {
@@ -255,6 +298,79 @@ Deno.serve(async (req) => {
     return json({ error: String(err) }, 500)
   }
 })
+
+const ALL_SLOTS = ['08:00', '09:15', '10:30', '11:45', '13:00', '14:15']
+
+// Every YYYY-MM-DD between two dates, inclusive (UTC maths: no timezone drift).
+function eachDate(startStr: string, endStr: string): string[] {
+  const out: string[] = []
+  const d = new Date(startStr + 'T00:00:00Z')
+  const end = new Date(endStr + 'T00:00:00Z')
+  while (d <= end && out.length <= 400) {
+    out.push(d.toISOString().slice(0, 10))
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return out
+}
+
+// Groups sorted YYYY-MM-DD strings into [start, end] runs of consecutive days.
+function groupContiguous(dates: string[]): [string, string][] {
+  const runs: [string, string][] = []
+  for (const d of dates) {
+    const last = runs[runs.length - 1]
+    if (last) {
+      const next = new Date(last[1] + 'T00:00:00Z')
+      next.setUTCDate(next.getUTCDate() + 1)
+      if (next.toISOString().slice(0, 10) === d) { last[1] = d; continue }
+    }
+    runs.push([d, d])
+  }
+  return runs
+}
+
+// Set of "YYYY-MM-DD|HH:MM" keys where this colleague is booked in [startStr, endStr].
+// Mirrors the GET handler: accepted assignments (canonical pilot_slots date) plus,
+// when the colleague IS the main pilot, his own confirmed bookings.
+async function getBookedKeys(
+  supabase: ReturnType<typeof createClient>,
+  colleagueId: string, pilotId: string, startStr: string, endStr: string,
+): Promise<Set<string>> {
+  const keys = new Set<string>()
+
+  const { data: assignments } = await supabase
+    .from('booking_assignments')
+    .select('slot_date, slot_time, bookings(pilot_slots(slot_date, slot_time))')
+    .eq('colleague_id', colleagueId)
+    .eq('pilot_id', pilotId)
+    .eq('status', 'accepted')
+
+  for (const a of (assignments || []) as any[]) {
+    const d = a.bookings?.pilot_slots?.slot_date ?? a.slot_date
+    const t = a.bookings?.pilot_slots?.slot_time ?? a.slot_time
+    if (d && t && d >= startStr && d <= endStr) keys.add(`${d}|${String(t).slice(0, 5)}`)
+  }
+
+  // Self-pilot: the main pilot's own confirmed bookings are never in booking_assignments
+  const [{ data: col }, { data: pil }] = await Promise.all([
+    supabase.from('colleagues').select('phone').eq('id', colleagueId).single(),
+    supabase.from('pilots').select('phone').eq('id', pilotId).single(),
+  ])
+  const norm = (p: string) => (p || '').replace(/\D/g, '')
+  if (col?.phone && pil?.phone && norm(col.phone) === norm(pil.phone)) {
+    const { data: slots } = await supabase
+      .from('pilot_slots')
+      .select('slot_date, slot_time, bookings(status)')
+      .eq('pilot_id', pilotId)
+      .gte('slot_date', startStr)
+      .lte('slot_date', endStr)
+    for (const ps of (slots || []) as any[]) {
+      if ((ps.bookings || []).some((b: any) => b.status === 'confirmed')) {
+        keys.add(`${ps.slot_date}|${String(ps.slot_time).slice(0, 5)}`)
+      }
+    }
+  }
+  return keys
+}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {

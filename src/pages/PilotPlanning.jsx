@@ -180,6 +180,11 @@ export default function PilotPlanning() {
       } else if (status === 'unavailable') {
         // Remove all unavailability entries covering this slot
         const matches = getUnavailForSlot(unavailability, dateStr, slotTime)
+        // A full-day / multi-day entry covers more than this one slot: ask first
+        if (matches.some(u => u.slot_time === null || u.start_date !== u.end_date) &&
+            !window.confirm('Cette indisponibilité couvre toute la journée ou une période. La retirer entièrement ?')) {
+          return
+        }
         for (const u of matches) {
           const r = await fetch(FUNCTION_URL, {
             method: 'POST',
@@ -194,6 +199,21 @@ export default function PilotPlanning() {
       }
       await fetchPlanning(weekStart)
     } finally { setSaving(false) }
+  }
+
+  // ── day view: tap anywhere on a slot row to toggle it (booked 🔒 slots never move) ──
+  function toggleSlotRow(dateStr, slotTime, status) {
+    if (saving || status === 'booked') return
+    if (status === 'available') {
+      addUnavail({ start_date: dateStr, end_date: dateStr, slot_time: slotTime })
+      return
+    }
+    const covering = getUnavailForSlot(unavailability, dateStr, slotTime)
+    if (covering.some(u => u.slot_time === null || u.start_date !== u.end_date) &&
+        !window.confirm('Cette indisponibilité couvre toute la journée ou une période. La retirer entièrement ?')) {
+      return
+    }
+    covering.forEach(u => removeUnavail(u.id))
   }
 
   // ── unavailability actions ────────────────────────────────────────────────
@@ -476,7 +496,10 @@ export default function PilotPlanning() {
             {(() => {
               const dateStr        = selectedDay
               const fullDayUnavail = getFullDayUnavail(unavailability, dateStr)
-              if (fullDayUnavail.length > 0) return (
+              // Slots are ALWAYS listed (booked 🔒 ones must stay visible); a full-day
+              // unavailability only adds a banner above them.
+              return (<>
+              {fullDayUnavail.length > 0 && (
                 <div style={s.fullDayBanner}>
                   <span>🚫 Journée entière indisponible</span>
                   <button style={s.btnCancelFull}
@@ -484,8 +507,8 @@ export default function PilotPlanning() {
                     Annuler
                   </button>
                 </div>
-              )
-              return ALL_SLOTS.map(slotTime => {
+              )}
+              {ALL_SLOTS.map(slotTime => {
                 const status   = slotStatus(assignments, unavailability, dateStr, slotTime)
                 const unavails = getUnavailForSlot(unavailability, dateStr, slotTime)
                   .filter(u => u.slot_time !== null)
@@ -495,8 +518,11 @@ export default function PilotPlanning() {
                 return (
                   <div key={slotTime} style={s.slotRow}>
                     <div style={s.slotRowHour}>{slotTime.slice(0, 5)}</div>
-                    <div style={{
+                    <div
+                      onClick={() => toggleSlotRow(dateStr, slotTime, status)}
+                      style={{
                       ...s.slotRowBlock,
+                      cursor: isBooked ? 'default' : 'pointer',
                       ...(isAvail   ? s.slotAvail   : {}),
                       ...(isUnavail ? s.slotUnavail : {}),
                       ...(isBooked  ? s.slotBooked  : {}),
@@ -511,13 +537,13 @@ export default function PilotPlanning() {
                       </div>
                       {isAvail && (
                         <button style={s.badgeDispo} disabled={saving}
-                          onClick={() => addUnavail({ start_date: dateStr, end_date: dateStr, slot_time: slotTime })}>
+                          onClick={e => { e.stopPropagation(); toggleSlotRow(dateStr, slotTime, status) }}>
                           DISPO
                         </button>
                       )}
                       {isUnavail && (
                         <button style={s.badgePasDispo} disabled={saving}
-                          onClick={() => unavails.forEach(u => removeUnavail(u.id))}>
+                          onClick={e => { e.stopPropagation(); toggleSlotRow(dateStr, slotTime, status) }}>
                           PAS DISPO
                         </button>
                       )}
@@ -525,14 +551,18 @@ export default function PilotPlanning() {
                     </div>
                   </div>
                 )
-              })
+              })}
+              </>)
             })()}
           </div>
 
           {!getFullDayUnavail(unavailability, selectedDay).length && (
             <div style={{ padding: '4px 16px 4px' }}>
               <button style={s.btnFullDay}
-                onClick={() => addUnavail({ start_date: selectedDay, end_date: selectedDay })}>
+                onClick={() => {
+                  if (!window.confirm('Marquer toute la journée indisponible ?\n\nLes créneaux déjà réservés (🔒) ne seront pas modifiés.')) return
+                  addUnavail({ start_date: selectedDay, end_date: selectedDay })
+                }}>
                 🚫 Indispo toute la journée
               </button>
             </div>
@@ -604,6 +634,9 @@ export default function PilotPlanning() {
             <label style={s.label}>Au</label>
             <input type="date" value={rangeEnd} min={rangeStart}
               onChange={e => setRangeEnd(e.target.value)} style={s.dateInput} />
+            <p style={{ color: '#94a3b8', fontSize: 12, margin: '12px 0 0', lineHeight: 1.4 }}>
+              🔒 Les créneaux déjà réservés ne seront pas modifiés.
+            </p>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <button style={s.btnCancel} onClick={() => setShowRangeModal(false)}>Annuler</button>
               <button
