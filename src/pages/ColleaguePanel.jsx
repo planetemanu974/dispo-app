@@ -401,7 +401,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
     reader.onload = () => {
       const img = new Image()
       img.onload = async () => {
-        const MAX = 160
+        const MAX = 256
         const ratio = Math.min(1, MAX / Math.max(img.width, img.height))
         const canvas = document.createElement('canvas')
         canvas.width  = Math.max(1, Math.round(img.width  * ratio))

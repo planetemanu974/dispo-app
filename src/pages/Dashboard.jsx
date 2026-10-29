@@ -2035,10 +2035,14 @@ export default function Dashboard({ pilot }) {
                           wBg = '#3b82f6'; wColor = 'white'; wBorder = '#1d4ed8'
                         }
 
+                        // Partner booking with a structure logo: the logo fills the whole slot
+                        const logoUrl = structureLogo(firstActive)
+                        if (logoUrl) { wColor = '#0f172a' }
+
                         return (
                           <div key={slot.id}
                             className={status}
-                            style={{ position:'absolute', left:2, right:2, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
+                            style={{ position:'absolute', left:2, right:2, top, height, borderRadius:8, background: logoUrl ? `#fff url(${logoUrl}) center / contain no-repeat` : wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
                               if (selectMode) {
                                 // Toggle slot selection
@@ -2085,7 +2089,7 @@ export default function Dashboard({ pilot }) {
                               {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
                                 <button
                                   style={{
-                                    background:'rgba(255,255,255,0.35)', color:'white',
+                                    background: logoUrl ? wBg : 'rgba(255,255,255,0.35)', color:'white',
                                     border:'1px solid rgba(255,255,255,0.5)', borderRadius:4,
                                     fontSize:'0.52rem', fontWeight:900,
                                     padding:'0 2px', lineHeight:1.3,
@@ -2098,19 +2102,13 @@ export default function Dashboard({ pilot }) {
                               )}
                             </div>
                             {/* Row 2: structure logo (partner bookings) or passenger name */}
-                            {structureLogo(firstActive) && (
-                              <div style={{ flex:1, minHeight:0, padding:'1px 2px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                                <img src={structureLogo(firstActive)} alt={firstActive.contact_name}
-                                  style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', background:'rgba(255,255,255,0.92)', borderRadius:4, padding:1 }} />
-                              </div>
-                            )}
-                            {name && !structureLogo(firstActive) && (
+                            {name && !logoUrl && (
                               <span style={{ fontSize:'0.65rem', fontWeight:800, padding:'0 4px', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block' }}>
                                 {name}
                               </span>
                             )}
                             {/* Row 3: pax count OR "pas dispo" label */}
-                            {pax !== null && (
+                            {pax !== null && !logoUrl && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85, whiteSpace:'nowrap' }}>{pax} pax</span>
                             )}
                             {!slot.is_available && activeBks.length === 0 && (
