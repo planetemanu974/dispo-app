@@ -201,7 +201,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
     setColLoading(true)
     const { data } = await supabase
       .from('colleagues')
-      .select('id, name, address, siret, phone, email, active, invite_used, created_at, is_direct, is_fixed, fixed_order, notes')
+      .select('id, name, address, siret, phone, email, active, invite_used, invite_token, created_at, is_direct, is_fixed, fixed_order, notes')
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
@@ -403,6 +403,51 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
     setDetailColleague(prev => ({ ...prev, active: newActive }))
+    loadColleagues()
+  }
+
+  // ── Structure access link ────────────────────────────────────────────────
+  // Not registered yet → one-time invite link (/join). Registered → permanent login page (/dispo).
+  function structureLink(c) {
+    return (!c.invite_used && c.invite_token)
+      ? `${window.location.origin}/join?token=${c.invite_token}`
+      : `${window.location.origin}/dispo`
+  }
+
+  // Re-send the link: re-enables access first if it was revoked, then shares / copies it
+  async function handleResendLink() {
+    const c = detailColleague
+    if (!c.active) {
+      if (!window.confirm('L\'accès est révoqué. Le réactiver et renvoyer le lien ?')) return
+      const { error } = await supabase.from('colleagues').update({ active: true })
+        .eq('id', c.id).eq('pilot_id', pilot.id)
+      if (error) { alert('Erreur : ' + error.message); return }
+      setDetailColleague(prev => ({ ...prev, active: true }))
+      loadColleagues()
+    }
+    const link = structureLink(c)
+    const msg = `Bonjour ${c.name}, voici votre lien pour voir mes disponibilités : ${link}`
+    if (c.phone) {
+      const { error } = await supabase.functions.invoke('send-sms', { body: { to: c.phone, message: msg } })
+      if (!error) { alert('SMS envoyé !'); return }
+    }
+    if (navigator.share) {
+      try { await navigator.share({ text: msg }); return } catch (_) { /* cancelled → fall back to copy */ }
+    }
+    try { await navigator.clipboard.writeText(msg); alert('Message copié — collez-le dans WhatsApp / SMS.') }
+    catch (_) { window.prompt('Copiez ce message :', msg) }
+  }
+
+  // Forgotten secret code: issue a fresh one-time invite so the structure can choose a new code
+  async function handleResetInvite() {
+    const c = detailColleague
+    if (!window.confirm('Générer une nouvelle invitation ? La structure devra choisir un nouveau code secret.')) return
+    const newToken = crypto.randomUUID()
+    const { error } = await supabase.from('colleagues')
+      .update({ invite_token: newToken, invite_used: false, active: true })
+      .eq('id', c.id).eq('pilot_id', pilot.id)
+    if (error) { alert('Erreur : ' + error.message); return }
+    setDetailColleague(prev => ({ ...prev, invite_token: newToken, invite_used: false, active: true }))
     loadColleagues()
   }
 
@@ -1178,8 +1223,43 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
               </button>
             </>
           ) : (
-            /* Structure : révoquer / réactiver + supprimer */
+            /* Structure : lien d'accès + révoquer / réactiver + supprimer */
             <>
+              <div style={{ marginTop: 14, padding: 12, background: '#0f2027', border: '1px solid #1d4ed844', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+                  🔗 Lien d'accès à mon planning
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', wordBreak: 'break-all', marginBottom: 8 }}>
+                  {structureLink(detailColleague)}
+                </div>
+                {!detailColleague.invite_used && (
+                  <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 8 }}>
+                    ⏳ Lien d'invitation à usage unique : la structure y choisit son code secret.
+                  </div>
+                )}
+                {!detailColleague.active && (
+                  <div style={{ fontSize: 11, color: '#f87171', marginBottom: 8 }}>
+                    🚫 Accès révoqué : « Renvoyer » le réactive.
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button type="button"
+                    onClick={() => navigator.clipboard?.writeText(structureLink(detailColleague)).then(() => alert('Lien copié')).catch(() => {})}
+                    style={{ flex: 1, padding: 8, background: '#1e293b', color: '#93c5fd', border: '1px solid #1d4ed844', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    📋 Copier
+                  </button>
+                  <button type="button" onClick={handleResendLink}
+                    style={{ flex: 1, padding: 8, background: '#1e3a5f', color: '#93c5fd', border: '1px solid #1d4ed844', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    📤 Renvoyer le lien
+                  </button>
+                </div>
+                {detailColleague.invite_used && (
+                  <button type="button" onClick={handleResetInvite}
+                    style={{ width: '100%', marginTop: 8, padding: 8, background: 'transparent', color: '#94a3b8', border: '1px dashed #334155', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    🔑 Code oublié ? Nouvelle invitation
+                  </button>
+                )}
+              </div>
               <button
                 onClick={handleToggleActive}
                 style={{ width: '100%', marginTop: 10, padding: '10px', background: detailColleague.active ? '#7f1d1d33' : '#14532d33', color: detailColleague.active ? '#fca5a5' : '#86efac', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
