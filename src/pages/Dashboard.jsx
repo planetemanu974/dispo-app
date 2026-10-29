@@ -1972,7 +1972,7 @@ export default function Dashboard({ pilot }) {
                         return (
                           <div key={slot.id}
                             className={status}
-                            style={{ position:'absolute', left:4, right:4, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
+                            style={{ position:'absolute', left:2, right:2, top, height, borderRadius:8, background:wBg, borderLeft:`4px solid ${wBorder}`, color:wColor, display:'flex', flexDirection:'column', overflow:'hidden', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.28)' }}
                             onClick={() => {
                               if (selectMode) {
                                 // Toggle slot selection
@@ -2010,10 +2010,26 @@ export default function Dashboard({ pilot }) {
                               </div>
                             )}
                             {/* Row 1: time (left) + "+N" badge (right) in a single flex row */}
-                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'2px 3px 0 4px', minHeight:0 }}>
-                              <span style={{ fontSize:'0.55rem', fontWeight:700, opacity:0.85, lineHeight:1 }}>
+                            {/* Time left, "+N places left" top-right. Phone columns are only ~40px wide,
+                                so both are kept compact and the badge never shrinks or wraps. */}
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:1, padding:'2px 2px 0 3px', minHeight:0 }}>
+                              <span style={{ fontSize:'0.5rem', fontWeight:700, opacity:0.85, lineHeight:1, whiteSpace:'nowrap', minWidth:0 }}>
                                 {slot.slot_time.slice(0, 5)}
                               </span>
+                              {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
+                                <button
+                                  style={{
+                                    background:'rgba(255,255,255,0.35)', color:'white',
+                                    border:'1px solid rgba(255,255,255,0.5)', borderRadius:4,
+                                    fontSize:'0.52rem', fontWeight:900,
+                                    padding:'0 2px', lineHeight:1.3,
+                                    cursor:'pointer', flexShrink:0, whiteSpace:'nowrap',
+                                  }}
+                                  onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
+                                  title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
+                                  +{remainingW}
+                                </button>
+                              )}
                             </div>
                             {/* Row 2: passenger name */}
                             {name && (
@@ -2024,23 +2040,6 @@ export default function Dashboard({ pilot }) {
                             {/* Row 3: pax count OR "pas dispo" label */}
                             {pax !== null && (
                               <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'0 4px', opacity:0.85, whiteSpace:'nowrap' }}>{pax} pax</span>
-                            )}
-                            {/* "+N" (places left) on its own line: a column is only ~40px wide on a phone */}
-                            {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
-                              <div style={{ padding:'1px 4px 0', display:'flex' }}>
-                                <button
-                                  style={{
-                                    background:'rgba(255,255,255,0.35)', color:'white',
-                                    border:'1px solid rgba(255,255,255,0.5)', borderRadius:4,
-                                    fontSize:'0.58rem', fontWeight:900,
-                                    padding:'0 5px', lineHeight:1.2,
-                                    cursor:'pointer', flexShrink:0,
-                                  }}
-                                  onClick={e => { e.stopPropagation(); openNewBooking(slot, date) }}
-                                  title={`${remainingW} place${remainingW > 1 ? 's' : ''} restante${remainingW > 1 ? 's' : ''}`}>
-                                  +{remainingW}
-                                </button>
-                              </div>
                             )}
                             {!slot.is_available && activeBks.length === 0 && (
                               <span style={{ fontSize:'0.58rem', fontWeight:700, padding:'0 4px', opacity:0.8, letterSpacing:'0.04em', textTransform:'uppercase' }}>pas dispo</span>
