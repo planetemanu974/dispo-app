@@ -196,6 +196,7 @@ export default function Dashboard({ pilot }) {
   const [colleagueRequestSlot, setColleagueRequestSlot] = useState(null) // { date, time, bookingId? } — set when opened from "Pas de pilote"
   const [fixedPilotPicker, setFixedPilotPicker] = useState(null) // { bookingId, slotLabel, date, time } — quick picker for fixed pilots
   const [showSettings, setShowSettings]       = useState(false)
+  const [showSupport, setShowSupport]         = useState(false)
   const [showHistory, setShowHistory]         = useState(false)
   const [showComptabilite, setShowComptabilite] = useState(false)
   const [showStructures, setShowStructures] = useState(false)
@@ -1516,6 +1517,7 @@ export default function Dashboard({ pilot }) {
               🔄 Mettre à jour l'app
             </button>
           )}
+          <MenuLink icon="🆘" label="Assistance" onClick={() => { setMenuOpen(false); setShowSupport(true) }} />
           <button onClick={() => supabase.auth.signOut()}
             style={{ width:'100%', padding:'10px', background:'rgba(239,68,68,0.15)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, color:'#fca5a5', fontSize:'0.88rem', cursor:'pointer', fontWeight:600 }}>
             Déconnexion
@@ -1524,7 +1526,7 @@ export default function Dashboard({ pilot }) {
       </div>
 
       {/* Help for the person managing the planning: advisor + "Prévenir l'administrateur" */}
-      <SupportHelp where={
+      <SupportHelp open={showSupport} onClose={() => setShowSupport(false)} where={
         showSettings ? 'Paramètres' : showHistory ? 'Historique' : showComptabilite ? 'Comptabilité'
         : showStructures ? 'Structures' : showMessages ? 'Messages' : showPilotReport ? 'Rapport pilotes'
         : `Planning (vue ${viewMode === 'week' ? 'Semaine' : viewMode === 'day' ? 'Jour' : 'Pilotes'})`

@@ -1,5 +1,5 @@
-// SupportHelp — in-app help for signed-in users (e.g. a secretary while the owner is away).
-//  • A "❓" button opens a small panel with an ADVISOR that explains how to use the app.
+// SupportHelp — in-app help (opened from the menu → « Assistance »; no floating button) for signed-in users (e.g. a secretary while the owner is away).
+//  • A panel with an ADVISOR that explains how to use the app.
 //    The advisor only talks: it cannot see the planning/bookings/accounting and cannot change anything.
 //  • "Prévenir l'administrateur" saves a help request (shown as a banner on the owner's dashboard)
 //    and texts the owner. Both go through the `support-assistant` Edge Function.
@@ -8,8 +8,7 @@ import { supabase } from '../lib/supabase'
 
 const GREETING = "Bonjour ! Je peux vous expliquer comment utiliser l'application. Je ne vois pas votre planning et je ne peux rien modifier : je suis là pour vous conseiller. Quelle est votre question ?"
 
-export default function SupportHelp({ where = '' }) {
-  const [open, setOpen]         = useState(false)
+export default function SupportHelp({ where = '', open = false, onClose = () => {} }) {
   const [log, setLog]           = useState([{ who: 'a', text: GREETING }])
   const [input, setInput]       = useState('')
   const [busy, setBusy]         = useState(false)
@@ -76,13 +75,12 @@ export default function SupportHelp({ where = '' }) {
 
   return (
     <>
-      <button className="support-fab" onClick={() => setOpen(o => !o)} aria-label="Aide" title="Aide">
-        {open ? '✕' : '❓'}
-      </button>
-
       {open && (
         <div className="support-panel" role="dialog" aria-label="Aide">
-          <div className="support-head">💡 Aide</div>
+          <div className="support-head">
+            <span>💡 Assistance</span>
+            <button className="support-close" onClick={onClose} aria-label="Fermer">✕</button>
+          </div>
 
           <div className="support-log" ref={logRef}>
             {log.map((m, i) => (
