@@ -37,7 +37,7 @@ export default function App() {
 
   // One single dark loading screen until we know who is signed in (no flash of the login page)
   if (session === undefined || (session && pilot === undefined)) {
-    return <div className="loading-screen"><img src="/logo-dpd-v2.png" alt="" /></div>
+    return <div className="loading-screen"><img src="/logo-dpd-v3.png" alt="" /></div>
   }
 
   return (
