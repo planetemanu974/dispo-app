@@ -340,14 +340,14 @@ const MAN = {
   spiral:{ label:'Spirale engagée', dur:14, f:(t,d)=>{ const a=ease(t/3)*(1-ease((t-d+3.5)/3.5));
       return {bank:68*D2R*a, pitch:0.75*a*a, V:10+14*a, brake:[0,0.8*Math.min(1,t/1.5)*(1-ease((t-d+3.5)/3.5))], sink:12*a*a}; } },
   // several full loops in a row (wing goes forward over the pilot), then a short recovery
-  loop:{ label:'Looping', dur:7.4, f:(t,d)=>{
-      const N=4, T=1.5;                       // N turns, T sim-seconds per turn
+  loop:{ label:'Looping', dur:13.4, f:(t,d)=>{
+      const N=8, T=1.5;                       // N turns, T sim-seconds per turn
       if(t<0.6) { const a=ease(t/0.6); return {bank:0,pitch:0.45*a,V:10+8*a,brake:[0,0]}; }
       const tEnd=0.6+N*T;
       if(t<tEnd){ const r=(t-0.6)/T; return {bank:0,pitch:0.45+r*2*Math.PI,V:19,brake:[0.3,0.3],direct:true,noWrap:true}; }
       const a=1-ease((t-tEnd)/0.8); return {bank:0,pitch:N*2*Math.PI-0.08*a+0.45*a*0,V:10+9*a,brake:[0,0]}; } },
 };
-const SHOW=['loop:7.4'];
+const SHOW=['loop:13.4'];
 let showIdx=-1;
 function startMan(name, keepShow){
   if(!keepShow) showIdx = name==='show' ? 0 : -1;
