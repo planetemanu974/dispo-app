@@ -1,0 +1,6 @@
+# Supabase CLI config — keeps per-function settings when functions are deployed from GitHub.
+project_id = "qoqwdtbqudstcwqlcgsq"
+
+# Twilio calls this webhook directly: it carries no Supabase login token, so JWT checking must stay OFF.
+[functions.handle-inbound-sms]
+verify_jwt = false
