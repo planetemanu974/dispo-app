@@ -595,3 +595,10 @@
 .weekpicker-today { width: 100%; margin-top: 8px; padding: 8px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; cursor: pointer; font-family: inherit; font-weight: 600; }
 .weekpicker-day:disabled { opacity: .3; cursor: default; }
 .weekpicker-day:disabled:hover { background: none; }
+
+/* Header on narrow phones: keep the three view tabs readable */
+@media (max-width: 480px) {
+  header .hdr-tabs { gap: 3px !important; }
+  header .hdr-tab { font-size: 0.72rem !important; padding: 7px 2px !important; }
+  header .hdr-tab-emoji { display: none; }
+}

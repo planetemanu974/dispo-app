@@ -1679,27 +1679,24 @@ export default function Dashboard({ pilot }) {
           style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0, position:'relative' }}>
           {/* Full logo (icon + "DispoPasDispo" wordmark), white on transparent */}
           <img src="/logo-full.png" alt="Dispo Pas Dispo — menu" style={{ height:40, width:'auto', display:'block' }} />
-          {updateReady && (
-            <span style={{ position:'absolute', top:0, right:0, width:10, height:10, background:'#eab308', borderRadius:'50%', border:'2px solid white' }} />
-          )}
         </button>
 
         {/* Toggle Semaine / Jour / Pilotes — prend l'espace restant */}
-        <div style={{ display:'flex', gap:4, flex:1, minWidth:0, justifyContent:'center' }}>
+        <div className="hdr-tabs" style={{ display:'flex', gap:4, flex:1, minWidth:0, justifyContent:'center' }}>
           <button
-            style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            className="hdr-tab" style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='week' ? '#fff' : '#222', color: viewMode==='week' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => setViewMode('week')}>
-            📅 Semaine
+            <span className="hdr-tab-emoji">📅 </span>Semaine
           </button>
           <button
-            style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            className="hdr-tab" style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='day' ? '#fff' : '#222', color: viewMode==='day' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => { setViewMode('day'); loadDay(selectedDate); loadPlanning(selectedDate) }}>
-            📋 Jour
+            <span className="hdr-tab-emoji">📋 </span>Jour
           </button>
           <button
-            style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='pilots' ? '#fff' : '#222', color: viewMode==='pilots' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
+            className="hdr-tab" style={{ flex:1, minWidth:0, whiteSpace:'nowrap', maxWidth:95, padding:'7px 3px', fontSize:'0.78rem', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontFamily:'inherit', background: viewMode==='pilots' ? '#fff' : '#222', color: viewMode==='pilots' ? '#000' : '#94a3b8', transition:'background 0.15s, color 0.15s' }}
             onClick={() => setViewMode('pilots')}>
-            🧑‍✈️ Pilotes
+            <span className="hdr-tab-emoji">🧑‍✈️ </span>Pilotes
           </button>
         </div>
 
@@ -1709,7 +1706,7 @@ export default function Dashboard({ pilot }) {
           style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 6px', flexShrink:0, fontSize:20, lineHeight:1 }}
           aria-label="Rafraîchir"
           title={updateReady ? 'Nouvelle version disponible — toucher pour mettre à jour' : 'Rafraîchir'}
-        ><span style={{ display:'inline-block', animation: refreshing ? 'spin-refresh 0.8s linear infinite' : 'none' }}>{updateReady ? '🟡' : '🔄'}</span></button>
+        ><span style={{ display:'inline-block', position:'relative', animation: refreshing ? 'spin-refresh 0.8s linear infinite' : 'none' }}>🔄{updateReady && <span style={{ position:'absolute', top:-3, right:-4, width:9, height:9, background:'#eab308', borderRadius:'50%', border:'1.5px solid #000' }} />}</span></button>
 
         {/* Bouton Paramètres */}
         <button
