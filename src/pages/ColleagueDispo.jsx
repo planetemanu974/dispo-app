@@ -48,11 +48,15 @@ function formatTime(timeStr) {
   return timeStr ? timeStr.slice(0, 5) : '--:--'
 }
 
+// Name shown in the page title: the pilot works here as an independent (not as the « Planète Parapente » structure)
+const PILOT_DISPLAY_NAME = 'Manu'
+
 // ── Composant principal ───────────────────────────────────────────────────
 export default function ColleagueDispo() {
   // Session du collègue (localStorage)
   const [session, setSession]       = useState(null)   // { colleague_id, pilot_id, name }
   const [authLoading, setAuthLoading] = useState(true)
+  const [logoUrl, setLogoUrl]   = useState(null)   // the structure's own logo (header)
   const [flights, setFlights]   = useState([])     // flights this structure booked with the pilot (shown with its logo)
 
   // Formulaire de connexion
@@ -130,6 +134,13 @@ export default function ColleagueDispo() {
     }
     init()
   }, [])
+
+  // Logo of the structure (fails silently until migration 027 is applied)
+  useEffect(() => {
+    if (!session?.colleague_id) { setLogoUrl(null); return }
+    supabase.rpc('get_colleague_logo', { p_colleague_id: session.colleague_id })
+      .then(({ data, error }) => setLogoUrl(error ? null : (data || null)))
+  }, [session?.colleague_id])
 
   // ── Charger l'historique des demandes ────────────────────────────────
   const loadHistory = useCallback(async (colSession) => {
@@ -342,12 +353,12 @@ export default function ColleagueDispo() {
         {/* Titre centré : "[Nom du pilote] Dispo" */}
         <div style={{ flex: 1, textAlign: 'center', padding: '0 8px' }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9', letterSpacing: '0.01em', lineHeight: 1.2 }}>
-            {session.pilotName || 'Mon pilote'}
+            {PILOT_DISPLAY_NAME}
             <span style={{ fontWeight: 400, color: '#22c55e', marginLeft: 6, fontSize: 12 }}>Dispo</span>
           </div>
-          <div style={{ fontSize: 10, color: '#475569', marginTop: 2, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-            {session.name}
-          </div>
+          {logoUrl
+            ? <img src={logoUrl} alt={session.name} style={{ height: 30, maxWidth: 140, objectFit: 'contain', marginTop: 4, display: 'inline-block' }} />
+            : <div style={{ fontSize: 10, color: '#475569', marginTop: 2, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{session.name}</div>}
         </div>
 
         {/* Déconnexion droite */}
