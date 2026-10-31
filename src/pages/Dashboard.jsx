@@ -7,7 +7,6 @@ import History from './History'
 import Comptabilite from './Comptabilite'
 import SupportHelp from '../components/SupportHelp'
 import WeekPicker from '../components/WeekPicker'
-import Structures from './Structures'
 import AssignColleague from '../components/AssignColleague'
 import FlightClosure from '../components/FlightClosure'
 import ActivityFeed from '../components/ActivityFeed'
@@ -204,7 +203,6 @@ export default function Dashboard({ pilot }) {
   const [showPreviewPicker, setShowPreviewPicker] = useState(false)   // choose a structure to preview its planning view
   const [showHistory, setShowHistory]         = useState(false)
   const [showComptabilite, setShowComptabilite] = useState(false)
-  const [showStructures, setShowStructures] = useState(false)
   const [showAssign, setShowAssign]           = useState(false) // AssignColleague drawer
 
   // Colleague messages (unread)
@@ -1620,7 +1618,6 @@ export default function Dashboard({ pilot }) {
           <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
           <MenuLink icon="💰" label="Rapport pilotes" onClick={() => { setMenuOpen(false); setShowPilotReport(true); loadPilotReport(reportMonth) }} />
           <MenuLink icon="📋" label="Historique"    onClick={() => { setMenuOpen(false); setShowHistory(true) }} />
-          <MenuLink icon="🤝" label="Structures"    onClick={() => { setMenuOpen(false); setShowStructures(true) }} />
           <MenuLink icon="🧾" label="Comptabilité"  onClick={() => { setMenuOpen(false); setShowComptabilite(true) }} />
           <MenuLink icon="☁️" label="Météo"         disabled />
         </nav>
@@ -1668,7 +1665,7 @@ export default function Dashboard({ pilot }) {
       {/* Help for the person managing the planning: advisor + "Prévenir l'administrateur" */}
       <SupportHelp open={showSupport} onClose={() => setShowSupport(false)} where={
         showSettings ? 'Paramètres' : showHistory ? 'Historique' : showComptabilite ? 'Comptabilité'
-        : showStructures ? 'Structures' : showMessages ? 'Messages' : showPilotReport ? 'Rapport pilotes'
+        : showMessages ? 'Messages' : showPilotReport ? 'Rapport pilotes'
         : `Planning (vue ${viewMode === 'week' ? 'Semaine' : viewMode === 'day' ? 'Jour' : 'Pilotes'})`
       } />
 
@@ -1749,25 +1746,6 @@ export default function Dashboard({ pilot }) {
               ← Retour
             </button>
             <Comptabilite pilot={pilot} flightTypes={flightTypes} />
-          </div>
-        </div>
-      )}
-
-      {/* Structures — monthly recap of flights done for partners */}
-      {showStructures && (
-        <div style={{ position:'fixed', inset:0, zIndex:200, background:'#0f172a', overflowY:'auto' }}>
-          <div style={{ maxWidth:480, margin:'0 auto', padding:'0 0 40px', position:'relative' }}>
-            <button
-              onClick={() => setShowStructures(false)}
-              style={{
-                position:'sticky', top:0, zIndex:10, display:'flex', alignItems:'center', gap:6,
-                background:'#1e293b', border:'none', borderBottom:'1px solid #334155',
-                color:'#94a3b8', fontSize:14, cursor:'pointer', padding:'14px 16px',
-                width:'100%', fontFamily:'inherit',
-              }}>
-              ← Retour
-            </button>
-            <Structures pilot={pilot} flightTypes={flightTypes} />
           </div>
         </div>
       )}
