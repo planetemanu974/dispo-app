@@ -97,11 +97,11 @@ export default function MascotAssistant({ onApply }) {
     say(hello)
     await wait(1600)
     showPose('bienvenue')
-    const q = "Dites-moi avec qui vous souhaitez voler, et je m'occupe de trouver le bon créneau."
+    const q = "Dites-moi en une phrase : combien êtes-vous, s'il y a des enfants (âge et poids), les poids approximatifs et le type de vol (découverte ou performance). Je trouve le créneau tout de suite."
     say(q)
     setLog([{ who: 'a', text: `${hello} ${q}` }])
     historyRef.current = [{ role: 'assistant', content: `${hello} ${q}` }]
-    setChips([{ label: 'Nous sommes en famille' }, { label: 'Je viens seul(e)' }, { label: 'Nous sommes en couple' }])
+    setChips([{ label: 'Nous sommes en famille' }, { label: 'Nous sommes deux adultes' }, { label: 'Je viens seul(e)' }])
     openingRef.current = false
   }
 
