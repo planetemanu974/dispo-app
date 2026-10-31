@@ -118,6 +118,7 @@ VOCABULAIRE : n'écris JAMAIS le mot « plan » (ni « plan à 3 », « plan à 
 GROUPE EN DEUX TEMPS = DEUX CRÉNEAUX CONSÉCUTIFS. Quand un groupe doit voler en deux temps (typiquement un enfant léger à 8h00 puis les autres ensuite), il lui faut DEUX créneaux CONSÉCUTIFS de la grille (ex. 8h00 puis 9h15) : on ne fait pas attendre un client. Consulte « PAIRES CONSÉCUTIVES LIBRES » du jour demandé. Si la paire nécessaire n'y figure pas, NE propose PAS de créneau éloigné (ex. 8h00 puis 11h45). Dis clairement et simplement ce qui bloque (« le créneau de 9h15 est déjà pris ce jour-là »), puis propose en priorité le prochain jour où la paire nécessaire est libre (précise le jour et les heures), avec en alternative le rappel par un moniteur qui étudiera une solution. Ne présente jamais un programme avec une longue attente comme solution par défaut.
 SUGGESTIONS VALIDES : ne propose JAMAIS en bouton un choix qui viole les règles métier pour ce groupe (ex. « 8h00 pour tous » avec un adulte de plus de 85 kg, ou performance pour un enfant). Chaque suggestion doit être réalisable avec les créneaux LIBRES du jour.
 « UN AUTRE HORAIRE » / « UN AUTRE JOUR » : ne renvoie jamais la question au client. Propose immédiatement une alternative précise et réalisable (un autre horaire le même jour, ou le jour suivant le plus proche), avec qui vole à quelle heure, et termine par « Est-ce que cela vous convient ? ». Si aucune alternative réaliste n'existe, propose le rappel par un moniteur.
+PAS DE PROMESSE VIDE : ne dis jamais « je prépare », « je regarde », « un instant », « laissez-moi vérifier » sans donner le résultat DANS LE MÊME MESSAGE. Chaque réponse fait exactement l'une de ces trois choses : (1) poser UNE question précise quand il manque une information, (2) présenter un programme précis (qui vole à quelle heure, avec qui) et demander « Est-ce que cela vous convient ? », (3) expliquer ce qui bloque et proposer un autre jour ou le rappel par un moniteur. Quand tu as groupe + types de vol + date, tu fais (2) ou (3) immédiatement, sans autre échange.
 RÉPONSES PROPRES : donne seulement la conclusion, jamais tes hésitations, vérifications ou corrections à voix haute (pas de « mais… donc… », pas de « attendez »). Vérifie les règles en silence, puis écris une réponse nette.
 Aujourd'hui : ${today}.
 
@@ -316,7 +317,18 @@ serve(async (req) => {
       const tool = blocks.find(c => c.type === 'tool_use')?.input
       const text = blocks.map(c => c.text ?? '').join('')
       const cand = tool ?? extractJson(text) ?? (salvageText(text) ? { texte: salvageText(text), pose: 'je-reflechis' } : null)
-      if (cand && typeof cand.texte === 'string' && cand.texte.trim()) out = cand
+      const txt = cand && typeof cand.texte === 'string' ? cand.texte.trim() : ''
+      // Guard: a reply that asks nothing, shows no time and offers no callback is an empty promise
+      // ("je prépare votre programme…"). Ask the model once to deliver the actual answer.
+      const hollow = txt && attempt === 0 && !txt.includes('?') && !/\b\d{1,2}\s?h\s?\d{0,2}\b/i.test(txt)
+        && !/rappel|transmise|à bientôt|merci pour votre/i.test(txt) && !(cand as Record<string, unknown>).callback
+      if (hollow) {
+        messages = [...messages,
+          { role: 'assistant', content: txt },
+          { role: 'user', content: "[Consigne interne : ta réponse précédente ne donne rien de concret. Donne MAINTENANT le résultat : soit une question précise, soit le programme précis (qui vole à quelle heure, avec qui) suivi de « Est-ce que cela vous convient ? », soit ce qui bloque avec un autre jour ou le rappel par un moniteur.]" }]
+        continue
+      }
+      if (txt) out = cand
       else console.error('Unusable assistant reply', attempt, data.stop_reason, JSON.stringify(data.content).slice(0, 500))
     }
     if (!out) out = { texte: "Excusez-moi, je n'ai pas bien compris. Pouvez-vous reformuler ?", pose: 'je-reflechis' }
