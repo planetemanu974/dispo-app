@@ -180,6 +180,33 @@ FORMAT DE RÉPONSE : tu réponds TOUJOURS en appelant l'outil « reply » (texte
 - "suggestions" : 0 à 3 réponses courtes qui font gagner du temps (ex. « Découverte pour tous », « Performance pour tous », « 1 découverte + 1 performance », « Oui, parfait »).`
 }
 
+// Server-side check of the proposed programme (the model is not trusted to follow the rules alone):
+//  1. every slot used must be FREE that day;
+//  2. the distinct slots used must be CONSECUTIVE in the daily grid (nobody waits for hours).
+// Returns a correction message for the model, or null when the programme is acceptable.
+function checkDraft(draft: unknown, slots: Record<string, string[]>): string | null {
+  const d = draft as { date?: string; passengers?: { slot?: string | null }[] } | null
+  if (!d || typeof d.date !== 'string' || !Array.isArray(d.passengers)) return null
+  const free = slots[d.date]
+  if (!free) return null
+  const used = [...new Set(d.passengers.map(p => p.slot).filter((x): x is string => typeof x === 'string' && /^\d{2}:\d{2}$/.test(x)))].sort()
+  if (!used.length) return null
+
+  const notFree = used.filter(t => !free.includes(t))
+  if (notFree.length) {
+    return `Le programme utilise ${notFree.join(', ')} le ${d.date}, qui n'est pas libre ce jour-là. Les créneaux libres sont : ${free.join(', ') || 'aucun'}. Corrige : utilise uniquement des créneaux libres, ou propose un autre jour ou le rappel par un moniteur.`
+  }
+  const grid = [...new Set(Object.values(slots).flat())].sort()
+  const idx = used.map(t => grid.indexOf(t))
+  for (let i = 1; i < idx.length; i++) {
+    if (idx[i] !== idx[i - 1] + 1) {
+      const between = grid.slice(idx[i - 1] + 1, idx[i])
+      return `Le programme fait voler le groupe à ${used.join(' puis ')} : les créneaux ne sont pas consécutifs (${between.join(', ')} ${between.length > 1 ? 'sont' : 'est'} sauté${between.length > 1 ? 's' : ''}, donc le client attendrait trop longtemps). Corrige : dis simplement que ${between.join(', ')} ${between.length > 1 ? 'ne sont pas disponibles' : "n'est pas disponible"} ce jour-là, puis propose le prochain jour où une paire de créneaux CONSÉCUTIFS adaptée est libre (précise le jour et les heures), avec en alternative le rappel par un moniteur.`
+    }
+  }
+  return null
+}
+
 // ── Callback requests ────────────────────────────────────────────────────────
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -318,6 +345,13 @@ serve(async (req) => {
       const text = blocks.map(c => c.text ?? '').join('')
       const cand = tool ?? extractJson(text) ?? (salvageText(text) ? { texte: salvageText(text), pose: 'je-reflechis' } : null)
       const txt = cand && typeof cand.texte === 'string' ? cand.texte.trim() : ''
+      // Guard 1: the proposed programme must use free, consecutive slots — otherwise ask for a correction
+      const fix = attempt === 0 && txt ? checkDraft((cand as Record<string, unknown>).draft, slots) : null
+      if (fix) {
+        console.warn('draft rejected:', fix)
+        messages = [...messages, { role: 'assistant', content: txt }, { role: 'user', content: `[Consigne interne : ${fix}]` }]
+        continue
+      }
       // Guard: a reply that asks nothing, shows no time and offers no callback is an empty promise
       // ("je prépare votre programme…"). Ask the model once to deliver the actual answer.
       const hollow = txt && attempt === 0 && !txt.includes('?') && !/\b\d{1,2}\s?h\s?\d{0,2}\b/i.test(txt)
