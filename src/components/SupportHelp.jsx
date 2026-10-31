@@ -5,6 +5,7 @@
 //    and texts the owner. Both go through the `support-assistant` Edge Function.
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { POSES } from '../mascot/poses'
 
 const GREETING = "Bonjour ! Je peux vous expliquer comment utiliser l'application. Je ne vois pas votre planning et je ne peux rien modifier : je suis là pour vous conseiller. Quelle est votre question ?"
 
@@ -73,12 +74,16 @@ export default function SupportHelp({ where = '', open = false, onClose = () => 
     }
   }
 
+  // The mascot changes pose with what is going on
+  const pose = sent ? 'merci' : busy ? 'je-reflechis' : escalate ? 'je-t-ecoute' : 'je-t-explique'
+
   return (
     <>
       {open && (
         <div className="support-panel" role="dialog" aria-label="Aide">
           <div className="support-head">
-            <span>💡 Assistance</span>
+            <img className="support-avatar" src={POSES[pose]} alt="" />
+            <span className="support-title">Assistance<small>Je vous explique l'application</small></span>
             <button className="support-close" onClick={onClose} aria-label="Fermer">✕</button>
           </div>
 
