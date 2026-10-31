@@ -1,0 +1,24 @@
+# Deploys the Supabase Edge Functions automatically when files in supabase/functions change on main.
+# One-time setup: add the repository secret SUPABASE_ACCESS_TOKEN
+# (GitHub → Settings → Secrets and variables → Actions → New repository secret).
+name: Deploy Supabase functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy all functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy --project-ref qoqwdtbqudstcwqlcgsq --use-api
