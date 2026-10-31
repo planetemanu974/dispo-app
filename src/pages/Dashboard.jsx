@@ -855,6 +855,26 @@ export default function Dashboard({ pilot }) {
       .upsert(inserts, { onConflict: 'pilot_id,slot_date,slot_time', ignoreDuplicates: true })
   }
 
+  // ── toggleMainPilotSlot ───────────────────────────────────────────────────
+  // Pilots grid, main pilot row: a cell is the same thing as the slot in the general planning,
+  // so a tap opens/closes that slot (PAS DISPO) exactly like the week view does.
+  async function toggleMainPilotSlot(date, slotTime) {
+    const slot = (weekData[date]?.slots || []).find(sl => sl.slot_time?.slice(0, 5) === slotTime)
+    if (!slot) return
+    const newAvail = !slot.is_available
+    setWeekData(prev => ({   // instant feedback
+      ...prev,
+      [date]: { ...prev[date], slots: prev[date].slots.map(sl => sl.id === slot.id ? { ...sl, is_available: newAvail } : sl) },
+    }))
+    const { error } = await supabase.from('pilot_slots').update({ is_available: newAvail }).eq('id', slot.id)
+    if (error) { loadWeek(weekStart, true); return }
+    logActivity(pilot.id, 'slot_toggled', 'slot', slot.id, {
+      slot_date: slot.slot_date, slot_time: slot.slot_time, is_available: newAvail,
+    })
+    loadWeek(weekStart, true)
+    if (date === selectedDate) loadDay(selectedDate, true)
+  }
+
   // ── toggleAvailability ────────────────────────────────────────────────────
   async function toggleAvailability(slot) {
     const newAvail = !slot.is_available
@@ -3169,7 +3189,11 @@ export default function Dashboard({ pilot }) {
                                   {slotTimes.map(slotTime => {
                                     // Check if this slot exists on this day
                                     const slotExists = daySlots.some(s => s.slot_time?.slice(0,5) === slotTime)
-                                    const unavail    = isColleagueUnavailable(pilot.id, date, slotTime + ':00')
+                                    // The general planning (pilot_slots.is_available) is the source of truth for the main pilot:
+                                    // closed slot = absent. Other pilots keep their own absence list.
+                                    const unavail    = isMainPilot
+                                      ? daySlots.some(s => s.slot_time?.slice(0,5) === slotTime && s.is_available === false)
+                                      : isColleagueUnavailable(pilot.id, date, slotTime + ':00')
 
                                     // Is this pilot booked on this slot?
                                     // Main pilot (fixed_order=1) = booked if ANY booking exists on this slot.
@@ -3217,7 +3241,7 @@ export default function Dashboard({ pilot }) {
                                       <span key={slotTime}
                                         role="button"
                                         title={cellTitle}
-                                        onClick={() => togglePilotAvailability(pilot.id, date, slotTime)}
+                                        onClick={() => isMainPilot ? toggleMainPilotSlot(date, slotTime) : togglePilotAvailability(pilot.id, date, slotTime)}
                                         style={{
                                           width:18, height:18, borderRadius:4,
                                           background: cellBg,
