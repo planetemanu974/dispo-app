@@ -150,6 +150,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
   // Collègues
   const [colleagues, setColleagues] = useState([])
   const [colLoading, setColLoading] = useState(false)
+  const [assignmentCounts, setAssignmentCounts] = useState({})  // colleague id → flights assigned to them
   const [bookingCounts, setBookingCounts] = useState({})  // structure name (lower-case) → number of bookings
 
   // Modal : invitation structure
@@ -218,6 +219,11 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
     const counts = {}
     for (const b of bk || []) { const k = (b.contact_name || '').trim().toLowerCase(); counts[k] = (counts[k] || 0) + 1 }
     setBookingCounts(counts)
+    // Independent pilots: how often I assigned them a flight
+    const { data: asg } = await supabase.from('booking_assignments').select('colleague_id').eq('pilot_id', pilot.id).limit(5000)
+    const aCounts = {}
+    for (const a of asg || []) aCounts[a.colleague_id] = (aCounts[a.colleague_id] || 0) + 1
+    setAssignmentCounts(aCounts)
     setColLoading(false)
   }, [pilot.id])
 
@@ -851,10 +857,14 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
                   </div>
 
                   {!colLoading && (() => {
+                    // Most solicited first: flights assigned to them + requests exchanged
+                    const callsOf = c => (assignmentCounts[c.id] || 0) + requests.filter(r => r.colleague_id === c.id).length
                     const directs = colleagues.filter(c => c.is_direct && !c.is_fixed)
+                      .map(c => ({ c, calls: callsOf(c) }))
+                      .sort((a, b) => b.calls - a.calls || (a.c.name || '').localeCompare(b.c.name || ''))
                     return directs.length === 0
                       ? <p style={{ ...s.muted, padding: '10px 0', textAlign: 'left' }}>Aucun pilote indépendant.</p>
-                      : directs.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} />)
+                      : directs.map(({ c, calls }) => <ColleagueCard key={c.id} c={c} onOpen={openDetail} calls={calls} />)
                   })()}
                 </div>
               )}
