@@ -1580,11 +1580,11 @@ export default function Dashboard({ pilot }) {
     return `${start.toLocaleDateString('fr-FR', opts)} – ${end.toLocaleDateString('fr-FR', optsEnd)}`
   }
 
-  if (selectedDate === null) return <div className="loading-screen"><img src="/logo-dpd-v3.png" alt="" /></div>
+  if (selectedDate === null) return <div className="loading-screen"><img src="/logo-dpd-v4.png" alt="" /></div>
 
   return (
     <div className="dashboard">
-      {!ready && <div className="loading-screen" style={{ position:'fixed', inset:0, zIndex:1000 }}><img src="/logo-dpd-v3.png" alt="" /></div>}
+      {!ready && <div className="loading-screen" style={{ position:'fixed', inset:0, zIndex:1000 }}><img src="/logo-dpd-v4.png" alt="" /></div>}
 
       {/* ── Side menu overlay ── */}
       {menuOpen && (
@@ -1675,7 +1675,7 @@ export default function Dashboard({ pilot }) {
         <button onClick={() => setMenuOpen(true)}
           style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0, position:'relative' }}>
           {/* Full logo (icon + "DispoPasDispo" wordmark), white on transparent */}
-          <img src="/logo-dpd-v3.png" alt="Dispo Pas Dispo — menu" style={{ height:44, width:'auto', display:'block' }} />
+          <img src="/logo-dpd-v4.png" alt="Dispo Pas Dispo — menu" style={{ height:44, width:'auto', display:'block' }} />
         </button>
 
         {/* Toggle Semaine / Jour / Pilotes — prend l'espace restant */}
