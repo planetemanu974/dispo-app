@@ -53,6 +53,7 @@ export default function ColleagueDispo() {
   // Session du collègue (localStorage)
   const [session, setSession]       = useState(null)   // { colleague_id, pilot_id, name }
   const [authLoading, setAuthLoading] = useState(true)
+  const [flights, setFlights]   = useState([])     // flights this structure booked with the pilot (shown with its logo)
 
   // Formulaire de connexion
   const [loginName, setLoginName]   = useState('')
@@ -158,6 +159,14 @@ export default function ColleagueDispo() {
     })
 
     if (!error) setSlots(data || [])
+
+    // The structure's own flights with the pilot (logo). Fails silently until migration 026 is applied.
+    const { data: fl, error: flErr } = await supabase.rpc('get_structure_flights', {
+      p_colleague_id: colSession.colleague_id,
+      p_start_date:   days[0],
+      p_end_date:     days[6],
+    })
+    setFlights(flErr ? [] : (fl || []))
     setCalLoading(false)
   }, [])
 
@@ -388,6 +397,14 @@ export default function ColleagueDispo() {
           slotIndex[d][t] = sl
         })
 
+        // Flights this structure booked with the pilot: flightIndex[date][HH:MM]
+        const flightIndex = {}
+        flights.forEach(f => {
+          const t = String(f.slot_time).slice(0, 5)
+          if (!flightIndex[f.slot_date]) flightIndex[f.slot_date] = {}
+          flightIndex[f.slot_date][t] = f
+        })
+
         return (
           <div style={{ overflowX: 'auto', padding: '0 8px', marginTop: 2 }}>
             {/* Table : 1re colonne = heure, puis 1 colonne par jour */}
@@ -423,6 +440,27 @@ export default function ColleagueDispo() {
 
                       // Cellule vide : pas de créneau ce jour à cette heure
                       if (!slot) return <td key={date} />
+
+                      // Vol déjà réservé par cette structure : case blanche avec son logo
+                      const flight = flightIndex[date]?.[time]
+                      if (flight) {
+                        const confirmed = flight.status === 'confirmed'
+                        return (
+                          <td key={date} style={{ padding: 0 }}>
+                            <div style={{
+                              ...s.slotBtn, width: '100%', cursor: 'default',
+                              background: flight.logo_url ? `#fff url(${flight.logo_url}) center / contain no-repeat` : '#fff',
+                              border: `2px solid ${confirmed ? '#6366f1' : '#f59e0b'}`,
+                              color: '#0f172a', position: 'relative',
+                            }}>
+                              <span style={{ fontWeight: 800, fontSize: 11, textShadow: '0 0 3px #fff, 0 0 3px #fff' }}>{time}</span>
+                              <span style={{ fontSize: 8, marginTop: 1, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: confirmed ? '#4338ca' : '#b45309', textShadow: '0 0 3px #fff, 0 0 3px #fff' }}>
+                                {confirmed ? 'Confirmé ✓' : 'En attente'}{flight.pax > 1 ? ` · ${flight.pax} pax` : ''}
+                              </span>
+                            </div>
+                          </td>
+                        )
+                      }
 
                       // Créneau caché (pas dispo ou occupé sans relation avec ce collègue)
                       const visible = (slot.is_available && !slot.is_booked) || slot.my_request_status

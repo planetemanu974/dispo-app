@@ -1602,8 +1602,8 @@ export default function Dashboard({ pilot }) {
             style={{ background:'#0b1220', border:'1px solid #334155', borderRadius:14, padding:16, width:'100%', maxWidth:380, maxHeight:'80vh', overflowY:'auto', color:'#e2e8f0' }}>
             <div style={{ fontWeight:700, marginBottom:4 }}>📅 Planning vu par les structures</div>
             <div style={{ fontSize:'0.85rem', color:'#94a3b8', marginBottom:12 }}>Choisissez la structure dont vous voulez voir l'écran. Lecture seule : rien ne peut être envoyé.</div>
-            {colleagues.length === 0 && <div style={{ color:'#94a3b8' }}>Aucune structure enregistrée.</div>}
-            {[...colleagues].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
+            {colleagues.filter(c => !c.is_direct).length === 0 && <div style={{ color:'#94a3b8' }}>Aucune structure enregistrée.</div>}
+            {[...colleagues].filter(c => !c.is_direct).sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
               <button key={c.id}
                 onClick={() => { setShowPreviewPicker(false); window.open(`/dispo?apercu=${c.id}`, '_blank') }}
                 style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 12px', marginBottom:6, background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0', fontSize:'0.95rem', cursor:'pointer', fontFamily:'inherit' }}>
