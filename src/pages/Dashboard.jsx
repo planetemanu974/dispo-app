@@ -405,7 +405,7 @@ export default function Dashboard({ pilot }) {
   useEffect(() => { const t = setTimeout(() => { setInitDone(true); setFeedDone(true) }, 8000); return () => clearTimeout(t) }, [])  // never block forever
   // Always start at the top after a reload (the browser would otherwise restore a mid-page scroll position)
   useEffect(() => { try { window.history.scrollRestoration = 'manual' } catch { /* ignore */ } }, [])
-  useEffect(() => { if (ready) window.scrollTo(0, 0) }, [ready])
+  useEffect(() => { if (ready) { window.scrollTo(0, 0); window.__hideBootSplash?.() } }, [ready])
 
   // ── INIT: runs once on mount ───────────────────────────────────────────────
   useEffect(() => {

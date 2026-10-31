@@ -5,11 +5,33 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#000000" />
-    <style>html,body{background:#000}</style>
-    <script>try{history.scrollRestoration='manual'}catch(e){}</script>
+    <style>
+      html,body{background:#000}
+      /* Start-up screen: the little pilot looping over the logo, kept alive until the app is ready */
+      #boot-splash{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:opacity .35s ease}
+      #boot-splash iframe{width:min(94vw,460px);height:min(94vw,460px);border:0;background:transparent;pointer-events:none}
+      #boot-splash img{height:54px;width:auto;opacity:.95;margin-top:-30px}
+    </style>
+    <script>
+      try{history.scrollRestoration='manual'}catch(e){}
+      // The boot splash is only for the pilot app (root page), never for public pages (booking, structures…)
+      (function(){
+        var t0=Date.now(), MIN=1800, done=false;
+        window.__hideBootSplash=function(){
+          if(done) return; done=true;
+          var el=document.getElementById('boot-splash'); if(!el) return;
+          setTimeout(function(){ el.style.opacity='0'; setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el) },400) }, Math.max(0, MIN-(Date.now()-t0)));
+        };
+        document.addEventListener('DOMContentLoaded',function(){
+          if(location.pathname!=='/'){ var el=document.getElementById('boot-splash'); if(el&&el.parentNode) el.parentNode.removeChild(el); done=true; }
+        });
+        setTimeout(function(){ window.__hideBootSplash() }, 9000); // safety: never block the app
+      })();
+    </script>
     <title>dispo-app</title>
   </head>
   <body>
+    <div id="boot-splash"><iframe src="/splash/looping.html" title="" tabindex="-1" aria-hidden="true"></iframe><img src="/logo-dpd-v4.png" alt="" /></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -35,6 +35,10 @@ export default function App() {
     setPilot(data ?? null)
   }
 
+  // Login page (not signed in): the start-up splash can go
+  useEffect(() => { if (session === null) window.__hideBootSplash?.() }, [session])
+  useEffect(() => { if (session && pilot === null) window.__hideBootSplash?.() }, [session, pilot])
+
   // One single dark loading screen until we know who is signed in (no flash of the login page)
   if (session === undefined || (session && pilot === undefined)) {
     return <div className="loading-screen"><img src="/logo-dpd-v4.png" alt="" /></div>
