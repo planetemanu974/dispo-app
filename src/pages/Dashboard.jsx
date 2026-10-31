@@ -3308,7 +3308,16 @@ export default function Dashboard({ pilot }) {
             {!editMode && (
               <>
                 <div className="modal-contact">
-                  <strong>{selectedBooking.contact_name}</strong><br />
+                  {/* Name with the phone number right next to it (tap to call) */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px 12px' }}>
+                    <strong>{selectedBooking.contact_name}</strong>
+                    {selectedBooking.contact_phone && (
+                      <a href={`tel:${selectedBooking.contact_phone.replace(/\s+/g,'')}`}
+                        style={{ color: '#93c5fd', fontWeight: 600, fontSize: '0.95rem', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                        {selectedBooking.contact_phone}
+                      </a>
+                    )}
+                  </div>
                   {selectedBooking.contact_phone && (
                     <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                       <a href={`tel:${selectedBooking.contact_phone.replace(/\s+/g,'')}`}
@@ -3356,10 +3365,15 @@ export default function Dashboard({ pilot }) {
                             Passager {i + 1}{(p.first_name || p.last_name) ? ` — ${p.first_name} ${p.last_name}`.trimEnd() : ''}
                           </div>
                           {pilotName && (
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 7px', borderRadius: 6,
-                              background: i === 0 ? '#1e3a5f' : '#14532d',
-                              color: i === 0 ? '#93c5fd' : '#86efac' }}>
-                              🪂 {pilotName}
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 700,
+                              padding: '2px 10px 2px 3px', borderRadius: 999,
+                              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e2e8f0' }}>
+                              {/* Initial in a coloured circle: blue for the main pilot, green for the others */}
+                              <span style={{ width: 20, height: 20, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '0.68rem', fontWeight: 800, color: 'white', background: i === 0 ? '#3b82f6' : '#16a34a' }}>
+                                {pilotName.charAt(0).toUpperCase()}
+                              </span>
+                              {pilotName}
                             </span>
                           )}
                         </div>
