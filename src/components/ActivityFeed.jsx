@@ -149,7 +149,7 @@ export default function ActivityFeed({ pilotId, onOpenBooking, onOpenDay, onFirs
       .from('colleagues')
       .select('name')
       .eq('id', pilotId)
-      .single()
+      .maybeSingle()   // no match is normal here (no 406 error in the console)
       .then(({ data }) => { if (data?.name) setAdminName(data.name) })
   }, [pilotId])
 

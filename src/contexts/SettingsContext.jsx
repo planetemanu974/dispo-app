@@ -66,7 +66,7 @@ export function SettingsProvider({ children, userId }) {
           .from('settings')
           .select('*')
           .eq('user_id', userId)
-          .single()
+          .maybeSingle()
 
         if (error && error.code !== 'PGRST116') {
           console.error('[settings] load error:', error)
