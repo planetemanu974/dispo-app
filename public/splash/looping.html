@@ -340,8 +340,8 @@ const MAN = {
   spiral:{ label:'Spirale engagée', dur:14, f:(t,d)=>{ const a=ease(t/3)*(1-ease((t-d+3.5)/3.5));
       return {bank:68*D2R*a, pitch:0.75*a*a, V:10+14*a, brake:[0,0.8*Math.min(1,t/1.5)*(1-ease((t-d+3.5)/3.5))], sink:12*a*a}; } },
   // several full loops in a row (wing goes forward over the pilot), then a short recovery
-  loop:{ label:'Looping', dur:13.4, f:(t,d)=>{
-      const N=8, T=1.5;                       // N turns, T sim-seconds per turn
+  loop:{ label:'Looping', dur:4.4, f:(t,d)=>{
+      const N=2, T=1.5;                       // N turns, T sim-seconds per turn
       if(t<0.6) { const a=ease(t/0.6); return {bank:0,pitch:0.45*a,V:10+8*a,brake:[0,0]}; }
       const tEnd=0.6+N*T;
       if(t<tEnd){ const r=(t-0.6)/T; return {bank:0,pitch:0.45+r*2*Math.PI,V:19,brake:[0.3,0.3],direct:true,noWrap:true}; }
@@ -506,7 +506,8 @@ window.PG = { startMan, step, render, set:(o)=>{ if(o.pal){curPal=o.pal;drawWing
 let last=performance.now();
 function frame(now){ const dt=Math.min(0.05,(now-last)/1000); last=now; if(!window.PG.manual){ step(dt); render(); } requestAnimationFrame(frame); }
 requestAnimationFrame(frame);
-startMan('show'); manT=0.5; S.pitch=0.2; S.V=13;   // start already in the dive: loops right away
+startMan('loop'); manT=0.5;   // two loops, then straight flight until the app is ready
+ S.pitch=0.2; S.V=13;   // start already in the dive: loops right away
 </script>
 </body>
 </html>
