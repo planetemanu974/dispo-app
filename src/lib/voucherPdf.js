@@ -155,6 +155,12 @@ export async function generateVoucher(v) {
   d.text('Réservez sur dispo-app-pi.vercel.app/reservation ou appelez-nous, en indiquant votre code. Photos et vidéo non incluses. Flashez le QR code pour réserver.', cx, 128, { align: 'center', maxWidth: maxW })
   d.setFont('helvetica', 'bold'); text(d, th.title)
   d.text('Planète Parapente — Saint-Leu', cx, design === 'adult' ? 137 : 135, align)
+  // Unpaid voucher created by phone: clearly not valid yet
+  if (v.status === 'pending') {
+    d.setFont('helvetica', 'bold'); d.setFontSize(11); text(d, '#dc2626')
+    d.text('À RÉGLER — non valable tant que le paiement n\'est pas effectué', cx, 112, { align: 'center', maxWidth: maxW })
+  }
+
   // QR code (bottom-right): scanned by the pilot on the day of the flight
   const qr = await QRCode.toDataURL(voucherCheckUrl(v.code), { margin: 1, width: 300 })
   fill(d, '#ffffff'); d.roundedRect(W - 38, H - 38, 30, 30, 2, 2, 'F')

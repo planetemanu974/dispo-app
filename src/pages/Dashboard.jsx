@@ -1773,7 +1773,7 @@ export default function Dashboard({ pilot }) {
                 color:'#94a3b8', fontSize:14, cursor:'pointer', padding:'14px 16px', width:'100%', fontFamily:'inherit' }}>
               ← Retour
             </button>
-            <GiftVouchersAdmin />
+            <GiftVouchersAdmin flightTypes={flightTypes} />
           </div>
         </div>
       )}

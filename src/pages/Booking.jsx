@@ -462,6 +462,7 @@ if (hasLightChild) {
     const { data } = await supabase.rpc('check_gift_voucher', { p_code: code })
     const r = data?.[0]
     if (!r || r.state === 'invalid') { setVoucherMsg({ ok: false, text: 'Code inconnu.' }); return }
+    if (r.state === 'unpaid')        { setVoucherMsg({ ok: false, text: "Le vol n'a pas été réglé. Invalide." }); return }
     if (r.state === 'expired')       { setVoucherMsg({ ok: false, text: "Votre bon cadeau n'est plus valide." }); return }
     if (r.state === 'booked')        { setVoucherMsg({ ok: false, text: 'Ce bon est déjà associé à une réservation.' }); return }
     if (r.state === 'used')          { setVoucherMsg({ ok: false, text: 'Ce bon a déjà été utilisé.' }); return }

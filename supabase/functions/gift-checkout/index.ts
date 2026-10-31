@@ -34,6 +34,34 @@ serve(async (req) => {
     const SITE_URL = (Deno.env.get('SITE_URL') ?? 'https://dispo-app-pi.vercel.app').replace(/\/$/, '')
     if (!STRIPE_KEY) return json({ error: 'Paiement non configuré' }, 500)
 
+    // Payment link of a voucher created by the pilot by phone: pay the existing pending voucher
+    if (b.pay_token) {
+      if (b.cgv !== true) return json({ error: 'CGV non acceptées' }, 400)
+      const sb0 = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+      const { data: pv } = await sb0.from('gift_vouchers').select('*').eq('token', b.pay_token).eq('status', 'pending').maybeSingle()
+      if (!pv) return json({ error: 'Bon introuvable ou déjà payé' }, 404)
+      const f0 = new URLSearchParams()
+      f0.set('mode', 'payment')
+      if (pv.buyer_email) f0.set('customer_email', pv.buyer_email)
+      f0.set('client_reference_id', pv.id)
+      f0.set('success_url', `${SITE_URL}/bon-cadeau/merci?t=${pv.token}`)
+      f0.set('cancel_url', `${SITE_URL}/bon-cadeau/payer?t=${pv.token}`)
+      f0.set('line_items[0][quantity]', '1')
+      f0.set('line_items[0][price_data][currency]', 'eur')
+      f0.set('line_items[0][price_data][unit_amount]', String(Math.round(Number(pv.amount_eur) * 100)))
+      f0.set('line_items[0][price_data][product_data][name]', `Bon cadeau — Vol parapente ${pv.flight_label}`)
+      f0.set('metadata[voucher_id]', pv.id)
+      const r0 = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${STRIPE_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: f0,
+      })
+      const s0 = await r0.json()
+      if (!r0.ok || !s0.url) { console.error('Stripe error', s0); return json({ error: 'Paiement indisponible' }, 502) }
+      await sb0.from('gift_vouchers').update({ stripe_session_id: s0.id }).eq('id', pv.id)
+      return json({ url: s0.url })
+    }
+
     const first = clean(b.first_name, 80), last = clean(b.last_name, 80)
     const phone = clean(b.phone, 30), email = clean(b.email, 120)
     if (!first || !last || !phone || !/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Champs obligatoires manquants' }, 400)

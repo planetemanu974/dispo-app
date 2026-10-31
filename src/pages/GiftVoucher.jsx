@@ -11,6 +11,7 @@ const CGV_URL = 'https://planete-parapente-reunion.com/cgv'
 export default function GiftVoucher() {
   const { pathname } = useLocation()
   if (pathname.endsWith('/verif')) return <Verify />
+  if (pathname.endsWith('/payer')) return <PayPage />
   return pathname.endsWith('/merci') ? <Thanks /> : <OrderForm />
 }
 
@@ -182,6 +183,61 @@ function Thanks() {
             <p style={{ fontSize: 12, opacity: .7, marginTop: 12 }}>
               Imprimez-le pour le glisser dans une enveloppe, ou envoyez le PDF par e-mail au bénéficiaire.
             </p>
+          </>
+        )}
+      </section>
+    </div>
+  )
+}
+
+/** Payment page for a voucher created by the pilot by phone: /bon-cadeau/payer?t=<token> */
+function PayPage() {
+  const [params] = useSearchParams()
+  const token = params.get('t')
+  const [v, setV] = useState(undefined)
+  const [cgv, setCgv] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc('get_gift_voucher', { p_token: token })
+      setV(data?.[0] ?? null)
+    })()
+  }, [token])
+
+  async function pay() {
+    if (!cgv) { setError("Merci d'accepter les conditions générales de vente."); return }
+    setBusy(true); setError('')
+    const { data, error: err } = await supabase.functions.invoke('gift-checkout', { body: { pay_token: token, cgv: true } })
+    if (err || !data?.url) { setError('Paiement momentanément indisponible. Réessayez ou appelez-nous.'); setBusy(false); return }
+    window.location.href = data.url
+  }
+
+  return (
+    <div className="booking-page">
+      <header className="booking-header">
+        <img src="/logo-icon.png" alt="Planète Parapente" style={{ height: 48, marginBottom: 10 }} />
+        <h1>Régler votre bon cadeau 🎁</h1>
+      </header>
+      <section className="booking-section" style={{ textAlign: 'center' }}>
+        {v === undefined && <p>Chargement…</p>}
+        {v === null && <p className="error-msg">Bon introuvable. Vérifiez le lien reçu.</p>}
+        {v && v.status !== 'pending' && <p>✅ Ce bon est déjà réglé. Code : <b>{v.code}</b></p>}
+        {v && v.status === 'pending' && (
+          <>
+            <p><b>Vol {v.flight_label}</b> — {v.amount_eur} €</p>
+            {v.to_name && <p>Pour : {v.to_name}</p>}
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13, textAlign: 'left' }}>
+              <input type="checkbox" checked={cgv} onChange={e => setCgv(e.target.checked)} style={{ width: 'auto', marginTop: 3 }} />
+              <span>J'ai lu et j'accepte les <a href={CGV_URL} target="_blank" rel="noreferrer" style={{ color: '#f97316' }}>conditions générales de vente</a> :
+                bon valable 6 mois, non remboursable, non échangeable.</span>
+            </label>
+            {error && <p className="error-msg">{error}</p>}
+            <button className="btn-primary" disabled={busy} onClick={pay} style={{ width: '100%', marginTop: 12 }}>
+              {busy ? 'Redirection…' : `Payer ${v.amount_eur} €`}
+            </button>
+            <p style={{ fontSize: 12, opacity: .7, marginTop: 8 }}>Le bon n'est valable qu'une fois le paiement accepté.</p>
           </>
         )}
       </section>

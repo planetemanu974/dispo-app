@@ -35,6 +35,13 @@ export default function GiftVoucherVerify() {
     await load(); setBusy(false)
   }
 
+  async function cashIn() {
+    setBusy(true)
+    const exp = new Date(); exp.setMonth(exp.getMonth() + 6)
+    await supabase.from('gift_vouchers').update({ status: 'paid', paid_at: new Date().toISOString(), expires_at: exp.toISOString() }).eq('code', code).eq('status', 'pending')
+    await load(); setBusy(false)
+  }
+
   const { v } = state
   const until = v ? new Date(Math.max(new Date(v.expires_at), v.extended_until ? new Date(v.extended_until) : 0)) : null
   const expired = until && until < new Date()
@@ -43,7 +50,7 @@ export default function GiftVoucherVerify() {
     lines = [`Vol ${v.flight_label}${v.media_pack === 'photo' ? ' + photos' : v.media_pack === 'photo_video' ? ' + photos/vidéo' : ''}`,
       v.to_name ? `Pour : ${v.to_name}` : '', v.from_name ? `De la part de : ${v.from_name}` : ''].filter(Boolean)
     if (v.status === 'used') { tone = '#dc2626'; title = `Déjà utilisé — vol effectué le ${fmt(v.used_at)}` }
-    else if (v.status === 'pending') { tone = '#dc2626'; title = 'Non payé — bon NON valide' }
+    else if (v.status === 'pending') { tone = '#dc2626'; title = "Le vol n'a pas été réglé. Invalide." }
     else if (v.status === 'cancelled') { tone = '#dc2626'; title = 'Bon annulé' }
     else if (v.status === 'lost') { tone = '#dc2626'; title = 'Bon perdu' }
     else if (v.status === 'booked') {
@@ -72,6 +79,11 @@ export default function GiftVoucherVerify() {
               {v.desired_date && <p style={{ opacity: .8 }}>Date souhaitée : {fmt(v.desired_date)}</p>}
               {v.message && <p style={{ fontStyle: 'italic', opacity: .8 }}>« {v.message} »</p>}
             </div>
+            {v.status === 'pending' && (
+              <button className="btn-primary" disabled={busy} onClick={cashIn} style={{ width: '100%', marginTop: 14 }}>
+                💶 Encaissé sur place — valider le bon
+              </button>
+            )}
             {(v.status === 'booked' || (v.status === 'paid' && !expired)) && (
               <button className="btn-primary" disabled={busy} onClick={markUsed} style={{ width: '100%', marginTop: 14 }}>
                 ✅ Marquer le vol comme effectué

@@ -49,7 +49,7 @@ serve(async (req) => {
 
   // E-mail to the buyer (optional until RESEND_API_KEY is configured)
   const resend = Deno.env.get('RESEND_API_KEY')
-  if (resend) {
+  if (resend && v.buyer_email) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${resend}`, 'Content-Type': 'application/json' },
