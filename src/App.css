@@ -567,3 +567,5 @@
 .loading-screen { min-height: 100vh; background: #000; display: flex; align-items: center; justify-content: center; }
 .loading-screen img { height: 64px; width: auto; opacity: .9; animation: splash-pulse 1.4s ease-in-out infinite; }
 @keyframes splash-pulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+
+@keyframes spin-refresh { to { transform: rotate(360deg) } }

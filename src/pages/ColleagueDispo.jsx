@@ -447,17 +447,18 @@ export default function ColleagueDispo() {
                         const confirmed = flight.status === 'confirmed'
                         return (
                           <td key={date} style={{ padding: 0 }}>
-                            <div style={{
+                            <button disabled style={{
                               ...s.slotBtn, width: '100%', cursor: 'default',
-                              background: flight.logo_url ? `#fff url(${flight.logo_url}) center / contain no-repeat` : '#fff',
-                              border: `2px solid ${confirmed ? '#6366f1' : '#f59e0b'}`,
-                              color: '#0f172a', position: 'relative',
+                              // Same size as the other cells; the status colour is an inner outline
+                              background: flight.logo_url ? `#fff url(${flight.logo_url}) center / 58% no-repeat` : '#fff',
+                              boxShadow: `inset 0 0 0 2px ${confirmed ? '#6366f1' : '#f59e0b'}`,
+                              color: '#0f172a',
                             }}>
-                              <span style={{ fontWeight: 800, fontSize: 11, textShadow: '0 0 3px #fff, 0 0 3px #fff' }}>{time}</span>
-                              <span style={{ fontSize: 8, marginTop: 1, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: confirmed ? '#4338ca' : '#b45309', textShadow: '0 0 3px #fff, 0 0 3px #fff' }}>
-                                {confirmed ? 'Confirmé ✓' : 'En attente'}{flight.pax > 1 ? ` · ${flight.pax} pax` : ''}
+                              <span style={{ fontWeight: 800, fontSize: 11, textShadow: '0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff' }}>{time}</span>
+                              <span style={{ fontSize: 8, marginTop: 1, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: confirmed ? '#4338ca' : '#b45309', textShadow: '0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff' }}>
+                                {confirmed ? 'Confirmé ✓' : 'En attente'}{flight.pax > 1 ? ` · ${flight.pax}` : ''}
                               </span>
-                            </div>
+                            </button>
                           </td>
                         )
                       }

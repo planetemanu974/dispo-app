@@ -319,9 +319,33 @@ export default function Dashboard({ pilot }) {
     } else {
       setPendingAll([])
     }
-    if (selectedDate) { loadDay(selectedDate, true); loadPlanning(selectedDate) }
-    if (weekStart) loadWeek(weekStart)
-    navigator.serviceWorker?.getRegistration().then(r => r?.update()).catch(() => {})
+    if (selectedDate) { loadDay(selectedDate, true); loadPlanning(selectedDate, true) }
+    if (weekStart) loadWeek(weekStart, true)
+    return checkNewVersion()
+  }
+
+  // Is a newer version of the app deployed? Compares the script file name of the page we are running
+  // with the one in the freshly fetched index.html (the file name changes on every deploy).
+  async function checkNewVersion() {
+    try {
+      const html = await (await fetch('/index.html', { cache: 'no-store' })).text()
+      const latest  = (html.match(/\/assets\/index-[^"']+\.js/) || [])[0]
+      const current = [...document.scripts].map(sc => sc.src).find(u => /\/assets\/index-[^"']+\.js/.test(u))
+      const isNew = !!(latest && current && !current.endsWith(latest))
+      if (isNew) setUpdateReady(true)
+      return isNew
+    } catch { return false }
+  }
+
+  // 🔄 button: refresh the data in place (nothing flickers, you stay where you are).
+  // The page only reloads when a new version of the app is really available.
+  const [refreshing, setRefreshing] = useState(false)
+  async function handleRefreshClick() {
+    if (updateReady) { window.location.reload(); return }
+    setRefreshing(true)
+    const isNew = await refreshAll()
+    setRefreshing(false)
+    if (isNew) window.location.reload()
   }
   refreshRef.current = () => {
     if (selectedBooking || editMode || document.visibilityState === 'hidden') return
@@ -577,8 +601,8 @@ export default function Dashboard({ pilot }) {
   }, [selectedBooking?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── loadWeek ───────────────────────────────────────────────────────────────
-  async function loadWeek(start) {
-    setWeekLoading(true)
+  async function loadWeek(start, silent = false) {
+    if (!silent) setWeekLoading(true)
     const days = getDayRange(start, WEEK_DAYS_COUNT)
 
     await Promise.all(days.map(d => ensureSlots(d)))
@@ -782,8 +806,8 @@ export default function Dashboard({ pilot }) {
   }
 
   // ── loadPlanning ──────────────────────────────────────────────────────────
-  async function loadPlanning(fromDate) {
-    setPlanningLoading(true)
+  async function loadPlanning(fromDate, silent = false) {
+    if (!silent) setPlanningLoading(true)
     const days = getDayRange(fromDate, 14)
     const [dayStart, dayEnd] = [days[0], days[days.length - 1]]
 
@@ -1654,13 +1678,13 @@ export default function Dashboard({ pilot }) {
           </button>
         </div>
 
-        {/* Bouton Rafraîchir — recharge l'app (jaune quand une nouvelle version est prête) */}
+        {/* Bouton Rafraîchir — met les données à jour sur place; recharge seulement si une nouvelle version existe */}
         <button
-          onClick={() => window.location.reload()}
-          style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 6px', flexShrink:0, fontSize:20, lineHeight:1, filter: updateReady ? 'none' : 'grayscale(0.2)' }}
+          onClick={handleRefreshClick}
+          style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 6px', flexShrink:0, fontSize:20, lineHeight:1 }}
           aria-label="Rafraîchir"
-          title={updateReady ? 'Nouvelle version disponible — rafraîchir' : 'Rafraîchir'}
-        >{updateReady ? '🟡' : '🔄'}</button>
+          title={updateReady ? 'Nouvelle version disponible — toucher pour mettre à jour' : 'Rafraîchir'}
+        ><span style={{ display:'inline-block', animation: refreshing ? 'spin-refresh 0.8s linear infinite' : 'none' }}>{updateReady ? '🟡' : '🔄'}</span></button>
 
         {/* Bouton Paramètres */}
         <button
