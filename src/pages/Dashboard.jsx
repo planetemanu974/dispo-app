@@ -165,6 +165,9 @@ export default function Dashboard({ pilot }) {
   const [weekStart, setWeekStart]             = useState(() => getWeekStart(TODAY))
   const [weekData, setWeekData]               = useState({})       // { [date]: { slots, bookings } }
   const [weekLoading, setWeekLoading]         = useState(false)
+  // Week actually shown in the grids. It only changes once the new week's data has arrived, so pressing
+  // Prév./Suiv. never swaps the grid for a « Chargement… » text (which made the page below jump).
+  const [shownWeekStart, setShownWeekStart] = useState(() => getWeekStart(TODAY))
   // Fixed pilot unavailability for current week (loaded in loadWeek)
   const [fixedUnavailability, setFixedUnavailability] = useState([])
   // Slot clicked in week view for toggle-availability mini-modal
@@ -701,6 +704,7 @@ export default function Dashboard({ pilot }) {
     setFixedUnavailability(unavailData || [])
 
     setWeekData(byDate)
+    setShownWeekStart(start)
     setWeekLoading(false)
   }
 
@@ -1545,7 +1549,7 @@ export default function Dashboard({ pilot }) {
     return { name, pax: totalPax }
   }
 
-  const weekDays = getDayRange(weekStart, WEEK_DAYS_COUNT)
+  const weekDays = getDayRange(shownWeekStart, WEEK_DAYS_COUNT)
 
   // Week range label: "20 – 24 oct. 2026"
   function weekRangeLabel() {
@@ -2106,7 +2110,7 @@ export default function Dashboard({ pilot }) {
             <button className="btn-ghost" onClick={() => changeWeek(1)}>Suiv. ›</button>
           </div>
 
-          {weekLoading ? <p className="loading">Chargement...</p> : (
+          {(weekLoading && Object.keys(weekData).length === 0) ? <p className="loading">Chargement...</p> : (
             /* Full-width grid — no horizontal scroll */
             <div>
             <div className="cal-container" style={{ minWidth: 0 }}>
@@ -3057,7 +3061,7 @@ export default function Dashboard({ pilot }) {
               <button className="btn-ghost" onClick={() => changeWeek(1)}>Suiv. ›</button>
             </div>
 
-            {weekLoading ? <p className="loading">Chargement...</p> : (
+            {(weekLoading && Object.keys(weekData).length === 0) ? <p className="loading">Chargement...</p> : (
               <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:4 }}>
                 <table style={{
                   borderCollapse:'collapse', fontSize:'0.78rem',
