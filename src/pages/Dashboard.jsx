@@ -2319,7 +2319,7 @@ export default function Dashboard({ pilot }) {
                               <span style={{ fontSize:'0.5rem', fontWeight:700, opacity:0.85, lineHeight:1, whiteSpace:'nowrap', minWidth:0 }}>
                                 {slot.slot_time.slice(0, 5)}
                               </span>
-                              {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && (
+                              {firstActive && remainingW > 0 && slot.is_available && firstActive.source !== 'colleague' && !String(firstActive.booking_ref || '').startsWith('COL-') && (
                                 <button
                                   style={{
                                     background: logoUrl ? wBg : 'rgba(255,255,255,0.35)', color:'white',
@@ -2358,7 +2358,9 @@ export default function Dashboard({ pilot }) {
                                       style={{
                                         fontSize: '0.55rem', fontWeight: 900,
                                         // Absent pilot: number stays in place (keeps the others aligned) but is invisible
-                                        color: unavail ? 'transparent' : 'rgba(255,255,255,0.9)',
+                                        color: unavail ? 'transparent' : (logoUrl ? 'white' : 'rgba(255,255,255,0.9)'),
+                                        // On a logo (white background) the number sits on a coloured chip, like the « +N » badge
+                                        ...(logoUrl && !unavail ? { background: wBg, borderRadius: 4, padding: '1px 3px', border: '1px solid rgba(255,255,255,0.5)' } : {}),
                                         flexShrink: 0,
                                         lineHeight: 1,
                                       }}>
