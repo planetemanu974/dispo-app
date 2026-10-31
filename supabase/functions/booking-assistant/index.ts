@@ -1,0 +1,175 @@
+// Supabase Edge Function — booking-assistant
+// Conversational assistant of the public booking page ("la mascotte").
+// It only talks: it collects date / passengers / contact and proposes a flight plan from the
+// free slots the page sends. It has NO database access — the booking itself is created by the
+// regular booking form (with its checks and the SMS verification code).
+//
+// Secrets to set (Supabase → Edge Functions → Secrets, or `supabase secrets set`):
+//   ANTHROPIC_API_KEY   (required)  — developer key from console.anthropic.com
+//   ASSISTANT_MODEL     (optional)  — defaults to claude-haiku-5-5
+//
+// Deploy:  supabase functions deploy booking-assistant
+// (The page calls it with the public anon key, like send-sms.)
+
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+
+const API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+const MODEL   = Deno.env.get('ASSISTANT_MODEL') ?? 'claude-haiku-5-5'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Content-Type': 'application/json',
+}
+
+// ── Abuse guards (this endpoint is public and each call costs a little) ──────
+const MAX_MESSAGES = 30          // messages kept per conversation
+const MAX_CHARS    = 700         // per message
+const RATE_WINDOW  = 10 * 60_000 // 10 minutes
+const RATE_MAX     = 60          // calls per IP per window (best effort, per instance)
+const hits = new Map<string, number[]>()
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now()
+  const list = (hits.get(ip) ?? []).filter(t => now - t < RATE_WINDOW)
+  list.push(now)
+  hits.set(ip, list)
+  return list.length > RATE_MAX
+}
+
+const POSES = [
+  'salut', 'bienvenue', 'je-t-ecoute', 'sourire', 'je-reflechis', 'recherche', 'creneau-trouve',
+  'je-montre', 'prise-reservation', 'reservation-confirmee', 'pouce', 'pas-disponible',
+  'tout-est-dispo', 'montre-telephone', 'observation-meteo', 'infos-spot', 'je-t-explique',
+  'camera', 'a-bientot', 'merci', 'bras-croises', 'controle-voile', 'check-materiel',
+]
+
+function systemPrompt(today: string, slots: Record<string, string[]>): string {
+  const free = Object.entries(slots)
+    .map(([d, t]) => `${d} : ${t.length ? t.join(', ') : 'complet'}`)
+    .join('\n')
+
+  return `Tu es l'assistant de réservation de Planète Parapente Réunion (Saint-Leu, île de La Réunion), dans la page de réservation en ligne.
+Tu réponds dans la langue du client (français par défaut), avec le vouvoiement sauf si le client tutoie. Ton chaleureux, détendu, professionnel. Réponses COURTES : 1 à 3 phrases, pas de listes.
+Aujourd'hui : ${today}.
+
+TON UNIQUE OBJECTIF : mener le client jusqu'à une réservation. Ne le laisse pas s'éparpiller : si on te pose une question hors sujet ou générale (peur, âge, météo…), réponds en une phrase puis ramène la conversation à la réservation. Tu ne donnes jamais d'avis médical.
+
+CE QUE TU DOIS RECUEILLIR (une question à la fois) :
+1. Le nombre de personnes, et pour chacune : adulte ou enfant. Pour un enfant : l'âge et le poids. Pour un adulte : le poids (moins de 70 kg ou plus de 70 kg suffit pour orienter, mais demande un poids approximatif en kg pour le formulaire).
+2. Le type de vol souhaité par personne : découverte (≈20 min) ou performance (30 à 45 min, sensations plus fortes).
+3. La date souhaitée.
+4. Une fois le plan accepté : prénom et nom du contact, et numéro de téléphone.
+
+RÈGLES MÉTIER (strictes) :
+- Capacité : 4 passagers maximum par créneau. Un groupe plus grand est réparti sur plusieurs créneaux.
+- Créneau de 8h00 : vol DÉCOUVERTE uniquement (jamais de performance : la brise n'est pas encore en place, c'est idéal pour les poids légers). Réservé aux passagers légers (≤ 75 kg). Un passager de 76 à 85 kg peut y voler mais prévenez-le qu'il descendra plus vite et profitera moins du vol : le créneau suivant lui convient mieux.
+- Créneaux de 9h15 et après : découverte ou performance, passagers jusqu'à 100 kg.
+- Au-dessus de 100 kg : impossible, pour une raison d'assurance. Dis-le avec tact.
+- Enfants : 6 ans minimum (aucun enfant de moins de 6 ans, ni de moins de 18 kg). Un enfant de moins de 20 kg vole uniquement à 8h00. Les enfants jusqu'à 14 ans font uniquement un vol découverte (marmaille, 80 €), jamais un vol performance. Chaque enfant vole avec un adulte du groupe et ne reste jamais seul à l'atterrissage. Une autorisation parentale est demandée dans le formulaire.
+- Un adulte lourd (> 75 kg) qui vole avec un passager léger (< 65 kg) en découverte : préviens-le qu'il descendra plus vite.
+- Exemple de plan pour une famille : enfants + un adulte en découverte à 8h00, l'adulte qui veut un vol performance à 9h15 (pas de performance à 8h).
+- Tarifs : vol marmaille (≤ 14 ans) 80 € ; découverte 90 € ; performance 110 à 120 € ; photos +10 € ; photos + vidéo +20 €. Paiement à la fin du vol, pas d'acompte.
+- Un moniteur valide la réservation ou rappelle directement le client par téléphone. Ne promets rien d'autre. Si le vol est annulé pour la météo, il est reporté sans frais.
+- Tu ne connais PAS : le point de rendez-vous exact, l'état de la météo, ni les cas médicaux. Dis que le moniteur le précisera. N'invente jamais d'information.
+
+DISPONIBILITÉS RÉELLES (seuls ces créneaux sont libres ; n'en propose jamais d'autres, ne t'engage jamais sur un créneau absent de cette liste) :
+${free}
+
+DÉROULÉ : quand tu as les passagers, les vols et une date, propose un plan précis (qui vole à quelle heure) en respectant les règles et les créneaux libres, puis demande « Est-ce que cela vous convient ? ». Si un créneau demandé n'existe pas, propose le plus proche qui respecte les règles. Quand le client accepte le plan ET que tu as son nom et son téléphone, dis que tu prépares sa réservation et mets "ready": true.
+
+FORMAT DE RÉPONSE : uniquement un objet JSON, sans aucun texte autour :
+{
+  "texte": "ce que tu dis au client",
+  "pose": "<une valeur parmi : ${POSES.join(', ')}>",
+  "suggestions": ["réponse courte cliquable 1", "..."],   // 0 à 3, très courtes
+  "draft": null ou {
+    "date": "AAAA-MM-JJ",
+    "passengers": [ { "kind": "adult" | "child", "first_name": "", "age": nombre ou null, "weight_kg": nombre ou null, "flight": "discovery" | "performance", "slot": "HH:MM" ou null } ],
+    "contact_name": "",
+    "phone": "",
+    "ready": true | false
+  }
+}
+- "draft" : renseigne-le dès que tu connais au moins la date ou les passagers, et mets-le à jour à chaque réponse (garde ce que tu savais déjà). "ready" vaut true seulement quand le plan est accepté et que nom + téléphone sont connus.
+- Ne mets jamais de poids ou d'âge inventés : null si inconnu.
+- Pour les enfants, "flight" vaut toujours "discovery".`
+}
+
+function extractJson(text: string): Record<string, unknown> | null {
+  const a = text.indexOf('{')
+  const b = text.lastIndexOf('}')
+  if (a < 0 || b < a) return null
+  try { return JSON.parse(text.slice(a, b + 1)) } catch { return null }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+
+  try {
+    if (!API_KEY) {
+      return new Response(JSON.stringify({ error: 'assistant_not_configured' }), { status: 503, headers: CORS })
+    }
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    if (rateLimited(ip)) {
+      return new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: CORS })
+    }
+
+    const body = await req.json() as {
+      messages?: { role: string; content: string }[]
+      today?: string
+      slots?: Record<string, string[]>
+    }
+
+    const today = /^\d{4}-\d{2}-\d{2}$/.test(body.today ?? '') ? body.today! : new Date().toISOString().slice(0, 10)
+
+    // Sanitise the slot map (dates → times) so nothing unexpected reaches the prompt
+    const slots: Record<string, string[]> = {}
+    for (const [d, times] of Object.entries(body.slots ?? {}).slice(0, 14)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Array.isArray(times)) continue
+      slots[d] = times.filter(t => /^\d{2}:\d{2}$/.test(String(t))).slice(0, 12).map(String)
+    }
+
+    // Keep only well-formed, bounded messages; the API needs the first one to be from the user
+    let messages = (body.messages ?? [])
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+      .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) }))
+      .slice(-MAX_MESSAGES)
+    while (messages.length && messages[0].role !== 'user') messages.shift()
+    if (!messages.length) {
+      return new Response(JSON.stringify({ error: 'no_message' }), { status: 400, headers: CORS })
+    }
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 700,
+        system: systemPrompt(today, slots),
+        messages,
+      }),
+    })
+
+    if (!res.ok) {
+      console.error('Anthropic error', res.status, await res.text())
+      return new Response(JSON.stringify({ error: 'upstream_error' }), { status: 502, headers: CORS })
+    }
+
+    const data = await res.json()
+    const text: string = (data.content ?? []).map((c: { text?: string }) => c.text ?? '').join('')
+    const out = extractJson(text) ?? { texte: text.trim() || 'Pouvez-vous reformuler ?', pose: 'je-reflechis' }
+
+    // Never let the model send an unknown pose id
+    if (!POSES.includes(String(out.pose))) out.pose = 'sourire'
+
+    return new Response(JSON.stringify(out), { headers: CORS })
+  } catch (err) {
+    console.error('booking-assistant error:', err)
+    return new Response(JSON.stringify({ error: 'server_error' }), { status: 500, headers: CORS })
+  }
+})

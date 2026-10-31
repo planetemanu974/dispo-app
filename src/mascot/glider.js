@@ -1,0 +1,386 @@
+// Real-time 3D paraglider used by the booking assistant (WebGL2, no dependencies).
+// Ported from the "assistant mascotte" prototype. createGlider() returns
+// { ok, play('arrive'|'depart', durationMs) -> Promise, clear() }.
+// If WebGL2 is not available it returns a harmless no-op object.
+/* eslint-disable */
+export function createGlider(canvas, PILOT_SRC) {
+  const SPR = { w:352, h:376, rl:[32,100], rr:[294,104] }
+  try {
+// ---------- tiny mat4 / vec3 (column-major) ----------
+const M = {
+  ident(){ const m=new Float32Array(16); m[0]=m[5]=m[10]=m[15]=1; return m; },
+  mul(a,b){ const o=new Float32Array(16);
+    for(let c=0;c<4;c++) for(let r=0;r<4;r++){ let s=0; for(let k=0;k<4;k++) s+=a[k*4+r]*b[c*4+k]; o[c*4+r]=s; } return o; },
+  persp(fov,asp,n,f){ const t=1/Math.tan(fov/2), m=new Float32Array(16);
+    m[0]=t/asp; m[5]=t; m[10]=(f+n)/(n-f); m[11]=-1; m[14]=2*f*n/(n-f); return m; },
+  lookAt(e,c,u){ const z=V.norm(V.sub(e,c)), x=V.norm(V.cross(u,z)), y=V.cross(z,x), m=M.ident();
+    m[0]=x[0];m[4]=x[1];m[8]=x[2]; m[1]=y[0];m[5]=y[1];m[9]=y[2]; m[2]=z[0];m[6]=z[1];m[10]=z[2];
+    m[12]=-V.dot(x,e); m[13]=-V.dot(y,e); m[14]=-V.dot(z,e); return m; },
+  trans(x,y,z){ const m=M.ident(); m[12]=x;m[13]=y;m[14]=z; return m; },
+  rx(a){ const m=M.ident(),c=Math.cos(a),s=Math.sin(a); m[5]=c;m[6]=s;m[9]=-s;m[10]=c; return m; },
+  ry(a){ const m=M.ident(),c=Math.cos(a),s=Math.sin(a); m[0]=c;m[2]=-s;m[8]=s;m[10]=c; return m; },
+  rz(a){ const m=M.ident(),c=Math.cos(a),s=Math.sin(a); m[0]=c;m[1]=s;m[4]=-s;m[5]=c; return m; },
+  pt(m,p){ return [m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12], m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13], m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]]; },
+  dir(m,p){ return [m[0]*p[0]+m[4]*p[1]+m[8]*p[2], m[1]*p[0]+m[5]*p[1]+m[9]*p[2], m[2]*p[0]+m[6]*p[1]+m[10]*p[2]]; },
+};
+// pitch rotation positive = nose down (forward +Z goes toward -Y)
+M.rpitch = a => M.rx(a);
+const V = {
+  add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  scl:(a,s)=>[a[0]*s,a[1]*s,a[2]*s], dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  len:a=>Math.hypot(a[0],a[1],a[2]), norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];},
+  lerp:(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t],
+};
+
+// ---------- GL setup ----------
+const gl = canvas.getContext('webgl2', { antialias:true, alpha:true, premultipliedAlpha:true, preserveDrawingBuffer:true });
+const GL_OK=!!gl;
+
+function prog(vs, fs){
+  const mk=(t,s)=>{ const sh=gl.createShader(t); gl.shaderSource(sh,s); gl.compileShader(sh);
+    if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); return sh; };
+  const p=gl.createProgram(); gl.attachShader(p,mk(gl.VERTEX_SHADER,vs)); gl.attachShader(p,mk(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name]=gl.getUniformLocation(p,a.name); }
+  return {p,u};
+}
+
+const wingProg = prog(`#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec2 aUV;
+uniform mat4 uVP, uModel; out vec3 vN; out vec2 vUV; out vec3 vW;
+void main(){ vec4 w=uModel*vec4(aPos,1.); vW=w.xyz; vN=mat3(uModel)*aNor; vUV=aUV; gl_Position=uVP*w; }`,
+`#version 300 es
+precision highp float; in vec3 vN; in vec2 vUV; in vec3 vW; uniform sampler2D uTex; uniform vec3 uSun, uEye; out vec4 o;
+void main(){
+  vec3 n=normalize(vN); if(!gl_FrontFacing) n=-n;
+  vec3 base=texture(uTex,vUV).rgb;
+  vec3 l=normalize(uSun); float d=max(dot(n,l),0.);
+  float hemi=0.5+0.5*n.y;
+  vec3 amb=mix(vec3(.30,.33,.36),vec3(.55,.62,.72),hemi);
+  // translucency: light passing through the fabric from behind
+  float back=max(dot(-n,l),0.)*0.35;
+  vec3 v=normalize(uEye-vW); vec3 h=normalize(l+v); float sp=pow(max(dot(n,h),0.),40.)*0.25;
+  vec3 col=base*(amb*0.75+d*vec3(1.,.97,.92)*0.85+back*vec3(1.,.95,.85)) + sp;
+  o=vec4(pow(col,vec3(1./1.05)),1.);
+}`);
+
+const lineProg = prog(`#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec4 aCol; uniform mat4 uVP; out vec4 vC;
+void main(){ vC=aCol; gl_Position=uVP*vec4(aPos,1.); }`,
+`#version 300 es
+precision mediump float; in vec4 vC; out vec4 o; void main(){ o=vec4(vC.rgb*vC.a,vC.a); }`);
+
+const sprProg = prog(`#version 300 es
+layout(location=0) in vec3 aPos; layout(location=2) in vec2 aUV; uniform mat4 uVP; out vec2 vUV;
+void main(){ vUV=aUV; gl_Position=uVP*vec4(aPos,1.); }`,
+`#version 300 es
+precision mediump float; in vec2 vUV; uniform sampler2D uTex; out vec4 o; void main(){ vec4 c=texture(uTex,vUV); if(c.a<0.01) discard; o=c; }`);
+
+const groundProg = prog(`#version 300 es
+layout(location=0) in vec3 aPos; uniform mat4 uVP; out vec3 vW; void main(){ vW=aPos; gl_Position=uVP*vec4(aPos,1.); }`,
+`#version 300 es
+precision highp float; in vec3 vW; uniform vec3 uEye; uniform vec3 uFog; out vec4 o;
+float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+float fbm(vec2 p){ float s=0.,a=.5; for(int i=0;i<5;i++){ s+=a*n(p); p*=2.03; a*=.5; } return s; }
+void main(){
+  vec2 p=vW.xz*0.004;
+  float e=fbm(p)+0.35*fbm(p*4.);
+  vec3 deep=vec3(.05,.33,.55), lag=vec3(.18,.72,.80), sand=vec3(.86,.82,.66), grass=vec3(.30,.55,.25), forest=vec3(.16,.38,.18);
+  vec3 c = e<0.62 ? mix(deep,lag,smoothstep(.45,.62,e)) : e<0.66 ? sand : mix(grass,forest,smoothstep(.70,.95,e));
+  c *= 0.92+0.16*n(vW.xz*0.08);
+  float d=length(vW-uEye); float f=1.-exp(-d*0.0011);
+  o=vec4(mix(c,uFog,clamp(f,0.,1.)),1.);
+}`);
+
+// ---------- wing geometry ----------
+const W = {
+  cells: 36, sub: 4, chordN: 28,
+  R: 6.2, arcY: 1.4, thetaMax: 1.16,
+  c0: 2.55, thick0: 0.16, thick1: 0.10,
+};
+function chordAt(u){ const e=Math.sqrt(Math.max(0,1-u*u)); return W.c0*(0.32+0.68*Math.pow(e,0.75)); }
+function thetaAt(u){ return W.thetaMax*(u*0.78+0.22*u*u*u); }
+function zTE(u){ return -0.66*W.c0 + 0.18*W.c0*u*u; }
+// airfoil: returns [camber, halfThickness] (fractions of chord) at xc in [0,1]
+function airfoil(xc, t){
+  const yt=5*t*(0.2969*Math.sqrt(xc)-0.126*xc-0.3516*xc*xc+0.2843*xc*xc*xc-0.1036*xc*xc*xc*xc);
+  const m=0.035, p=0.33;
+  const yc = xc<p ? m/(p*p)*(2*p*xc-xc*xc) : m/((1-p)*(1-p))*((1-2*p)+2*p*xc-xc*xc);
+  return [yc, Math.max(yt,0)];
+}
+const NU = W.cells*W.sub+1, NX = W.chordN;
+// cosine-spaced chord stations
+const XS = []; for(let i=0;i<NX;i++){ const b=i/(NX-1)*Math.PI; XS.push(0.5-0.5*Math.cos(b)); }
+
+let brakeL=0, brakeR=0;
+function wingPoint(u, xc, upper){
+  const th=thetaAt(u), c=chordAt(u);
+  const t = W.thick0 + (W.thick1-W.thick0)*u*u;
+  let [yc,yt]=airfoil(xc,t);
+  // cell inflation: bulge between ribs
+  const cellPos = ((u+1)/2*W.cells)%1; const bul=Math.sin(Math.PI*cellPos);
+  const tipCell = Math.abs(u)>0.97 ? 0 : 1;
+  let off = upper ? (yc+yt*(1+0.22*bul*tipCell)) : (yc-yt*(1+0.10*bul*tipCell));
+  // brake: pull trailing edge down on the braked side
+  const br = u>0 ? brakeL*Math.min(1,u*1.6) : brakeR*Math.min(1,-u*1.6);
+  if (xc>0.55) off -= br*0.32*Math.pow((xc-0.55)/0.45,2);
+  const r = W.R + off*c;
+  const z = zTE(u) + c - xc*c;  // LE at front (+Z)
+  return [Math.sin(th)*r, W.arcY+Math.cos(th)*r, z];
+}
+
+// build index buffer once; vertices rebuilt per frame (brakes)
+const nSurf = NU*NX;
+const positions = new Float32Array(nSurf*2*3), normals = new Float32Array(nSurf*2*3), uvs = new Float32Array(nSurf*2*2);
+const idx = [];
+for(let s=0;s<2;s++) for(let i=0;i<NU-1;i++) for(let j=0;j<NX-1;j++){
+  const a=s*nSurf+i*NX+j, b=a+NX, c=a+1, d=b+1;
+  if(s===0) idx.push(a,b,c, c,b,d); else idx.push(a,c,b, c,d,b);
+}
+// tip caps: join upper and lower at first and last column
+for(const i of [0,NU-1]) for(let j=0;j<NX-1;j++){
+  const a=i*NX+j, b=nSurf+i*NX+j; idx.push(a,b,a+1, a+1,b,b+1);
+}
+const indexArr = new Uint32Array(idx);
+for(let s=0;s<2;s++) for(let i=0;i<NU;i++) for(let j=0;j<NX;j++){
+  const k=(s*nSurf+i*NX+j)*2; const u=-1+2*i/(NU-1);
+  uvs[k]=(u+1)/2; uvs[k+1]= s===0 ? XS[j]*0.5 : 0.5+XS[j]*0.5;
+}
+function buildWing(){
+  for(let s=0;s<2;s++) for(let i=0;i<NU;i++){ const u=-1+2*i/(NU-1);
+    for(let j=0;j<NX;j++){ const p=wingPoint(u,XS[j],s===0); const k=(s*nSurf+i*NX+j)*3;
+      positions[k]=p[0];positions[k+1]=p[1];positions[k+2]=p[2]; } }
+  normals.fill(0);
+  for(let t=0;t<indexArr.length;t+=3){
+    const a=indexArr[t]*3,b=indexArr[t+1]*3,c=indexArr[t+2]*3;
+    const e1=[positions[b]-positions[a],positions[b+1]-positions[a+1],positions[b+2]-positions[a+2]];
+    const e2=[positions[c]-positions[a],positions[c+1]-positions[a+1],positions[c+2]-positions[a+2]];
+    const n=V.cross(e1,e2);
+    for(const v of [a,b,c]){ normals[v]+=n[0]; normals[v+1]+=n[1]; normals[v+2]+=n[2]; }
+  }
+}
+
+const wingVAO = gl.createVertexArray(); gl.bindVertexArray(wingVAO);
+const bPos=gl.createBuffer(), bNor=gl.createBuffer(), bUV=gl.createBuffer(), bIdx=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,bPos); gl.bufferData(gl.ARRAY_BUFFER,positions.byteLength,gl.DYNAMIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+gl.bindBuffer(gl.ARRAY_BUFFER,bNor); gl.bufferData(gl.ARRAY_BUFFER,normals.byteLength,gl.DYNAMIC_DRAW); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,3,gl.FLOAT,false,0,0);
+gl.bindBuffer(gl.ARRAY_BUFFER,bUV); gl.bufferData(gl.ARRAY_BUFFER,uvs,gl.STATIC_DRAW); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,2,gl.FLOAT,false,0,0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIdx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indexArr,gl.STATIC_DRAW);
+gl.bindVertexArray(null);
+function uploadWing(){ buildWing();
+  gl.bindBuffer(gl.ARRAY_BUFFER,bPos); gl.bufferSubData(gl.ARRAY_BUFFER,0,positions);
+  gl.bindBuffer(gl.ARRAY_BUFFER,bNor); gl.bufferSubData(gl.ARRAY_BUFFER,0,normals); }
+
+// ---------- wing texture (canvas) ----------
+const TW=2048, TH=1024;
+const texCanvas=document.createElement('canvas'); texCanvas.width=TW; texCanvas.height=TH;
+const tctx=texCanvas.getContext('2d');
+const wingTex=gl.createTexture();
+const PALETTES = {
+  black:{ base:'#1c1d21', under:'#202126', le:'#2b2d33', accent:null, logo:'#f4f4f4', seam:'rgba(255,255,255,.07)' },
+  classic:{ base:'#f4f5f7', under:'#ff5a1f', le:'#155e8c', accent:'#ff5a1f', logo:null, seam:'rgba(0,0,0,.10)' },
+  reunion:{ base:'#13a7b5', under:'#0f8f9c', le:'#0b5e7a', accent:'#ffc928', logo:'#ffffff', seam:'rgba(0,0,0,.10)' },
+  red:{ base:'#f5f5f5', under:'#d7202a', le:'#d7202a', accent:'#d7202a', logo:null, seam:'rgba(0,0,0,.10)' },
+};
+function drawWingTexture(name){
+  const P=PALETTES[name]; const g=tctx;
+  // param-space helpers: u in [-1,1] -> x, xc in [0,1] -> y within surface half
+  const X=u=>(u+1)/2*TW, Y=(xc,s)=>(s*0.5+xc*0.5)*TH;
+  const poly=(pts,s,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([u,x],i)=>i?g.lineTo(X(u),Y(x,s)):g.moveTo(X(u),Y(x,s))); g.closePath(); g.fill(); };
+  for(const s of [0,1]){
+    g.fillStyle = s===0 ? P.base : P.under; g.fillRect(0,s*TH/2,TW,TH/2);
+    if(name==='classic'){
+      if(s===0){
+        for(const sg of [1,-1]){ // mirrored side bands
+          poly([[sg*0.30,0],[sg*0.62,0],[sg*0.86,1],[sg*0.55,1]],0,P.accent);
+          poly([[sg*0.62,0],[sg*1.01,0],[sg*1.01,1],[sg*0.86,1]],0,P.le);
+        }
+        poly([[-1.01,0],[1.01,0],[1.01,0.07],[-1.01,0.07]],0,P.le);
+      } else {
+        poly([[-0.25,0],[0.25,0],[0.12,1],[-0.12,1]],1,'#f4f5f7');
+        for(const sg of [1,-1]) poly([[sg*0.80,0],[sg*1.01,0],[sg*1.01,1],[sg*0.92,1]],1,P.le);
+      }
+    } else if(name==='reunion'){
+      for(const sg of [1,-1]){
+        poly([[sg*0.18,0],[sg*0.30,0],[sg*0.48,1],[sg*0.36,1]],s,P.accent);
+        poly([[sg*0.72,0],[sg*1.01,0],[sg*1.01,1],[sg*0.85,1]],s,P.le);
+      }
+      poly([[-0.07,0],[0.07,0],[0.05,1],[-0.05,1]],s,'#ffffff');
+    } else if(name==='red'){
+      for(const sg of [1,-1]){
+        poly([[sg*0.45,0],[sg*1.01,0],[sg*1.01,1],[sg*0.70,1]],s,P.accent);
+        poly([[sg*0.28,0],[sg*0.36,0],[sg*0.56,1],[sg*0.48,1]],s,P.accent);
+      }
+      if(s===1) poly([[-0.2,0],[0.2,0],[0.2,1],[-0.2,1]],1,'#f5f5f5');
+    } else { // black
+      poly([[-1.01,0],[1.01,0],[1.01,0.10],[-1.01,0.10]],s,P.le);
+    }
+    if(P.logo){ drawLogo(g, X(-0.33), Y(0.47,s), 1, P.logo, s); }
+    // seams: ribs + chord panels
+    g.strokeStyle=P.seam; g.lineWidth=2;
+    for(let i=0;i<=W.cells;i++){ const x=X(-1+2*i/W.cells); g.beginPath(); g.moveTo(x,s*TH/2); g.lineTo(x,(s+1)*TH/2); g.stroke(); }
+    for(const xc of [0.18,0.42,0.68]){ g.beginPath(); g.moveTo(0,Y(xc,s)); g.lineTo(TW,Y(xc,s)); g.stroke(); }
+    // cell openings on the lower surface just behind the leading edge
+    if(s===1){ g.fillStyle='rgba(8,10,14,.85)';
+      for(let i=1;i<W.cells-1;i++){ const u0=-1+2*i/W.cells, u1=-1+2*(i+1)/W.cells;
+        g.beginPath(); g.ellipse((X(u0)+X(u1))/2, Y(0.035,1), (X(u1)-X(u0))*0.38, TH*0.012, 0,0,Math.PI*2); g.fill(); } }
+  }
+  gl.bindTexture(gl.TEXTURE_2D,wingTex);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,texCanvas);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  const af=gl.getExtension('EXT_texture_filter_anisotropic'); if(af) gl.texParameterf(gl.TEXTURE_2D,af.TEXTURE_MAX_ANISOTROPY_EXT,8);
+}
+// two interlaced rounded loops, like the mascot's wing logo
+function drawLogo(g, cx, cy, k, col, s){
+  g.save(); g.translate(cx,cy); if(s===1) g.scale(-1,1); // mirror on the underside so it reads correctly from below
+  g.scale(1.0,0.55); g.strokeStyle=col; g.lineWidth=34; g.lineCap='round'; g.lineJoin='round';
+  const loop=(x,y,w,h,r)=>{ g.beginPath(); g.roundRect(x-w/2,y-h/2,w,h,r); g.stroke(); };
+  loop(-70,-20,190,170,80); loop(70,20,190,170,80);
+  g.restore();
+}
+
+// ---------- pilot sprite ----------
+const pilotTex=gl.createTexture(); let pilotReady=false;
+const pimg=new Image(); pimg.onload=()=>{ gl.bindTexture(gl.TEXTURE_2D,pilotTex);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,pimg); gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false); pilotReady=true; };
+pimg.src=PILOT_SRC;
+const sprVAO=gl.createVertexArray(), sprPos=gl.createBuffer(), sprUV=gl.createBuffer();
+gl.bindVertexArray(sprVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER,sprPos); gl.bufferData(gl.ARRAY_BUFFER,4*3*4,gl.DYNAMIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+gl.bindBuffer(gl.ARRAY_BUFFER,sprUV); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,1, 1,1, 0,0, 1,0]),gl.STATIC_DRAW); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,2,gl.FLOAT,false,0,0);
+gl.bindVertexArray(null);
+
+// ---------- lines ----------
+// attachment points: rows A,B,C,D at chord fractions, every other rib, each side
+const ROWS=[0.07,0.30,0.55,0.80];
+const attach=[]; // {u,xc,row,side,group}
+for(let i=1;i<=W.cells/2;i+=2){
+  for(const side of [1,-1]){ const u=side*(i-0.0)/(W.cells/2);
+    if(Math.abs(u)>0.98) continue;
+    ROWS.forEach((xc,r)=>attach.push({u, xc, r, side, g: Math.floor((i-1)/6)}));
+  }
+}
+const brakeAtt=[]; for(let i=0;i<=W.cells/2;i+=2){ for(const side of [1,-1]){ const u=side*Math.max(0.08,i/(W.cells/2))*0.98; brakeAtt.push({u,side,g:Math.floor(i/6)}); } }
+const lineVAO=gl.createVertexArray(), lineBuf=gl.createBuffer(); let lineData=new Float32Array(4096*7), lineCount=0;
+gl.bindVertexArray(lineVAO); gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf); gl.bufferData(gl.ARRAY_BUFFER,lineData.byteLength,gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,28,0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,4,gl.FLOAT,false,28,12);
+gl.bindVertexArray(null);
+function pushLine(a,b,col){ const o=lineCount*14; if(o+14>lineData.length) return;
+  lineData.set([a[0],a[1],a[2],col[0],col[1],col[2],col[3], b[0],b[1],b[2],col[0],col[1],col[2],col[3]],o); lineCount++; }
+
+
+// ---------- scripted rendering for the assistant ----------
+const S = { pos:[0,0,0], psi:0, bank:0, pitch:0 };
+let bL=0, bR=0, pilotScale=1.9, curPal='black';
+const D2R=Math.PI/180; const SUN=V.norm([0.4,0.85,0.35]);
+function rotation(){ return M.mul(M.ry(S.psi), M.mul(M.rx(S.pitch), M.rz(S.bank))); }
+function render3D(eye, target){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=Math.round(canvas.clientWidth*dpr), h=Math.round(canvas.clientHeight*dpr);
+  if(!w||!h) return;
+  if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; }
+  gl.viewport(0,0,w,h); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  brakeL=bL; brakeR=bR; uploadWing();
+  const pivot=[0,3.2,0], Rm=rotation();
+  const model=M.mul(M.trans(...S.pos), M.mul(M.trans(...pivot), M.mul(Rm, M.trans(-pivot[0],-pivot[1],-pivot[2]))));
+  const VP=M.mul(M.persp(38*D2R,w/h,0.3,2000), M.lookAt(eye,target,[0,1,0]));
+  gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);
+  gl.useProgram(wingProg.p);
+  gl.uniformMatrix4fv(wingProg.u.uVP,false,VP); gl.uniformMatrix4fv(wingProg.u.uModel,false,model);
+  gl.uniform3fv(wingProg.u.uSun,SUN); gl.uniform3fv(wingProg.u.uEye,eye);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,wingTex); gl.uniform1i(wingProg.u.uTex,0);
+  gl.bindVertexArray(wingVAO); gl.drawElements(gl.TRIANGLES,indexArr.length,gl.UNSIGNED_INT,0);
+  const upW=V.norm(M.dir(Rm,[0,1,0])), fwdW=V.norm(M.dir(Rm,[0,0,1]));
+  const riserMid=M.pt(model,[0,0,0]);
+  let toCam=V.sub(eye,riserMid); toCam=V.sub(toCam,V.scl(upW,V.dot(toCam,upW)));
+  if(V.len(toCam)<1e-3) toCam=fwdW; toCam=V.norm(toCam);
+  const rightW=V.norm(V.cross(upW,toCam));
+  const px=0.0042*pilotScale, mid=[(SPR.rl[0]+SPR.rr[0])/2,(SPR.rl[1]+SPR.rr[1])/2];
+  const at=(sx,sy)=>V.add(riserMid, V.add(V.scl(rightW,(sx-mid[0])*px), V.scl(upW,-(sy-mid[1])*px)));
+  const riserL=at(...SPR.rl), riserR=at(...SPR.rr), leftW=V.norm(M.dir(Rm,[1,0,0]));
+  const [rLeft,rRight] = V.dot(V.sub(riserL,riserR),leftW)>0 ? [riserL,riserR] : [riserR,riserL];
+  lineCount=0;
+  const lineCol=[0.9,0.91,0.93,0.5], aCol=[0.95,0.55,0.45,0.55], brakeCol=[0.95,0.85,0.5,0.45];
+  const galleries=new Map();
+  for(const a of attach){ const top=M.pt(model,wingPoint(a.u,a.xc,false)), riser=a.side>0?rLeft:rRight, key=a.side+':'+a.r+':'+a.g;
+    if(!galleries.has(key)) galleries.set(key,{pts:[],riser,r:a.r}); galleries.get(key).pts.push(top); }
+  for(const g of galleries.values()){ const avg=g.pts.reduce((s,p)=>V.add(s,p),[0,0,0]).map(v=>v/g.pts.length);
+    const node=V.lerp(avg,g.riser,0.42), col=g.r===0?aCol:lineCol; for(const p of g.pts) pushLine(p,node,col); pushLine(node,g.riser,col); }
+  const bg=new Map();
+  for(const b of brakeAtt){ const te=M.pt(model,wingPoint(b.u,0.995,false)), riser=b.side>0?rLeft:rRight, key=b.side+':'+b.g;
+    if(!bg.has(key)) bg.set(key,{pts:[],riser}); bg.get(key).pts.push(te); }
+  for(const g of bg.values()){ const avg=g.pts.reduce((s,p)=>V.add(s,p),[0,0,0]).map(v=>v/g.pts.length);
+    const hand=V.add(g.riser,V.scl(fwdW,-0.25*pilotScale/2)), node=V.lerp(avg,hand,0.35); for(const p of g.pts) pushLine(p,node,brakeCol); pushLine(node,hand,brakeCol); }
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  gl.useProgram(lineProg.p); gl.uniformMatrix4fv(lineProg.u.uVP,false,VP);
+  gl.bindVertexArray(lineVAO); gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf); gl.bufferSubData(gl.ARRAY_BUFFER,0,lineData,0,lineCount*14);
+  gl.drawArrays(gl.LINES,0,lineCount*2);
+  if(pilotReady){
+    const q=[at(0,SPR.h),at(SPR.w,SPR.h),at(0,0),at(SPR.w,0)];
+    gl.useProgram(sprProg.p); gl.uniformMatrix4fv(sprProg.u.uVP,false,VP);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,pilotTex); gl.uniform1i(sprProg.u.uTex,0);
+    gl.bindVertexArray(sprVAO); gl.bindBuffer(gl.ARRAY_BUFFER,sprPos); gl.bufferSubData(gl.ARRAY_BUFFER,0,new Float32Array(q.flat()));
+    gl.depthMask(false); gl.drawArrays(gl.TRIANGLE_STRIP,0,4); gl.depthMask(true);
+  }
+  gl.bindVertexArray(null);
+}
+drawWingTexture('black');
+
+// ---------- choreography ----------
+// camera fixed; glider ends hovering just in front of it, then the static pose takes over
+const EYE=[0,3.0,17], TGT=[0,2.6,0];
+const ez=t=>t<0?0:t>1?1:t*t*(3-2*t);
+const lerp=(a,b,t)=>a+(b-a)*t;
+function bez(p0,p1,p2,p3,t){ const u=1-t; return [0,1,2].map(i=>u*u*u*p0[i]+3*u*u*t*p1[i]+3*u*t*t*p2[i]+t*t*t*p3[i]); }
+function flyPath(P, t, dt){
+  const a=bez(...P,t), b=bez(...P,Math.min(1,t+0.01));
+  const d=V.sub(b,a); return { pos:a, psi:Math.atan2(d[0],d[2]) };
+}
+// arrival: comes from far up-right, swoops in a turn, flares in front of the camera
+const ARR=[[60,40,-120],[-30,25,-60],[30,4,-10],[0,0,0]];
+const DEP=[[0,0,0],[0,1,-6],[-35,18,-40],[-70,45,-150]];
+const GLIDER = {
+  ok: GL_OK,
+  play(kind, dur){
+    return new Promise(res=>{
+      if(!GL_OK){ res(); return; }
+      const t0=performance.now(); let prevPsi=null;
+      const P = kind==='arrive'?ARR:DEP;
+      function f(now){
+        const t=Math.min(1,(now-t0)/dur), k = kind==='arrive' ? 1-Math.pow(1-t,2.2) : Math.pow(t,1.7);
+        const fp=flyPath(P,Math.min(k,0.995));
+        S.pos=fp.pos;
+        let psi=fp.psi; if(kind==='arrive' && t>0.85){ const d=((0-psi+Math.PI*3)%(Math.PI*2))-Math.PI; psi=psi+d*ez((t-0.85)/0.15); } // face the camera when landing
+        // bank from turn rate
+        const turn = prevPsi===null?0:((psi-prevPsi+Math.PI*3)%(Math.PI*2)-Math.PI);
+        prevPsi=psi; S.psi=psi;
+        S.bank=lerp(S.bank, Math.max(-0.9,Math.min(0.9,-turn*18)), 0.15);
+        S.pitch = kind==='arrive' ? (t>0.82 ? -0.35*Math.sin(Math.PI*ez((t-0.82)/0.18)) : 0.08) : (t<0.15 ? -0.25*ez(t/0.15) : 0.05);
+        const flare = kind==='arrive' ? ez((t-0.8)/0.2) : 0; bL=bR=flare*0.9;
+        render3D(EYE,TGT);
+        if(t<1) requestAnimationFrame(f); else res();
+      }
+      requestAnimationFrame(f);
+    });
+  },
+  clear(){ if(GL_OK){ gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); } }
+};
+
+
+    return GLIDER
+  } catch (e) {
+    console.warn('3D indisponible', e)
+    return { ok: false, play: () => Promise.resolve(), clear() {} }
+  }
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { validateWeight, validateAge, calculatePrice, suggestSlots, AGE_LIMITS, WEIGHT_LIMITS } from '../utils/rules'
 import { useSettings, DEFAULT_SETTINGS } from '../contexts/SettingsContext'
+import MascotAssistant from '../components/MascotAssistant'
 
 const TODAY = new Date().toISOString().split('T')[0]
 const emptyPassenger = () => ({
@@ -132,6 +133,46 @@ async function loadSlots(date) {
       }
     }
     return rows
+  }
+
+  // The booking assistant ("mascotte") hands over what it gathered in the chat. We only pre-fill the
+  // regular form (date, passengers, contact): all validations, the parental authorisation, the
+  // slot proposals and the SMS verification still happen below, as for any booking.
+  function applyAssistantDraft(draft) {
+    if (!draft) return
+    const list = Array.isArray(draft.passengers) ? draft.passengers.slice(0, 6) : []
+    if (/^\d{4}-\d{2}-\d{2}$/.test(draft.date || '') && draft.date >= TODAY) setSelectedDate(draft.date)
+
+    if (list.length) {
+      const kids   = list.filter(p => p.kind === 'child')
+      const adults = list.filter(p => p.kind !== 'child')
+      const disco  = adults.filter(p => p.flight !== 'performance')
+      const perf   = adults.filter(p => p.flight === 'performance')
+      const ordered = [...kids, ...disco, ...perf]   // same order as buildPassengersFromCounts
+      const rows = buildPassengersFromCounts(ordered.length, kids.length, disco.length, perf.length, [])
+      ordered.forEach((p, i) => {
+        rows[i] = {
+          ...rows[i],
+          first_name: String(p.first_name || '').slice(0, 40),
+          age:        p.age ? String(parseInt(p.age, 10) || '') : '',
+          weight_kg:  p.weight_kg ? String(parseInt(p.weight_kg, 10) || '') : '',
+        }
+      })
+      setTotalCount(ordered.length); setChildCount(kids.length)
+      setDiscoveryCount(disco.length); setPerformanceCount(perf.length)
+      setPassengers(rows)
+    }
+    if (draft.contact_name || draft.phone) {
+      setContact(c => ({
+        name:  String(draft.contact_name || c.name || '').slice(0, 80),
+        phone: String(draft.phone || c.phone || '').slice(0, 30),
+      }))
+    }
+    // Start the slot proposal again from the pre-filled form
+    setConflictMode(null); setSuggestedSlot(null); setSelectedSlot(null)
+    setSlotInfo(null); setSelectedSlots([]); setErrors({}); setSplitMode(false)
+    setStep(2)
+    setTimeout(() => document.getElementById('booking-passengers')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350)
   }
 
   function updatePassenger(i, field, value) {
@@ -623,6 +664,8 @@ if (hasLightChild) {
         <p>Planete Parapente - Saint-Leu</p>
       </header>
 
+      <MascotAssistant onApply={applyAssistantDraft} />
+
       {/* Step 1 */}
       {step >= 1 && (
         <section className="booking-section">
@@ -635,7 +678,7 @@ if (hasLightChild) {
 
       {/* Step 2 */}
       {step >= 2 && (
-        <section className="booking-section">
+        <section className="booking-section" id="booking-passengers">
           <h2>2. Passagers</h2>
 
           {/* Contact block — shown first */}
