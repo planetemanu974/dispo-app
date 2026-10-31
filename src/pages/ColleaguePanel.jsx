@@ -150,6 +150,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
   // Collègues
   const [colleagues, setColleagues] = useState([])
   const [colLoading, setColLoading] = useState(false)
+  const [bookingCounts, setBookingCounts] = useState({})  // structure name (lower-case) → number of bookings
 
   // Modal : invitation structure
   const [showInvite,   setShowInvite]   = useState(false)
@@ -207,6 +208,16 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
       .eq('pilot_id', pilot.id)
       .order('created_at', { ascending: false })
     setColleagues(data || [])
+    // How often each structure books a flight with me (partner bookings « COL-… »), used to sort the list
+    const { data: bk } = await supabase
+      .from('bookings')
+      .select('contact_name, pilot_slots!inner(pilot_id)')
+      .eq('pilot_slots.pilot_id', pilot.id)
+      .like('booking_ref', 'COL-%')
+      .limit(2000)
+    const counts = {}
+    for (const b of bk || []) { const k = (b.contact_name || '').trim().toLowerCase(); counts[k] = (counts[k] || 0) + 1 }
+    setBookingCounts(counts)
     setColLoading(false)
   }, [pilot.id])
 
@@ -798,10 +809,14 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
                   </div>
 
                   {colLoading ? <p style={s.muted}>Chargement…</p> : (() => {
+                    // Most active structures first: bookings made with me + requests received
+                    const callsOf = c => (bookingCounts[(c.name || '').trim().toLowerCase()] || 0) + requests.filter(r => r.colleague_id === c.id).length
                     const structures = colleagues.filter(c => !c.is_direct)
+                      .map(c => ({ c, calls: callsOf(c) }))
+                      .sort((a, b) => b.calls - a.calls || (a.c.name || '').localeCompare(b.c.name || ''))
                     return structures.length === 0
                       ? <p style={{ ...s.muted, padding: '10px 0 16px', textAlign: 'left' }}>Aucune structure invitée.</p>
-                      : structures.map(c => <ColleagueCard key={c.id} c={c} onOpen={openDetail} />)
+                      : structures.map(({ c, calls }) => <ColleagueCard key={c.id} c={c} onOpen={openDetail} calls={calls} />)
                   })()}
 
                   {/* Séparateur */}
@@ -1473,7 +1488,7 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
 }
 
 // ── Carte collègue réutilisable ───────────────────────────────────────────────
-function ColleagueCard({ c, onOpen, badge }) {
+function ColleagueCard({ c, onOpen, badge, calls }) {
   return (
     <button
       onClick={() => onOpen(c)}
@@ -1502,7 +1517,10 @@ function ColleagueCard({ c, onOpen, badge }) {
                   : '🚫 Accès révoqué')}
           </div>
         </div>
-        <span style={{ color: '#475569', fontSize: 18 }}>›</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {calls > 0 && <span style={{ fontSize: 11, color: '#7dd3fc', background: 'rgba(56,189,248,.12)', borderRadius: 10, padding: '2px 8px' }}>{calls} demande{calls > 1 ? 's' : ''}</span>}
+          <span style={{ color: '#475569', fontSize: 18 }}>›</span>
+        </span>
       </div>
     </button>
   )
