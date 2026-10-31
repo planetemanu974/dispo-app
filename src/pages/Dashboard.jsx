@@ -271,10 +271,24 @@ export default function Dashboard({ pilot }) {
     return () => { clearInterval(poll); supabase.removeChannel(channel) }
   }, [pilot?.id])
 
+  // Permanently delete a help request (after confirmation)
+  async function deleteHelp(id) {
+    if (!window.confirm('Supprimer cette demande d\'aide ?')) return
+    setHelpRequests(list => list.filter(h => h.id !== id))
+    await supabase.from('support_requests').delete().eq('id', id)
+  }
+
   async function markHelpDone(id) {
     setHelpRequests(list => list.filter(h => h.id !== id))
     await supabase.from('support_requests')
       .update({ status: 'done', handled_at: new Date().toISOString() }).eq('id', id)
+  }
+
+  // Permanently delete a callback request (after confirmation)
+  async function deleteCallback(id) {
+    if (!window.confirm('Supprimer cette demande de rappel ?')) return
+    setCallbacks(list => list.filter(c => c.id !== id))
+    await supabase.from('callback_requests').delete().eq('id', id)
   }
 
   async function markCallbackDone(id) {
@@ -1952,7 +1966,10 @@ export default function Dashboard({ pilot }) {
               <div className="callback-meta">
                 Demandé {new Date(c.created_at).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </div>
-              <button className="callback-done" onClick={() => markCallbackDone(c.id)}>✅ Rappelé</button>
+              <div className="callback-actions">
+                <button className="callback-done" onClick={() => markCallbackDone(c.id)}>✅ Rappelé</button>
+                <button className="callback-delete" onClick={() => deleteCallback(c.id)}>🗑 Supprimer</button>
+              </div>
             </div>
           ))}
         </div>
@@ -1971,7 +1988,10 @@ export default function Dashboard({ pilot }) {
               <div className="callback-meta">
                 {new Date(h.created_at).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </div>
-              <button className="callback-done" onClick={() => markHelpDone(h.id)}>✅ Traité</button>
+              <div className="callback-actions">
+                <button className="callback-done" onClick={() => markHelpDone(h.id)}>✅ Traité</button>
+                <button className="callback-delete" onClick={() => deleteHelp(h.id)}>🗑 Supprimer</button>
+              </div>
             </div>
           ))}
         </div>
