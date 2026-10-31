@@ -342,8 +342,8 @@ const MAN = {
   loop:{ label:'Looping', dur:7, f:(t,d)=>{
       // dive to build speed, then a full loop (pilot goes over the wing), then recover
       if(t<1.2) { const a=ease(t/1.2); return {bank:0,pitch:0.45*a,V:10+8*a,brake:[0,0]}; }
-      if(t<4.4){ const k=ease((t-1.2)/3.2); return {bank:0,pitch:0.45-k*(2*Math.PI+0.45),V:18+4*Math.sin(Math.PI*k),brake:[0.3,0.3],direct:true,noWrap:true}; }
-      const a=1-ease((t-4.4)/2.5); return {bank:0,pitch:-2*Math.PI+0.08*a,V:10+8*a,brake:[0,0]}; } },
+      if(t<4.4){ const k=ease((t-1.2)/3.2); return {bank:0,pitch:0.45+k*(2*Math.PI-0.45),V:18+4*Math.sin(Math.PI*k),brake:[0.3,0.3],direct:true,noWrap:true}; }
+      const a=1-ease((t-4.4)/2.5); return {bank:0,pitch:2*Math.PI-0.08*a,V:10+8*a,brake:[0,0]}; } },
 };
 const SHOW=['loop:7'];
 let showIdx=-1;
@@ -366,11 +366,11 @@ function step(dt){
     else startMan('straight');
     m=MAN[manName]; dur = showIdx>=0 ? +SHOW[showIdx].split(':')[1] : m.dur;
   }
-  if(manName==='loop' && manT>=6.9 && S.pitch<-3) S.pitch+=2*Math.PI;
+  if(manName==='loop' && manT>=6.9 && S.pitch>3) S.pitch-=2*Math.PI;
   const tg=m.f(manT, m.dur===Infinity?1e9:m.dur);
   if(tg.direct){ S.bank=smooth(S.bank,tg.bank,12,dt); S.pitch=smooth(S.pitch,tg.pitch,12,dt); }
   else { S.bank=smooth(S.bank,tg.bank,3,dt); S.pitch=smooth(S.pitch,tg.pitch,3,dt); }
-  if(manName==='loop' && manT>=6.9 && Math.abs(S.pitch+2*Math.PI)<0.3) S.pitch+=2*Math.PI;
+  if(manName==='loop' && manT>=6.9 && Math.abs(S.pitch-2*Math.PI)<0.3) S.pitch-=2*Math.PI;
   S.V=smooth(S.V,tg.V,2,dt);
   bL=smooth(bL,tg.brake[0],6,dt); bR=smooth(bR,tg.brake[1],6,dt);
   // coordinated turn: heading rate from bank (right bank -> heading decreases)
