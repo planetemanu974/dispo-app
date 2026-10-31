@@ -3,6 +3,7 @@
 // Affiche : connexion → calendrier vert/rouge → demande de créneau
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import WeekPicker from '../components/WeekPicker'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const DAYS_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
@@ -380,9 +381,15 @@ export default function ColleagueDispo() {
       {/* ── Navigation semaine ── */}
       <div style={s.weekNav}>
         <button onClick={prevWeek} disabled={!canPrev} style={s.navBtn}>‹</button>
-        <span style={s.weekLabel}>
-          {formatDate(days[0])} — {formatDate(days[6])}
-        </span>
+        {/* Tap the dates to open a calendar: the 7-day window then starts on the chosen day */}
+        <WeekPicker
+          label={`${formatDate(days[0])} — ${formatDate(days[6])}`}
+          weekStart={weekStart}
+          today={today()}
+          minDate={today()}
+          buttonStyle={s.weekLabel}
+          onPick={d => setWeekStart(d < today() ? today() : d)}
+        />
         <button onClick={nextWeek} style={s.navBtn}>›</button>
       </div>
 

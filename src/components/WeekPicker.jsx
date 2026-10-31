@@ -7,7 +7,7 @@ const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-export default function WeekPicker({ label, weekStart, today, onPick }) {
+export default function WeekPicker({ label, weekStart, today, onPick, buttonStyle, minDate }) {
   const [open, setOpen]   = useState(false)
   const [month, setMonth] = useState(() => new Date(weekStart + 'T00:00:00'))   // any date inside the shown month
 
@@ -29,7 +29,7 @@ export default function WeekPicker({ label, weekStart, today, onPick }) {
 
   return (
     <span className="weekpicker">
-      <button type="button" className="week-nav-label weekpicker-btn" onClick={toggle} aria-label="Choisir une semaine">
+      <button type="button" className="week-nav-label weekpicker-btn" style={buttonStyle} onClick={toggle} aria-label="Choisir une semaine">
         {label} <span className="weekpicker-caret">▾</span>
       </button>
       {open && (
@@ -48,7 +48,7 @@ export default function WeekPicker({ label, weekStart, today, onPick }) {
                 const inMonth = d.getMonth() === month.getMonth()
                 const inShown = d >= shownStart && d <= shownEnd
                 return (
-                  <button key={s} type="button" onClick={() => pick(s)}
+                  <button key={s} type="button" disabled={!!minDate && s < minDate} onClick={() => pick(s)}
                     className={`weekpicker-day${inMonth ? '' : ' is-out'}${inShown ? ' is-shown' : ''}${s === today ? ' is-today' : ''}`}>
                     {d.getDate()}
                   </button>
