@@ -4,6 +4,9 @@ import { validateWeight, validateAge, calculatePrice, suggestSlots, AGE_LIMITS, 
 import { useSettings, DEFAULT_SETTINGS } from '../contexts/SettingsContext'
 import MascotAssistant from '../components/MascotAssistant'
 
+// Booking assistant switched off on the public page (kept in the code, set to true to bring it back)
+const ASSISTANT_ENABLED = false
+
 const TODAY = new Date().toISOString().split('T')[0]
 const emptyPassenger = () => ({
   first_name: '', last_name: '', weight_kg: '', age: '',
@@ -664,7 +667,7 @@ if (hasLightChild) {
         <p>Planete Parapente - Saint-Leu</p>
       </header>
 
-      <MascotAssistant onApply={applyAssistantDraft} />
+      {ASSISTANT_ENABLED && <MascotAssistant onApply={applyAssistantDraft} />}
 
       {/* Step 1 */}
       {step >= 1 && (
