@@ -5,11 +5,7 @@ import { useSettings, DEFAULT_SETTINGS } from '../contexts/SettingsContext'
 import Verify from './GiftVoucherVerify'
 import { generateVoucher, voucherFilename, VOUCHER_DESIGNS } from '../lib/voucherPdf'
 
-const PACKS = [
-  { id: 'none',        label: 'Vol seul',             extra: 0 },
-  { id: 'photo',       label: '+ Pack photos',        extra: 10 },
-  { id: 'photo_video', label: '+ Pack photos + vidéo', extra: 20 },
-]
+const CGV_URL = 'https://planete-parapente-reunion.com/cgv'
 
 /** Public gift voucher page: order form (/bon-cadeau) and thank-you + download (/bon-cadeau/merci?t=…). */
 export default function GiftVoucher() {
@@ -24,7 +20,7 @@ function OrderForm() {
   const [params] = useSearchParams()
 
   const [f, setF] = useState({
-    flight_type_id: params.get('vol') || '', media_pack: 'none', design: 'adult',
+    flight_type_id: params.get('vol') || '', design: 'adult', cgv: false,
     first_name: '', last_name: '', phone: '', email: '',
     from_name: '', to_name: '', message: '', desired_date: '',
   })
@@ -38,13 +34,14 @@ function OrderForm() {
   }, [flightTypes]) // eslint-disable-line
 
   const ft = flightTypes.find(t => t.id === f.flight_type_id)
-  const total = (ft?.price_eur ?? 0) + (PACKS.find(p => p.id === f.media_pack)?.extra ?? 0)
+  const total = ft?.price_eur ?? 0
 
   async function submit(e) {
     e.preventDefault(); setError('')
     if (!f.first_name.trim() || !f.last_name.trim() || !f.phone.trim() || !/^\S+@\S+\.\S+$/.test(f.email)) {
       setError('Merci de renseigner nom, prénom, téléphone et un e-mail valide.'); return
     }
+    if (!f.cgv) { setError('Merci d\'accepter les conditions générales de vente.'); return }
     setBusy(true)
     const { data, error: err } = await supabase.functions.invoke('gift-checkout', { body: f })
     if (err || !data?.url) { setError('Le paiement est momentanément indisponible. Réessayez ou appelez-nous.'); setBusy(false); return }
@@ -69,11 +66,7 @@ function OrderForm() {
               ))}
             </select>
           </div>
-          <div className="field">
-            <select value={f.media_pack} onChange={e => set('media_pack', e.target.value)}>
-              {PACKS.map(p => <option key={p.id} value={p.id}>{p.label}{p.extra ? ` (+${p.extra} €)` : ''}</option>)}
-            </select>
-          </div>
+          <p style={{ fontSize: 12, opacity: .75 }}>Photos et vidéo non incluses dans le bon (en option le jour du vol).</p>
         </section>
 
         <section className="booking-section">
@@ -121,6 +114,11 @@ function OrderForm() {
             <div className="field"><label>E-mail</label>
               <input type="email" value={f.email} onChange={e => set('email', e.target.value)} /></div>
           </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13 }}>
+            <input type="checkbox" checked={f.cgv} onChange={e => set('cgv', e.target.checked)} style={{ width: 'auto', marginTop: 3 }} />
+            <span>J'ai lu et j'accepte les <a href={CGV_URL} target="_blank" rel="noreferrer" style={{ color: '#f97316' }}>conditions générales de vente</a> :
+              bon valable 6 mois, non remboursable, non échangeable.</span>
+          </label>
           {error && <p className="error-msg">{error}</p>}
           <button className="btn-primary" type="submit" disabled={busy || !ft} style={{ width: '100%', marginTop: 12 }}>
             {busy ? 'Redirection vers le paiement…' : `Payer ${total} € — recevoir le bon`}

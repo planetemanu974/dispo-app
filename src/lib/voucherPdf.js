@@ -149,10 +149,10 @@ export async function generateVoucher(v) {
   d.setFont('helvetica', 'bold'); d.setFontSize(13); text(d, th.accent)
   d.text(`Code : ${v.code}`, cx, 117, align)
   d.setFont('helvetica', 'normal'); d.setFontSize(8.5); text(d, th.text)
-  const valid = v.expires_at ? `Valable jusqu'au ${fmtDate(v.expires_at)}. ` : 'Valable 6 mois. '
+  const valid = v.expires_at ? `Valable 6 mois, jusqu'au ${fmtDate(v.expires_at)} inclus. ` : 'Valable 6 mois. '
   const desired = v.desired_date ? `Date de vol souhaitée : ${fmtDate(v.desired_date)}. ` : ''
   d.text(`${valid}${desired}`, cx, 123, { align: 'center', maxWidth: maxW })
-  d.text('Réservez sur dispo-app-pi.vercel.app/reservation ou appelez-nous, en indiquant votre code. Présentez ce bon (QR code) le jour du vol.', cx, 128, { align: 'center', maxWidth: maxW })
+  d.text('Réservez sur dispo-app-pi.vercel.app/reservation ou appelez-nous, en indiquant votre code. Photos et vidéo non incluses. Flashez le QR code pour réserver.', cx, 128, { align: 'center', maxWidth: maxW })
   d.setFont('helvetica', 'bold'); text(d, th.title)
   d.text('Planète Parapente — Saint-Leu', cx, design === 'adult' ? 137 : 135, align)
   // QR code (bottom-right): scanned by the pilot on the day of the flight

@@ -72,6 +72,10 @@ export default function Booking() {
   const [selectedSlot, setSelectedSlot]   = useState(null)
   const [contact, setContact]             = useState({ name: '', phone: '' })
   const [notes, setNotes]                 = useState('')
+  // Gift vouchers (one code per passenger): [{ code, label, to_name }]
+  const [vouchers, setVouchers]           = useState([])
+  const [voucherInput, setVoucherInput]   = useState('')
+  const [voucherMsg, setVoucherMsg]       = useState(null)   // { ok: bool, text }
   const [errors, setErrors]               = useState({})
   const [slotInfo, setSlotInfo]           = useState(null)
   const [conflictMode, setConflictMode]   = useState(null)   // 'child_perf' | 'heavy' | 'split_message' | null
@@ -449,6 +453,45 @@ if (hasLightChild) {
   }
 
   // ── Split booking: create two separate bookings (8h + late slot) ──────────
+
+  // ── Gift vouchers ─────────────────────────────────────────────────────────
+  async function addVoucher(rawCode) {
+    const code = String(rawCode || '').trim().toUpperCase()
+    if (!code) return
+    if (vouchers.some(v => v.code === code)) { setVoucherMsg({ ok: false, text: 'Ce bon est déjà ajouté.' }); return }
+    const { data } = await supabase.rpc('check_gift_voucher', { p_code: code })
+    const r = data?.[0]
+    if (!r || r.state === 'invalid') { setVoucherMsg({ ok: false, text: 'Code inconnu.' }); return }
+    if (r.state === 'expired')       { setVoucherMsg({ ok: false, text: "Votre bon cadeau n'est plus valide." }); return }
+    if (r.state === 'booked')        { setVoucherMsg({ ok: false, text: 'Ce bon est déjà associé à une réservation.' }); return }
+    if (r.state === 'used')          { setVoucherMsg({ ok: false, text: 'Ce bon a déjà été utilisé.' }); return }
+    setVouchers(vs => [...vs, { code, label: r.flight_label, to_name: r.to_name }])
+    setVoucherInput('')
+    setVoucherMsg({ ok: true, text: `Bon accepté : vol ${r.flight_label}.` })
+  }
+
+  // Notes sent to the pilot: free notes + the voucher codes used
+  function fullNotes() {
+    const vtxt = vouchers.length
+      ? `🎁 Bon cadeau : ${vouchers.map(v => `${v.code} (${v.label})`).join(', ')} — sans photo/vidéo`
+      : ''
+    return [notes, vtxt].filter(Boolean).join('\n') || null
+  }
+
+  // Attach every voucher to the freshly created booking (the server re-checks validity)
+  async function redeemVouchers(bookingId) {
+    for (const v of vouchers) {
+      const { error } = await supabase.rpc('redeem_gift_voucher', { p_code: v.code, p_booking_id: bookingId })
+      if (error) console.error('Voucher error', error)
+    }
+  }
+
+  // QR code landing: /reservation?bon=CODE pre-fills the voucher
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('bon')
+    if (code) addVoucher(code)
+  }, []) // eslint-disable-line
+
   async function submitSplitBooking() {
     setSubmitting(true)
     const time8    = slotTogether?.slot_time?.slice(0, 5) || '08:00'
@@ -473,11 +516,12 @@ if (hasLightChild) {
     // ── Booking 1 : 8h00 ─────────────────────────────────────────────────────
     const { data: b1, error: e1 } = await supabase.from('bookings')
       .insert({ pilot_slot_id: slotTogether.id, status: 'pending', source: 'public',
-                contact_name: contact.name, contact_phone: contact.phone, notes: notes || null })
+                contact_name: contact.name, contact_phone: contact.phone, notes: fullNotes() })
       .select().single()
     if (e1) { setErrors({ submit: 'Erreur réservation 8h00. Réessayez.' }); setSubmitting(false); return }
 
     const ref = b1.id.slice(0, 8).toUpperCase()
+    await redeemVouchers(b1.id)
     const { error: e1pax } = await supabase.from('passengers').insert(pax8h.map(p => ({
       booking_id: b1.id, first_name: p.first_name, last_name: p.last_name,
       // safeInt avoids NaN→null on NOT-NULL columns (adults have no age field, perf has no weight)
@@ -532,7 +576,7 @@ if (hasLightChild) {
       `🕗 ${time8} : ${names8h}\n` +
       `🕗 ${timeLate} : ${namesLate}\n` +
       `Réf : ${ref}` +
-      (notes ? `\nNote : ${notes}` : '')
+      (fullNotes() ? `\nNote : ${fullNotes()}` : '')
     await sendSMS('PILOT', pilotMsg)
 
     setBookingRef(ref)
@@ -554,7 +598,7 @@ if (hasLightChild) {
       .insert({
         pilot_slot_id: slotsToBook[0].id, status: 'pending', source: 'public',
         contact_name:  contact.name,       contact_phone: contact.phone,
-        notes:         notes || null,
+        notes:         fullNotes(),
       })
       .select().single()
 
@@ -564,6 +608,7 @@ if (hasLightChild) {
     }
 
     const ref = bookingData.id.slice(0, 8).toUpperCase()
+    await redeemVouchers(bookingData.id)
 
     const paxInserts = passengers.map(p => ({
       booking_id:    bookingData.id,
@@ -634,7 +679,7 @@ if (hasLightChild) {
       `📅 ${dateStr} à ${time}\n` +
       `Passagers : ${paxList}\n` +
       `Réf : ${ref}` +
-      (notes ? `\nNote : ${notes}` : '')
+      (fullNotes() ? `\nNote : ${fullNotes()}` : '')
     await sendSMS('PILOT', pilotMsg)
 
     setBookingRef(ref)
@@ -922,6 +967,30 @@ if (hasLightChild) {
               + Ajouter un passager
             </button>
           )}
+
+          <div className="passenger-card">
+            <div className="passenger-header">🎁 Bon cadeau (un code par personne)</div>
+            {vouchers.map(v => (
+              <div key={v.code} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0' }}>
+                <span>✅ <b>{v.code}</b> — vol {v.label}</span>
+                <button type="button" onClick={() => setVouchers(vs => vs.filter(x => x.code !== v.code))}
+                  style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer' }}>Retirer</button>
+              </div>
+            ))}
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={voucherInput} placeholder="PP-XXXX-XXXX" style={{ flex:1 }}
+                onChange={e => setVoucherInput(e.target.value.toUpperCase())} />
+              <button type="button" className="btn-primary" style={{ width:'auto', padding:'0 16px' }}
+                onClick={() => addVoucher(voucherInput)}>Ajouter</button>
+            </div>
+            {voucherMsg && <p className={voucherMsg.ok ? '' : 'error-msg'} style={{ marginTop:6 }}>{voucherMsg.text}</p>}
+            {vouchers.length > 0 && (
+              <p style={{ fontSize:12, opacity:.75, marginTop:6 }}>
+                Le bon couvre le vol indiqué, sans photo ni vidéo. Un vol plus cher ou un autre passager
+                (règles de poids et d'âge) se règle sur place. Les passagers sans bon sont au tarif normal.
+              </p>
+            )}
+          </div>
 
           <div className="passenger-card">
             <div className="passenger-header">Notes (optionnel)</div>

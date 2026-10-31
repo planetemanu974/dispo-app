@@ -38,9 +38,9 @@ serve(async (req) => {
     const phone = clean(b.phone, 30), email = clean(b.email, 120)
     if (!first || !last || !phone || !/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Champs obligatoires manquants' }, 400)
 
-    const pack = String(b.media_pack ?? 'none')
+    const pack = 'none' // photos / video are never included in a voucher
     const design = DESIGNS.includes(b.design) ? b.design : 'adult'
-    if (!(pack in PACK_EXTRA)) return json({ error: 'Option invalide' }, 400)
+    if (b.cgv !== true) return json({ error: 'CGV non acceptées' }, 400)
 
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
