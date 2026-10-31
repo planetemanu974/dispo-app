@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { validateWeight, validateAge, calculatePrice, suggestSlots, AGE_LIMITS, WEIGHT_LIMITS } from '../utils/rules'
 import { useSettings, DEFAULT_SETTINGS } from '../contexts/SettingsContext'
 import MascotAssistant from '../components/MascotAssistant'
+import BookingDoneMascot from '../components/BookingDoneMascot'
 
 // Booking assistant switched off on the public page (kept in the code, set to true to bring it back)
 const ASSISTANT_ENABLED = false
@@ -644,8 +645,8 @@ if (hasLightChild) {
   if (step === 4) return (
     <div className="booking-page">
       <div className="booking-done">
-        <div className="done-icon">✅</div>
-        <h2>Demande envoyée !</h2>
+        <BookingDoneMascot />
+        <h2>Demande envoyée ✅</h2>
         <p>Référence : <strong>{bookingRef}</strong></p>
         <p>Le moniteur va confirmer votre vol. Vous serez contacté au numéro indiqué.</p>
         <button className="btn-primary" onClick={() => {

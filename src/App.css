@@ -602,3 +602,18 @@
   header .hdr-tab { font-size: 0.72rem !important; padding: 7px 2px !important; }
   header .hdr-tab-emoji { display: none; }
 }
+
+/* ── Booking confirmation: animated mascot ───────────────────────────────── */
+.done-mascot { position: relative; height: 210px; display: flex; align-items: flex-end; justify-content: center; margin: 4px auto 6px; }
+.done-mascot-img { height: 190px; width: auto; position: relative; z-index: 2; transform-origin: 50% 100%;
+  animation: done-pop .55s cubic-bezier(.2,1.4,.4,1) both, done-bob 2.6s ease-in-out .55s infinite; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+.done-shadow { position: absolute; bottom: 0; left: 50%; width: 90px; height: 12px; margin-left: -45px; border-radius: 50%; background: rgba(0,0,0,.35); filter: blur(4px); animation: done-shadow 2.6s ease-in-out .55s infinite; }
+.done-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
+.done-confetti span { position: absolute; top: -10px; border-radius: 2px; opacity: 0; animation-name: done-fall; animation-timing-function: ease-in; animation-fill-mode: forwards; }
+@keyframes done-pop { 0% { transform: scale(.2) translateY(30px) rotate(-8deg); opacity: 0 } 60% { transform: scale(1.12) translateY(-6px) rotate(3deg); opacity: 1 } 100% { transform: scale(1) translateY(0) rotate(0); opacity: 1 } }
+@keyframes done-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
+@keyframes done-shadow { 0%,100% { transform: scaleX(1); opacity: .35 } 50% { transform: scaleX(.8); opacity: .22 } }
+@keyframes done-fall { 0% { opacity: 1; transform: translateY(0) rotate(0) } 100% { opacity: 0; transform: translateY(210px) rotate(540deg) } }
+@media (prefers-reduced-motion: reduce) {
+  .done-mascot-img, .done-shadow { animation: none } .done-confetti { display: none }
+}
