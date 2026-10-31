@@ -156,6 +156,16 @@ function MenuLink({ icon, label, onClick, disabled, extra }) {
   )
 }
 
+// Small initial-in-a-circle used next to a pilot's name (replaces the 🪂 emoji)
+function PilotDot({ name, color = '#16a34a', size = 20 }) {
+  return (
+    <span style={{ width: size, height: size, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.34 + 'px', fontWeight: 800, color: 'white', background: color, flexShrink: 0 }}>
+      {(name || '?').charAt(0).toUpperCase()}
+    </span>
+  )
+}
+
 export default function Dashboard({ pilot }) {
   // Dynamic settings — flight types, slots, school info
   const { settings } = useSettings()
@@ -3412,8 +3422,10 @@ export default function Dashboard({ pilot }) {
                       return (
                         <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0',
                           opacity: isAbsent ? 0.45 : 1 }}>
-                          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: isAbsent ? '#94a3b8' : '#e2e8f0' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontWeight: 600, fontSize: '0.9rem', color: isAbsent ? '#94a3b8' : '#e2e8f0' }}>
+                            <PilotDot name={a.colleagues?.name} color={isAbsent ? '#64748b' : '#16a34a'} />
                             {a.colleagues?.name || '—'}
+                            {a.colleagues?.phone && <a href={`tel:${a.colleagues.phone}`} style={{ color: '#93c5fd', fontWeight: 500, fontSize: '0.8rem', textDecoration: 'none', whiteSpace: 'nowrap' }}>{a.colleagues.phone}</a>}
                             {isAbsent && <span style={{ marginLeft: 6, fontSize: '0.72rem', fontWeight: 700, color: '#f87171' }}>ABSENT</span>}
                           </span>
                           <span style={{ fontSize: '0.8rem', color: isAbsent ? '#64748b' : st.color, fontWeight: 600 }}>
@@ -3460,7 +3472,11 @@ export default function Dashboard({ pilot }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {freelancers.map(c => (
                             <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 7 }}>
-                              <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#e2e8f0' }}>🪂 {c.name}</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+                                <PilotDot name={c.name} />
+                                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#e2e8f0' }}>{c.name}</span>
+                                {c.phone && <a href={`tel:${c.phone}`} style={{ color: '#93c5fd', fontSize: '0.8rem', textDecoration: 'none', whiteSpace: 'nowrap' }}>{c.phone}</a>}
+                              </span>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 {c.phone && (
                                   <a href={`tel:${c.phone}`}
