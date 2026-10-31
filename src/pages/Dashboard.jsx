@@ -372,8 +372,14 @@ export default function Dashboard({ pilot }) {
   const [planningLoading, setPlanningLoading] = useState(false)
 
   // First data load finished? Until then a dark splash covers the page (no half-built screen)
-  const [ready, setReady] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setReady(true), 8000); return () => clearTimeout(t) }, [])  // never block forever
+  // Ready = planning loaded AND "Derniers changements" loaded, so nothing pops in afterwards.
+  const [initDone, setInitDone] = useState(false)
+  const [feedDone, setFeedDone] = useState(false)
+  const ready = initDone && feedDone
+  useEffect(() => { const t = setTimeout(() => { setInitDone(true); setFeedDone(true) }, 8000); return () => clearTimeout(t) }, [])  // never block forever
+  // Always start at the top after a reload (the browser would otherwise restore a mid-page scroll position)
+  useEffect(() => { try { window.history.scrollRestoration = 'manual' } catch { /* ignore */ } }, [])
+  useEffect(() => { if (ready) window.scrollTo(0, 0) }, [ready])
 
   // ── INIT: runs once on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -416,8 +422,8 @@ export default function Dashboard({ pilot }) {
       setWeekStart(getWeekStart(startDate))
       await loadWeek(getWeekStart(startDate))
       await loadDay(startDate)
-      loadPlanning(startDate)
-      setReady(true)
+      await loadPlanning(startDate)
+      setInitDone(true)
 
       // Load colleague messages (all, most recent first)
       const { data: msgs } = await supabase
@@ -3256,7 +3262,7 @@ export default function Dashboard({ pilot }) {
 
       {/* ── Activity feed: last changes, shown below the week/day/pilots views ── */}
       {(viewMode === 'week' || viewMode === 'day') && (
-        <ActivityFeed pilotId={pilot.id} onOpenBooking={openBookingFromFeed} onOpenDay={openDayFromFeed} />
+        <ActivityFeed pilotId={pilot.id} onFirstLoad={() => setFeedDone(true)} onOpenBooking={openBookingFromFeed} onOpenDay={openDayFromFeed} />
       )}
 
       {/* ── Booking detail modal (shared by both views) ── */}

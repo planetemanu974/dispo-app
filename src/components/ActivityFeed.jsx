@@ -138,7 +138,7 @@ function groupDetail(name, rows) {
 // onOpenBooking(bookingId) → Promise<boolean>  (true when the booking was opened)
 // onOpenDay(dateStr)       → jump to that day in the day view
 
-export default function ActivityFeed({ pilotId, onOpenBooking, onOpenDay }) {
+export default function ActivityFeed({ pilotId, onOpenBooking, onOpenDay, onFirstLoad }) {
   const [entries, setEntries] = useState([])
   const [adminName, setAdminName] = useState('')
 
@@ -263,7 +263,8 @@ export default function ActivityFeed({ pilotId, onOpenBooking, onOpenDay }) {
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, 15)
     setEntries(all)
-  }, [pilotId])
+    onFirstLoad?.()   // lets the dashboard hide its splash screen once this block is ready
+  }, [pilotId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load()
