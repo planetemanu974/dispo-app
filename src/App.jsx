@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import GiftVoucher from './pages/GiftVoucher'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { SettingsProvider } from './contexts/SettingsContext'
@@ -49,6 +50,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/reservation" element={<Booking />} />
+          <Route path="/bon-cadeau/*" element={<GiftVoucher />} />
           <Route path="/manu-dispo"  element={<ManuDispo />} />
           <Route path="/join"        element={<ColleagueJoin />} />
           <Route path="/dispo"       element={<ColleagueDispo />} />

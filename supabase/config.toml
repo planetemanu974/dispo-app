@@ -4,3 +4,10 @@ project_id = "qoqwdtbqudstcwqlcgsq"
 # Twilio calls this webhook directly: it carries no Supabase login token, so JWT checking must stay OFF.
 [functions.handle-inbound-sms]
 verify_jwt = false
+
+# Public gift voucher order form (no login) and Stripe's webhook (signed by Stripe instead of a JWT).
+[functions.gift-checkout]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
