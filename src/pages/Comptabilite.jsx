@@ -51,21 +51,24 @@ function localDateStr(d = new Date()) {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-// Wrapper: two tabs — own customers (Planète Parapente) and flights done for other structures
+// Wrapper: two tabs — own customers (Planete Parapente) and flights done for other structures
 export default function Comptabilite({ pilot, flightTypes }) {
   const [tab, setTab] = useState('own')
   const tabBtn = active => ({
-    flex: 1, padding: '12px 8px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700,
+    flex: 1, padding: '12px 4px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
     border: 'none', borderBottom: active ? '3px solid #38bdf8' : '3px solid transparent',
     background: 'transparent', color: active ? '#38bdf8' : '#64748b',
   })
   return (
     <div style={{ background: '#0f172a', minHeight: '100vh', color: '#e2e8f0', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
       <div style={{ display: 'flex', borderBottom: '1px solid #1e293b' }}>
-        <button style={tabBtn(tab === 'own')} onClick={() => setTab('own')}>🏠 Planète Parapente</button>
+        <button style={tabBtn(tab === 'own')} onClick={() => setTab('own')}>🏠 Planete Parapente</button>
         <button style={tabBtn(tab === 'structures')} onClick={() => setTab('structures')}>🤝 Structures</button>
+        <button style={tabBtn(tab === 'invoices')} onClick={() => setTab('invoices')}>🧾 Mes factures</button>
       </div>
-      {tab === 'own' ? <ComptaOwn pilot={pilot} flightTypes={flightTypes} /> : <StructuresCompta pilot={pilot} flightTypes={flightTypes} />}
+      {tab === 'own' && <ComptaOwn pilot={pilot} flightTypes={flightTypes} />}
+      {tab === 'structures' && <StructuresCompta pilot={pilot} flightTypes={flightTypes} />}
+      {tab === 'invoices' && <StructuresCompta pilot={pilot} flightTypes={flightTypes} mode="archive" />}
     </div>
   )
 }

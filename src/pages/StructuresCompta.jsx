@@ -26,16 +26,17 @@ function shiftMonth(key, delta) {
 const monthLabel = key => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) }
 const dayLabel = d => new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
-export default function StructuresCompta({ pilot, flightTypes }) {
+export default function StructuresCompta({ pilot, flightTypes, mode = 'list' }) {
   const [rows, setRows]         = useState([])
   const [rates, setRates]       = useState({})        // `${structKey}::${flightKey}` → price
   const [paid, setPaid]         = useState(new Set()) // `${bookingId}::${flightKey}`
   const [invoices, setInvoices] = useState([])
   const [emails, setEmails]     = useState({})
+  const [allStructs, setAllStructs] = useState([])   // names of every partner structure
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [month, setMonth]       = useState(todayStr().slice(0, 7))
-  const [view, setView]         = useState('list')    // 'list' | 'editor' | 'archive'
+  const [view, setView]         = useState(mode === 'archive' ? 'archive' : 'list')  // 'list' | 'editor' | 'archive'
   const [busy, setBusy]         = useState(false)
 
   const typeLabel = id => flightTypes.find(t => t.id === id)?.label || id
@@ -59,6 +60,7 @@ export default function StructuresCompta({ pilot, flightTypes }) {
       setRates(Object.fromEntries((r.data || []).map(x => [`${x.structure_key}::${x.flight_key}`, Number(x.price_eur)])))
       setPaid(new Set((p.data || []).map(x => `${x.booking_id}::${x.flight_key}`)))
       setInvoices(inv.data || [])
+      setAllStructs((col.data || []).filter(c => !c.is_direct).map(c => c.name))
       setEmails(Object.fromEntries((col.data || []).filter(c => !c.is_direct).map(c => [normName(c.name), c.email || ''])))
     } catch (e) {
       setError('Chargement impossible : ' + (e.message || e))
@@ -82,6 +84,21 @@ export default function StructuresCompta({ pilot, flightTypes }) {
     }
     return out.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
   }, [rows, month])
+
+  // Every flight (all months) — lets the invoice form prefill the sum for any month
+  const allFlightsFor = useMemo(() => {
+    const out = []
+    for (const bk of rows) {
+      const date = bk.pilot_slots?.slot_date
+      if (!date) continue
+      ;(bk.closure_data?.pilot_flights || []).forEach((f, i) => {
+        if (!f.flight_type_id) return
+        const media = f.media_pack && f.media_pack !== 'none' ? f.media_pack : 'none'
+        out.push({ date, structKey: normName(bk.contact_name), structName: bk.contact_name || '—', price_key: `${f.flight_type_id}|${media}` })
+      })
+    }
+    return out
+  }, [rows])
 
   const priceOf = f => rates[`${f.structKey}::${f.price_key}`] || 0
   const isPaid  = f => paid.has(`${f.booking_id}::${f.flight_key}`)
@@ -118,7 +135,7 @@ export default function StructuresCompta({ pilot, flightTypes }) {
 
   // ── Invoice ────────────────────────────────────────────────────────────────
   // Creates (or updates) the month's invoice of a structure, then returns the PDF.
-  async function saveInvoice({ structKey, structName, lines, email }) {
+  async function saveInvoice({ structKey, structName, month, lines, email }) {
     const total = lines.reduce((s, l) => s + l.priceEur, 0)
     let inv = invoices.find(i => i.structure_key === structKey && i.month === month)
     if (inv) {
@@ -167,14 +184,14 @@ export default function StructuresCompta({ pilot, flightTypes }) {
 
   // ── Views ──────────────────────────────────────────────────────────────────
   if (view === 'editor') {
-    return <InvoiceEditor month={month} flights={flights} priceOf={priceOf} mediaOf={mediaOf} typeLabel={typeLabel} emails={emails}
-      invoices={invoices} busy={busy} onBack={() => setView('list')}
+    return <InvoiceEditor startMonth={month} flights={allFlightsFor} structNames={[...new Map([...allStructs, ...allFlightsFor.map(f => f.structName)].filter(Boolean).map(n => [normName(n), n])).values()].sort((a, b) => a.localeCompare(b))} priceOf={priceOf}
+      emails={emails} invoices={invoices} busy={busy} onBack={() => setView('list')}
       onSubmit={async (payload, mail) => {
         setBusy(true)
         try {
           const inv = await saveInvoice(payload)
           if (mail) await sendByMail(inv, payload.email); else pdfOf(inv).save(invoiceFilename(inv.invoice_number))
-          setView('list')
+          setView(mode === 'archive' ? 'archive' : 'list')
         } catch (e) { alert('Facture impossible : ' + (e.message || e)) } finally { setBusy(false) }
       }} />
   }
@@ -185,8 +202,10 @@ export default function StructuresCompta({ pilot, flightTypes }) {
     const ordered = [...byMonth.entries()].sort((a, b) => b[0].localeCompare(a[0]))
     return (
       <div style={wrap}>
-        <button onClick={() => setView('list')} style={{ ...btn, marginBottom: 12 }}>← Retour</button>
-        <h3 style={{ margin: '0 0 12px' }}>📁 Mes factures</h3>
+        {mode === 'archive'
+          ? <button style={{ ...btn, width: '100%', marginBottom: 12, background: '#1d4ed8', borderColor: '#1d4ed8' }} onClick={() => setView('editor')}>🧾 Éditer une facture</button>
+          : <button onClick={() => setView('list')} style={{ ...btn, marginBottom: 12 }}>← Retour</button>}
+        <h3 style={{ margin: '0 0 12px' }}>Mes factures</h3>
         {ordered.length === 0 && <div style={empty}>Aucune facture éditée pour l'instant.</div>}
         {ordered.map(([m, list]) => (
           <div key={m} style={{ marginBottom: 14 }}>
@@ -211,7 +230,6 @@ export default function StructuresCompta({ pilot, flightTypes }) {
     <div style={wrap}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <button style={{ ...btn, flex: 1, background: '#1d4ed8', borderColor: '#1d4ed8' }} onClick={() => setView('editor')}>🧾 Éditer une facture</button>
-        <button style={{ ...btn, flex: 1 }} onClick={() => setView('archive')}>📁 Mes factures</button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '8px 0 12px' }}>
@@ -260,77 +278,67 @@ export default function StructuresCompta({ pilot, flightTypes }) {
   )
 }
 
-/** Month-end invoice form: pick the structure, type the amounts, create the PDF. */
-function InvoiceEditor({ month, flights, priceOf, mediaOf, typeLabel, emails, invoices, busy, onBack, onSubmit }) {
-  const structs = useMemo(() => {
-    const m = new Map()
-    flights.forEach(f => { if (!m.has(f.structKey)) m.set(f.structKey, f.structName) })
-    return [...m.entries()]
-  }, [flights])
-  const [structKey, setStructKey] = useState(structs[0]?.[0] || '')
+/** Invoice form: structure + month + one sum. Creates the PDF and can send it by mail. */
+function InvoiceEditor({ startMonth, flights, structNames, priceOf, emails, invoices, busy, onBack, onSubmit }) {
+  const [month, setMonth] = useState(startMonth)
+  const [structName, setStructName] = useState(structNames[0] || '')
   const [email, setEmail] = useState('')
-  const [amounts, setAmounts] = useState({})
-
-  const mine = flights.filter(f => f.structKey === structKey)
+  const [sum, setSum] = useState('')
+  const structKey = normName(structName)
   const existing = invoices.find(i => i.structure_key === structKey && i.month === month)
-  const keyOf = f => `${f.booking_id}${f.flight_key}`
 
-  // Reset the form when the structure changes (amounts prefilled from the list's prices)
+  // Sum suggested from the flights' prices (only a starting point, the pilot types the real amount)
+  const mine = flights.filter(f => f.structKey === structKey && f.date.slice(0, 7) === month)
+  const suggested = mine.reduce((s, f) => s + priceOf(f), 0)
+
   useEffect(() => {
     setEmail(emails[structKey] || '')
-    setAmounts(Object.fromEntries(mine.map(f => [keyOf(f), String(priceOf(f) || '')])))
+    setSum(existing ? String(existing.total_eur) : suggested ? String(suggested) : '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structKey])
+  }, [structKey, month])
 
-  const num = v => { const n = parseFloat(String(v).replace(',', '.')); return Number.isFinite(n) ? n : 0 }
-  const lines = mine.map(f => ({
-    label: `${new Date(f.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} · ${typeLabel(f.flight_type_id)}${mediaOf(f) ? ' + ' + mediaOf(f) : ''}`,
-    priceEur: num(amounts[keyOf(f)]),
-  }))
-  const total = lines.reduce((s, l) => s + l.priceEur, 0)
-  const ready = lines.length > 0 && total > 0
+  const amount = (() => { const n = parseFloat(String(sum).replace(',', '.')); return Number.isFinite(n) ? n : 0 })()
+  const ready = structName && amount > 0
+  const payload = () => ({
+    structKey, structName, month, email,
+    lines: [{ label: `Vols parapente biplace - ${monthLabel(month)}${mine.length ? ` (${mine.length} vol${mine.length > 1 ? 's' : ''})` : ''}`, priceEur: amount }],
+  })
 
   return (
     <div style={wrap}>
       <button onClick={onBack} style={{ ...btn, marginBottom: 12 }}>← Retour</button>
-      <h3 style={{ margin: '0 0 4px' }}>🧾 Éditer une facture</h3>
-      <div style={{ color: '#64748b', fontSize: 12, marginBottom: 12, textTransform: 'capitalize' }}>{monthLabel(month)}</div>
+      <h3 style={{ margin: '0 0 12px' }}>🧾 Éditer une facture</h3>
 
-      {structs.length === 0
-        ? <div style={empty}>Aucun vol pour une structure ce mois-ci. Change de mois avec les flèches de la liste.</div>
-        : (<>
-          <select value={structKey} onChange={e => setStructKey(e.target.value)} style={{ ...priceInput, width: '100%', textAlign: 'left', marginBottom: 10 }}>
-            {structs.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
-          </select>
-          {existing && <div style={{ fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>Une facture existe déjà pour ce mois (n° {existing.invoice_number}) : elle sera mise à jour, avec le même numéro.</div>}
+      <label style={lbl}>Structure</label>
+      <select value={structName} onChange={e => setStructName(e.target.value)} style={{ ...priceInput, width: '100%', textAlign: 'left', marginBottom: 12 }}>
+        {structNames.map(n => <option key={n} value={n}>{n}</option>)}
+      </select>
 
-          {mine.map(f => (
-            <div key={keyOf(f)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #1e293b', fontSize: 13 }}>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ color: '#94a3b8' }}>{new Date(f.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span> · {typeLabel(f.flight_type_id)}{mediaOf(f) ? ` + ${mediaOf(f)}` : ''}
-              </span>
-              <input type="text" inputMode="decimal" placeholder="€" value={amounts[keyOf(f)] ?? ''}
-                onChange={e => setAmounts(a => ({ ...a, [keyOf(f)]: e.target.value }))} style={priceInput} />
-            </div>
-          ))}
+      <label style={lbl}>Mois</label>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <button style={btn} onClick={() => setMonth(m => shiftMonth(m, -1))}>‹</button>
+        <strong style={{ textTransform: 'capitalize' }}>{monthLabel(month)}</strong>
+        <button style={btn} onClick={() => setMonth(m => shiftMonth(m, 1))}>›</button>
+      </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0', fontSize: 16 }}>
-            <span>Total</span><strong>{eur(total)}</strong>
-          </div>
-          <input type="email" placeholder="E-mail de la structure" value={email} onChange={e => setEmail(e.target.value)}
-            style={{ ...priceInput, width: '100%', textAlign: 'left', marginBottom: 10 }} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button disabled={!ready || busy} style={{ ...btn, flex: 1, opacity: ready ? 1 : .5 }}
-              onClick={() => onSubmit({ structKey, structName: mine[0].structName, lines, email }, false)}>⬇ PDF</button>
-            <button disabled={!ready || busy} style={{ ...btn, flex: 2, background: '#1d4ed8', borderColor: '#1d4ed8', opacity: ready ? 1 : .5 }}
-              onClick={() => onSubmit({ structKey, structName: mine[0].structName, lines, email }, true)}>📧 Envoyer par mail</button>
-          </div>
-          {!ready && <div style={{ fontSize: 11, color: '#fbbf24', marginTop: 6 }}>Saisis les montants pour créer la facture.</div>}
-        </>)}
+      <label style={lbl}>Somme (€)</label>
+      <input type="text" inputMode="decimal" placeholder="0" value={sum} onChange={e => setSum(e.target.value)}
+        style={{ ...priceInput, width: '100%', fontSize: 22, padding: 12, marginBottom: 12 }} />
+      {existing && <div style={{ fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>Une facture existe déjà pour ce mois (n° {existing.invoice_number}) : elle sera mise à jour, avec le même numéro.</div>}
+
+      <label style={lbl}>E-mail de la structure</label>
+      <input type="email" placeholder="structure@exemple.fr" value={email} onChange={e => setEmail(e.target.value)}
+        style={{ ...priceInput, width: '100%', textAlign: 'left', marginBottom: 14 }} />
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button disabled={!ready || busy} style={{ ...btn, flex: 1, opacity: ready ? 1 : .5 }} onClick={() => onSubmit(payload(), false)}>⬇ PDF</button>
+        <button disabled={!ready || busy} style={{ ...btn, flex: 2, background: '#1d4ed8', borderColor: '#1d4ed8', opacity: ready ? 1 : .5 }} onClick={() => onSubmit(payload(), true)}>📧 Envoyer par mail</button>
+      </div>
     </div>
   )
 }
 
+const lbl = { display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 4 }
 const wrap = { padding: '12px 14px 30px' }
 const empty = { color: '#64748b', textAlign: 'center', padding: '30px 10px', fontSize: 13 }
 const btn = { background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }
