@@ -283,6 +283,48 @@ export default function Dashboard({ pilot }) {
       .update({ status: 'done', handled_at: new Date().toISOString() }).eq('id', id)
   }
 
+  // ── Auto-refresh ──────────────────────────────────────────────────────────
+  // Keeps the screen up to date without touching the page: every minute (and when the tab/app
+  // comes back to the foreground) it silently reloads pending requests, the day, the planning and
+  // the week, and asks the browser to look for a new version of the app.
+  // It is skipped while a booking is open or being edited so nothing moves under the user's finger.
+  const refreshRef = useRef(null)
+  async function refreshAll() {
+    if (!pilot?.id) return
+    const { data: slotData } = await supabase
+      .from('pilot_slots').select('id, slot_date, slot_time')
+      .eq('pilot_id', pilot.id).gte('slot_date', TODAY)
+    if (slotData && slotData.length > 0) {
+      const slotMap = Object.fromEntries(slotData.map(sl => [sl.id, sl]))
+      const { data: pending } = await supabase
+        .from('bookings').select('*, passengers(*)')
+        .in('pilot_slot_id', slotData.map(sl => sl.id)).eq('status', 'pending')
+        .order('created_at', { ascending: true })
+      setPendingAll((pending || []).map(b => ({ ...b, pilot_slots: slotMap[b.pilot_slot_id] })))
+    } else {
+      setPendingAll([])
+    }
+    if (selectedDate) { loadDay(selectedDate, true); loadPlanning(selectedDate) }
+    if (weekStart) loadWeek(weekStart)
+    navigator.serviceWorker?.getRegistration().then(r => r?.update()).catch(() => {})
+  }
+  refreshRef.current = () => {
+    if (selectedBooking || editMode || document.visibilityState === 'hidden') return
+    refreshAll()
+  }
+  useEffect(() => {
+    const tick = () => refreshRef.current?.()
+    const timer = setInterval(tick, 60000)
+    const onVisible = () => { if (document.visibilityState === 'visible') tick() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', tick)
+    }
+  }, [])
+
   const colleaguesRef = useRef([])
 
   useEffect(() => {
@@ -1562,6 +1604,14 @@ export default function Dashboard({ pilot }) {
             🧑‍✈️ Pilotes
           </button>
         </div>
+
+        {/* Bouton Rafraîchir — recharge l'app (jaune quand une nouvelle version est prête) */}
+        <button
+          onClick={() => window.location.reload()}
+          style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 6px', flexShrink:0, fontSize:20, lineHeight:1, filter: updateReady ? 'none' : 'grayscale(0.2)' }}
+          aria-label="Rafraîchir"
+          title={updateReady ? 'Nouvelle version disponible — rafraîchir' : 'Rafraîchir'}
+        >{updateReady ? '🟡' : '🔄'}</button>
 
         {/* Bouton Paramètres */}
         <button
