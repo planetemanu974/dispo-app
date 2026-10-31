@@ -94,13 +94,21 @@ export default function StructuresCompta({ pilot, flightTypes, mode = 'list' }) 
       ;(bk.closure_data?.pilot_flights || []).forEach((f, i) => {
         if (!f.flight_type_id) return
         const media = f.media_pack && f.media_pack !== 'none' ? f.media_pack : 'none'
-        out.push({ date, structKey: normName(bk.contact_name), structName: bk.contact_name || '—', price_key: `${f.flight_type_id}|${media}` })
+        out.push({ date, structKey: normName(bk.contact_name), structName: bk.contact_name || '—', flight_type_id: f.flight_type_id, media, price_key: `${f.flight_type_id}|${media}` })
       })
     }
     return out
   }, [rows])
 
-  const priceOf = f => rates[`${f.structKey}::${f.price_key}`] || 0
+  // Price = what the structure pays: flight type + media pack (set in the structure sheet).
+  // A price typed on a list row overrides it for that combination.
+  const priceOf = f => {
+    const override = rates[`${f.structKey}::${f.price_key}`]
+    if (override) return override
+    const base  = rates[`${f.structKey}::type:${f.flight_type_id}`] || 0
+    const media = f.media && f.media !== 'none' ? (rates[`${f.structKey}::media:${f.media}`] || 0) : 0
+    return base + media
+  }
   const isPaid  = f => paid.has(`${f.booking_id}::${f.flight_key}`)
   const mediaOf = f => (f.media !== 'none' ? MEDIA_LABELS[f.media] : '')
   const days = useMemo(() => {

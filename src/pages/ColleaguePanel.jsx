@@ -171,6 +171,8 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
   const [detailColleague, setDetailColleague] = useState(null)  // { id, name, address, siret, phone, active }
   const [detailSaving,    setDetailSaving]    = useState(false)
   const [detailError,     setDetailError]     = useState(null)
+  const [detailRates,     setDetailRates]     = useState({})    // what the structure pays the pilot: flight_key → text
+  const [detailRatesKey,  setDetailRatesKey]  = useState('')    // structure_key the rates are stored under
   const [planningToken,   setPlanningToken]   = useState(null)  // active token for fixed pilot
 
   // Historique (dans la fiche collègue)
@@ -286,6 +288,17 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
     setPlanningToken(null)
     setHistoryTab('invoices')
     setHistoryLoading(true)
+    // Pilot pay rates of this structure (private to the pilot)
+    const rateKey = (c.name || '').trim().toLowerCase()
+    setDetailRatesKey(rateKey)
+    setDetailRates({})
+    if (!c.is_direct) {
+      supabase.from('structure_rates').select('flight_key, price_eur')
+        .eq('pilot_id', pilot.id).eq('structure_key', rateKey)
+        .then(({ data }) => setDetailRates(Object.fromEntries(
+          (data || []).filter(r => r.flight_key.startsWith('type:') || r.flight_key.startsWith('media:'))
+            .map(r => [r.flight_key, String(Number(r.price_eur))]))))
+    }
     // Load (or auto-create) planning token for fixed pilots
     if (c.is_fixed) {
       let { data: tokenRow, error: fetchErr } = await supabase
@@ -388,6 +401,28 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
       .eq('id', detailColleague.id)
       .eq('pilot_id', pilot.id)
     if (error) { setDetailError('Erreur de sauvegarde. Réessayez.'); setDetailSaving(false); return }
+
+    // Save the pay rates (blank field = not offered by this structure)
+    if (!detailColleague.is_direct) {
+      const newKey = (detailColleague.name || '').trim().toLowerCase()
+      const wanted = [...flightTypes.map(t => `type:${t.id}`), 'media:pack_photo', 'media:pack_photo_video']
+      const toSave = [], toDelete = []
+      for (const k of wanted) {
+        const v = parseFloat(String(detailRates[k] ?? '').replace(',', '.'))
+        if (Number.isFinite(v)) toSave.push({ pilot_id: pilot.id, structure_key: newKey, flight_key: k, price_eur: v, updated_at: new Date().toISOString() })
+        else toDelete.push(k)
+      }
+      if (newKey !== detailRatesKey) {
+        // Structure renamed: drop the rates stored under the old name
+        await supabase.from('structure_rates').delete().eq('pilot_id', pilot.id).eq('structure_key', detailRatesKey).or('flight_key.like.type:%,flight_key.like.media:%')
+        setDetailRatesKey(newKey)
+      }
+      if (toSave.length) {
+        const { error: rErr } = await supabase.from('structure_rates').upsert(toSave, { onConflict: 'pilot_id,structure_key,flight_key' })
+        if (rErr) { setDetailError('Tarifs non enregistrés (base de données à mettre à jour).'); setDetailSaving(false); return }
+      }
+      if (toDelete.length) await supabase.from('structure_rates').delete().eq('pilot_id', pilot.id).eq('structure_key', newKey).in('flight_key', toDelete)
+    }
     setDetailSaving(false)
     loadColleagues()
     // Mettre à jour les données locales du modal (sans fermer)
@@ -942,6 +977,26 @@ export default function ColleaguePanel({ pilot, forceOpen, onClose, requestSlot,
 
             <label style={{ ...s.label, marginTop: 12 }}>Email</label>
             <input type="email" value={detailColleague.email || ''} onChange={e => setDetailColleague(p => ({ ...p, email: e.target.value }))} style={s.input} placeholder="Ex : contact@974parapente.re" />
+
+            {/* What this structure pays the pilot (used by the accounting page) */}
+            {!detailColleague.is_direct && (
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #334155' }}>
+                <label style={{ ...s.label, marginBottom: 4 }}>💶 Ce que la structure me paie</label>
+                <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px' }}>Laisse vide ce que la structure ne propose pas.</p>
+                {[...flightTypes.map(t => ({ k: `type:${t.id}`, label: t.label })),
+                  { k: 'media:pack_photo', label: 'Pack photo' },
+                  { k: 'media:pack_photo_video', label: 'Pack photo + vidéo' }].map(r => (
+                  <div key={r.k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ flex: 1, fontSize: 14, color: '#e2e8f0' }}>{r.label}</span>
+                    <input type="text" inputMode="decimal" placeholder="—"
+                      value={detailRates[r.k] ?? ''}
+                      onChange={e => setDetailRates(p => ({ ...p, [r.k]: e.target.value }))}
+                      style={{ ...s.input, width: 90, textAlign: 'right', marginTop: 0 }} />
+                    <span style={{ color: '#64748b' }}>€</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Notes libres — uniquement pour pilotes indépendants */}
             {detailColleague.is_direct && (
