@@ -44,7 +44,7 @@ export default function MascotAssistant({ onApply }) {
   useEffect(() => () => {
     clearTimeout(poseTimer.current)
     try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
-    try { recRef.current?.abort() } catch { /* ignore */ }
+    try { if (recRef.current) { recRef.current.onend = null; recRef.current.abort() } } catch { /* ignore */ }
   }, [])
 
   function showPose(id) {
@@ -183,7 +183,13 @@ export default function MascotAssistant({ onApply }) {
       r.lang = 'fr-FR'; r.continuous = true; r.interimResults = true
       let finalText = ''
       let silence = null
-      const armSilence = () => { clearTimeout(silence); silence = setTimeout(() => { try { r.stop() } catch { /* ignore */ } }, 2500) }
+      let finished = false     // true once the customer is done (silence, or second tap on the mic)
+      let restarts = 0
+
+      // The browser may close the listening session on its own after a few words.
+      // Until `finished`, we simply reopen it and keep what was already heard.
+      const finish = () => { finished = true; clearTimeout(silence); try { r.stop() } catch { /* ignore */ } }
+      const armSilence = (ms = 3500) => { clearTimeout(silence); silence = setTimeout(finish, ms) }
 
       r.onresult = e => {
         let interim = ''
@@ -195,10 +201,15 @@ export default function MascotAssistant({ onApply }) {
         armSilence()
       }
       r.onerror = ev => {
-        if (ev.error === 'no-speech') return          // handled in onend
+        if (ev.error === 'no-speech' || ev.error === 'aborted') return   // handled in onend
+        finished = true
         setBubble(ev.error === 'not-allowed' ? "Autorisez le micro dans votre navigateur pour parler." : "Je n'ai pas pu utiliser le micro.")
       }
       r.onend = () => {
+        if (!finished && restarts < 40) {            // closed early by the browser → listen again
+          restarts++
+          try { r.start(); return } catch { /* fall through and finish */ }
+        }
         clearTimeout(silence)
         recRef.current = null
         setListening(false)
@@ -206,10 +217,12 @@ export default function MascotAssistant({ onApply }) {
         if (heard) send(heard)
         else { setInput(''); setBubble("Je n'ai rien entendu, vous pouvez réessayer ou écrire votre message.") }
       }
+      // Tapping the mic again calls r.stop(): mark as finished so onend sends instead of restarting
+      r.stop = (orig => function () { finished = true; clearTimeout(silence); return orig.call(r) })(r.stop)
       recRef.current = r
       setListening(true); setInput('')
       showPose('je-t-ecoute'); setBubble('Je vous écoute…')
-      r.start(); armSilence()
+      r.start(); armSilence(6000)
     } catch { recRef.current = null; setListening(false); setBubble("Je n'ai pas pu utiliser le micro.") }
   }
 
