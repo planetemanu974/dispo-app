@@ -78,6 +78,8 @@ ${free}
 
 DÉROULÉ : quand tu as les passagers, les vols et une date, propose un plan précis (qui vole à quelle heure) en respectant les règles et les créneaux libres, puis demande « Est-ce que cela vous convient ? ». Si un créneau demandé n'existe pas, propose le plus proche qui respecte les règles. Quand le client accepte le plan ET que tu as son nom et son téléphone, dis que tu prépares sa réservation et mets "ready": true.
 
+DEMANDE DE RAPPEL : si aucun plan ne convient au client (créneaux incompatibles, date complète, il refuse les alternatives), ou s'il demande à être rappelé / à parler à un moniteur, propose qu'un moniteur le rappelle. Demande son prénom et nom, puis son numéro de téléphone (s'il ne les a pas déjà donnés). Dès que tu as les deux, remplis "callback" (voir format) UNE SEULE FOIS et dis clairement « Votre demande est transmise, un moniteur vous rappelle très vite ». Dans "callback.note", résume en une ou deux phrases ce qu'il faut savoir pour le rappel : composition du groupe (adultes/enfants, poids), vols souhaités, date voulue, et pourquoi aucun créneau n'a convenu. Ne promets jamais d'heure de rappel précise. N'écris « transmise » que si tu remplis "callback" dans cette même réponse.
+
 FORMAT DE RÉPONSE : uniquement un objet JSON, sans aucun texte autour :
 {
   "texte": "ce que tu dis au client",
@@ -89,11 +91,62 @@ FORMAT DE RÉPONSE : uniquement un objet JSON, sans aucun texte autour :
     "contact_name": "",
     "phone": "",
     "ready": true | false
-  }
+  },
+  "callback": null ou { "name": "prénom et nom", "phone": "numéro", "note": "résumé pour le moniteur" }
 }
 - "draft" : renseigne-le dès que tu connais au moins la date ou les passagers, et mets-le à jour à chaque réponse (garde ce que tu savais déjà). "ready" vaut true seulement quand le plan est accepté et que nom + téléphone sont connus.
 - Ne mets jamais de poids ou d'âge inventés : null si inconnu.
 - Pour les enfants, "flight" vaut toujours "discovery".`
+}
+
+// ── Callback requests ────────────────────────────────────────────────────────
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const cbHits = new Map<string, number[]>()   // anti-spam: max 3 callback requests / hour / IP
+
+async function saveCallback(
+  cb: { name?: string; phone?: string; note?: string },
+  draft: Record<string, unknown> | null,
+  ip: string,
+): Promise<boolean> {
+  try {
+    const name  = String(cb.name ?? '').trim().slice(0, 80)
+    const phone = String(cb.phone ?? '').trim().slice(0, 30)
+    const note  = String(cb.note ?? '').trim().slice(0, 600)
+    if (name.length < 2 || phone.replace(/\D/g, '').length < 8) return false
+    if (!SUPABASE_URL || !SERVICE_KEY) { console.error('callback: missing service role env'); return false }
+
+    const now = Date.now()
+    const recent = (cbHits.get(ip) ?? []).filter(t => now - t < 3_600_000)
+    if (recent.length >= 3) return true            // already saved earlier, don't spam the pilot
+    cbHits.set(ip, [...recent, now])
+
+    const headers = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' }
+
+    // Same phone already waiting for a call → don't create (or SMS) a duplicate
+    const dup = await fetch(
+      `${SUPABASE_URL}/rest/v1/callback_requests?status=eq.new&contact_phone=eq.${encodeURIComponent(phone)}&select=id&limit=1`,
+      { headers })
+    if (dup.ok && (await dup.json()).length) return true
+
+    const wanted = typeof draft?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(draft.date as string) ? draft.date : null
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/callback_requests`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ contact_name: name, contact_phone: phone, wanted_date: wanted, summary: note, draft: draft ?? null }),
+    })
+    if (!ins.ok) { console.error('callback insert failed', ins.status, await ins.text()); return false }
+
+    // SMS to the pilot (best effort — the banner in the app is the main channel)
+    const sms = `📞 Rappel demandé\n${name} — ${phone}\n${note}${wanted ? `\nDate voulue : ${wanted}` : ''}`
+    fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+      method: 'POST', headers, body: JSON.stringify({ to: 'PILOT', message: sms.slice(0, 450) }),
+    }).catch(e => console.error('callback sms failed', e))
+    return true
+  } catch (e) {
+    console.error('saveCallback error', e)
+    return false
+  }
 }
 
 function extractJson(text: string): Record<string, unknown> | null {
@@ -180,6 +233,19 @@ serve(async (req) => {
 
     // Never let the model send an unknown pose id
     if (!POSES.includes(String(out.pose))) out.pose = 'sourire'
+
+    // Callback request → stored for the pilot (banner in the app) + SMS to the pilot's phone.
+    // The customer is only told "transmise" if this really worked.
+    const cb = out.callback as { name?: string; phone?: string; note?: string } | null | undefined
+    delete out.callback
+    if (cb && typeof cb === 'object') {
+      const saved = await saveCallback(cb, out.draft as Record<string, unknown> | null, ip)
+      out.callback_saved = saved
+      if (!saved) {
+        out.texte = "Je n'ai pas réussi à transmettre votre demande. Pouvez-vous réessayer, ou nous appeler directement ? Merci !"
+        out.pose = 'pas-disponible'
+      }
+    }
 
     return new Response(JSON.stringify(out), { headers: CORS })
   } catch (err) {

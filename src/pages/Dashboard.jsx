@@ -232,7 +232,31 @@ export default function Dashboard({ pilot }) {
   // When a fixed pilot marks themselves unavailable, show a dismissible banner
   // without requiring the admin to refresh the page.
   const [pilotAlerts, setPilotAlerts] = useState([])   // [{ id, msg }]
+  const [callbacks, setCallbacks]     = useState([])   // customers who asked to be called back (booking assistant)
   // Keep a ref so the subscription closure always sees the latest colleagues list.
+  // Callback requests left by customers in the booking assistant: load + live updates
+  useEffect(() => {
+    if (!pilot?.id) return
+    const load = async () => {
+      const { data } = await supabase.from('callback_requests')
+        .select('*').eq('status', 'new').order('created_at', { ascending: false })
+      setCallbacks(data || [])
+    }
+    load()
+    const channel = supabase
+      .channel(`callbacks-${pilot.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'callback_requests' }, load)
+      .subscribe()
+    const poll = setInterval(load, 60000)   // safety net if realtime is not enabled
+    return () => { clearInterval(poll); supabase.removeChannel(channel) }
+  }, [pilot?.id])
+
+  async function markCallbackDone(id) {
+    setCallbacks(list => list.filter(c => c.id !== id))
+    await supabase.from('callback_requests')
+      .update({ status: 'done', handled_at: new Date().toISOString() }).eq('id', id)
+  }
+
   const colleaguesRef = useRef([])
 
   useEffect(() => {
@@ -1822,6 +1846,33 @@ export default function Dashboard({ pilot }) {
         flightTypes={flightTypes}
         onClose={() => { setColleaguePanelOpen(false); setColleagueRequestSlot(null) }}
       />
+
+      {/* ── Customers to call back (booking assistant) ── */}
+      {callbacks.length > 0 && (
+        <div className="callback-alert">
+          <div className="callback-alert-title">
+            📞 {callbacks.length} client{callbacks.length > 1 ? 's' : ''} à rappeler
+          </div>
+          {callbacks.map(c => (
+            <div key={c.id} className="callback-item">
+              <div className="callback-who">
+                <b>{c.contact_name}</b>
+                <a href={`tel:${String(c.contact_phone).replace(/[^\d+]/g, '')}`} className="callback-tel">📱 {c.contact_phone}</a>
+              </div>
+              {c.wanted_date && (
+                <div className="callback-meta">
+                  Date voulue : {new Date(c.wanted_date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </div>
+              )}
+              {c.summary && <div className="callback-note">{c.summary}</div>}
+              <div className="callback-meta">
+                Demandé {new Date(c.created_at).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <button className="callback-done" onClick={() => markCallbackDone(c.id)}>✅ Rappelé</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Pending alert ── */}
       {pendingAll.length > 0 && (() => {
