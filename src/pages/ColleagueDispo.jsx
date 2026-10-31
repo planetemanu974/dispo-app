@@ -97,6 +97,18 @@ export default function ColleagueDispo() {
   useEffect(() => {
     async function init() {
       try {
+        // Preview mode (/dispo?apercu=<colleague_id>): the owner, signed in, sees exactly what that structure sees.
+        // Nothing is saved and nothing can be sent from here.
+        const previewId = new URLSearchParams(window.location.search).get('apercu')
+        if (previewId) {
+          const { data: col } = await supabase.from('colleagues').select('id, name, pilot_id').eq('id', previewId).maybeSingle()
+          if (col) {
+            const pName = await fetchPilotName(col.pilot_id)
+            setSession({ colleague_id: col.id, pilot_id: col.pilot_id, name: col.name, pilotName: pName || '', preview: true })
+          }
+          setAuthLoading(false)
+          return
+        }
         const raw = localStorage.getItem('colleagueSession')
         if (raw) {
           const s = JSON.parse(raw)
@@ -182,6 +194,7 @@ export default function ColleagueDispo() {
 
   // ── Déconnexion ───────────────────────────────────────────────────────
   function handleLogout() {
+    if (session?.preview) { window.location.href = '/'; return }   // preview: just go back to the app
     try { localStorage.removeItem('colleagueSession') } catch { }
     setSession(null)
     setSlots([])
@@ -189,6 +202,7 @@ export default function ColleagueDispo() {
 
   // ── Ouvrir le modal de demande ────────────────────────────────────────
   function openRequest(slot) {
+    if (session?.preview) return   // preview is read-only
     setRequestSlot(slot)
     setNote('')
     setRequestError(null)
@@ -232,6 +246,7 @@ export default function ColleagueDispo() {
   // ── Envoyer un message au pilote ─────────────────────────────────────
   async function sendMessage(e) {
     e.preventDefault()
+    if (session?.preview) return   // preview is read-only
     if (!msgBody.trim()) return
     setMsgSending(true)
     setMsgError(null)
@@ -327,8 +342,13 @@ export default function ColleagueDispo() {
         </div>
 
         {/* Déconnexion droite */}
-        <button onClick={handleLogout} style={s.logoutBtn}>Déconnexion</button>
+        <button onClick={handleLogout} style={s.logoutBtn}>{session.preview ? '← Retour' : 'Déconnexion'}</button>
       </div>
+      {session.preview && (
+        <div style={{ background: '#312e81', color: '#e0e7ff', textAlign: 'center', fontSize: 13, padding: '8px 12px' }}>
+          👁 Aperçu : voici ce que voit <b>{session.name}</b>. Lecture seule, aucune demande ne peut être envoyée.
+        </div>
+      )}
 
       {/* ── Légende ── */}
       <div style={s.legend}>

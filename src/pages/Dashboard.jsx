@@ -197,6 +197,7 @@ export default function Dashboard({ pilot }) {
   const [fixedPilotPicker, setFixedPilotPicker] = useState(null) // { bookingId, slotLabel, date, time } — quick picker for fixed pilots
   const [showSettings, setShowSettings]       = useState(false)
   const [showSupport, setShowSupport]         = useState(false)
+  const [showPreviewPicker, setShowPreviewPicker] = useState(false)   // choose a structure to preview its planning view
   const [showHistory, setShowHistory]         = useState(false)
   const [showComptabilite, setShowComptabilite] = useState(false)
   const [showStructures, setShowStructures] = useState(false)
@@ -1558,7 +1559,7 @@ export default function Dashboard({ pilot }) {
         </div>
 
         <nav style={{ flex:1, paddingTop:6 }}>
-          <MenuLink icon="📅" label="Planning"      onClick={() => setMenuOpen(false)} />
+          <MenuLink icon="📅" label="Planning vu par les structures" onClick={() => { setMenuOpen(false); setShowPreviewPicker(true) }} />
           <MenuLink icon="👥" label="Collègues"     onClick={() => { setMenuOpen(false); setColleaguePanelOpen(true) }} />
           <MenuLink icon="💬" label="Messages"      onClick={() => { setMenuOpen(false); setShowMessages(true); markMessagesRead() }} extra={unreadCount > 0 ? unreadCount : null} />
           <div style={{ margin:'6px 16px', height:1, background:'rgba(255,255,255,0.07)' }} />
@@ -1586,6 +1587,28 @@ export default function Dashboard({ pilot }) {
           </button>
         </div>
       </div>
+
+      {/* ── Preview: planning as seen by a structure ── */}
+      {showPreviewPicker && (
+        <div onClick={() => setShowPreviewPicker(false)}
+          style={{ position:'fixed', inset:0, zIndex:300, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:'#0b1220', border:'1px solid #334155', borderRadius:14, padding:16, width:'100%', maxWidth:380, maxHeight:'80vh', overflowY:'auto', color:'#e2e8f0' }}>
+            <div style={{ fontWeight:700, marginBottom:4 }}>📅 Planning vu par les structures</div>
+            <div style={{ fontSize:'0.85rem', color:'#94a3b8', marginBottom:12 }}>Choisissez la structure dont vous voulez voir l'écran. Lecture seule : rien ne peut être envoyé.</div>
+            {colleagues.length === 0 && <div style={{ color:'#94a3b8' }}>Aucune structure enregistrée.</div>}
+            {[...colleagues].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
+              <button key={c.id}
+                onClick={() => { setShowPreviewPicker(false); window.open(`/dispo?apercu=${c.id}`, '_blank') }}
+                style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 12px', marginBottom:6, background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0', fontSize:'0.95rem', cursor:'pointer', fontFamily:'inherit' }}>
+                👁 {c.name}
+              </button>
+            ))}
+            <button onClick={() => setShowPreviewPicker(false)}
+              style={{ width:'100%', marginTop:6, padding:'10px', background:'transparent', border:'1px solid #334155', borderRadius:8, color:'#94a3b8', cursor:'pointer', fontFamily:'inherit' }}>Fermer</button>
+          </div>
+        </div>
+      )}
 
       {/* Help for the person managing the planning: advisor + "Prévenir l'administrateur" */}
       <SupportHelp open={showSupport} onClose={() => setShowSupport(false)} where={
