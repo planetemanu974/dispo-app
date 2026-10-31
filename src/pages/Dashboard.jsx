@@ -1603,7 +1603,7 @@ export default function Dashboard({ pilot }) {
       }}>
         {/* Logo + fermer */}
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'14px 16px 12px', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
-          <img src="/logo.png" alt="Logo" style={{ height:32, filter:'invert(1)' }} />
+          <img src="/logo-header.png" alt="Logo" style={{ height:34, width:'auto', display:'block' }} />
           <span style={{ flex:1, fontSize:'0.95rem', fontWeight:700, letterSpacing:'0.03em', color:'#e2e8f0' }}>DISPO / PAS DISPO</span>
           <button onClick={() => setMenuOpen(false)} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:20, cursor:'pointer' }}>✕</button>
         </div>
