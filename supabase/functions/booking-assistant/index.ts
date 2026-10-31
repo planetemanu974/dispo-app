@@ -103,6 +103,18 @@ function extractJson(text: string): Record<string, unknown> | null {
   try { return JSON.parse(text.slice(a, b + 1)) } catch { return null }
 }
 
+// Fallback when the JSON is cut or malformed: salvage the spoken text so the customer never
+// sees raw JSON. Returns null when nothing readable can be recovered.
+function salvageText(text: string): string | null {
+  const m = text.match(/"texte"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+  if (m) {
+    try { return JSON.parse(`"${m[1]}"`) } catch { return m[1] }
+  }
+  // Not JSON at all (the model just answered in plain text)
+  if (!text.trim().startsWith('{') && !text.includes('"texte"')) return text.trim() || null
+  return null
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -149,7 +161,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: 2000,
         system: systemPrompt(today, slots),
         messages,
       }),
@@ -162,7 +174,9 @@ serve(async (req) => {
 
     const data = await res.json()
     const text: string = (data.content ?? []).map((c: { text?: string }) => c.text ?? '').join('')
-    const out = extractJson(text) ?? { texte: text.trim() || 'Pouvez-vous reformuler ?', pose: 'je-reflechis' }
+    const out = extractJson(text)
+      ?? { texte: salvageText(text) ?? 'Pouvez-vous reformuler ?', pose: 'je-reflechis' }
+    if (typeof out.texte !== 'string' || !out.texte.trim()) out.texte = 'Pouvez-vous reformuler ?'
 
     // Never let the model send an unknown pose id
     if (!POSES.includes(String(out.pose))) out.pose = 'sourire'

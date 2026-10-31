@@ -22,6 +22,8 @@ export default function MascotAssistant({ onApply }) {
   const [input, setInput]       = useState('')
   const [busy, setBusy]         = useState(false)
   const [voiceOn, setVoiceOn]   = useState(false)
+  const [listening, setListening] = useState(false)
+  const recRef = useRef(null)        // active SpeechRecognition, if any
 
   const canvasRef   = useRef(null)
   const gliderRef   = useRef(null)
@@ -39,7 +41,11 @@ export default function MascotAssistant({ onApply }) {
   }, [])
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight }, [log])
-  useEffect(() => () => { clearTimeout(poseTimer.current); try { window.speechSynthesis?.cancel() } catch { /* ignore */ } }, [])
+  useEffect(() => () => {
+    clearTimeout(poseTimer.current)
+    try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
+    try { recRef.current?.abort() } catch { /* ignore */ }
+  }, [])
 
   function showPose(id) {
     const key = POSES[id] ? id : 'sourire'
@@ -123,7 +129,12 @@ export default function MascotAssistant({ onApply }) {
       })
       if (error || !data || data.error) throw new Error(data?.error || error?.message || 'assistant_error')
 
-      const reply = String(data.texte || '').trim() || 'Pouvez-vous reformuler ?'
+      let reply = String(data.texte || '').trim() || 'Pouvez-vous reformuler ?'
+      // Safety net: never show raw JSON to the customer
+      if (reply.startsWith('{')) {
+        const m = reply.match(/"texte"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+        reply = m ? m[1].replace(/\\"/g, '"').replace(/\\n/g, ' ') : 'Pouvez-vous reformuler ?'
+      }
       historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
       setLog(l => [...l, { who: 'a', text: reply }])
       showPose(data.pose); say(reply)
@@ -159,16 +170,47 @@ export default function MascotAssistant({ onApply }) {
     closeAssistant()
   }
 
+  // Microphone: keeps listening through short pauses, shows what it hears in the input field,
+  // and sends once the customer has been silent for ~2.5 s (or taps the mic again to stop).
   function startMic() {
+    // Second tap = stop listening and send what was heard
+    if (recRef.current) { try { recRef.current.stop() } catch { /* ignore */ } return }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { setBubble("Le micro n'est pas disponible sur cet appareil."); return }
+    try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
     try {
-      const r = new SR(); r.lang = 'fr-FR'; r.interimResults = false
-      showPose('je-t-ecoute'); say("Je vous écoute…")
-      r.onresult = e => send(e.results[0][0].transcript)
-      r.onerror = () => setBubble("Je n'ai pas pu utiliser le micro.")
-      r.start()
-    } catch { setBubble("Je n'ai pas pu utiliser le micro.") }
+      const r = new SR()
+      r.lang = 'fr-FR'; r.continuous = true; r.interimResults = true
+      let finalText = ''
+      let silence = null
+      const armSilence = () => { clearTimeout(silence); silence = setTimeout(() => { try { r.stop() } catch { /* ignore */ } }, 2500) }
+
+      r.onresult = e => {
+        let interim = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript
+          if (e.results[i].isFinal) finalText += t + ' '; else interim += t
+        }
+        setInput((finalText + interim).trim())
+        armSilence()
+      }
+      r.onerror = ev => {
+        if (ev.error === 'no-speech') return          // handled in onend
+        setBubble(ev.error === 'not-allowed' ? "Autorisez le micro dans votre navigateur pour parler." : "Je n'ai pas pu utiliser le micro.")
+      }
+      r.onend = () => {
+        clearTimeout(silence)
+        recRef.current = null
+        setListening(false)
+        const heard = finalText.trim()
+        if (heard) send(heard)
+        else { setInput(''); setBubble("Je n'ai rien entendu, vous pouvez réessayer ou écrire votre message.") }
+      }
+      recRef.current = r
+      setListening(true); setInput('')
+      showPose('je-t-ecoute'); setBubble('Je vous écoute…')
+      r.start(); armSilence()
+    } catch { recRef.current = null; setListening(false); setBubble("Je n'ai pas pu utiliser le micro.") }
   }
 
   return (
@@ -211,7 +253,7 @@ export default function MascotAssistant({ onApply }) {
         </div>
 
         <form className="mascot-in" onSubmit={e => { e.preventDefault(); send(input) }}>
-          <button type="button" className="mascot-icon" title="Parler" onClick={startMic}>🎤</button>
+          <button type="button" className={`mascot-icon${listening ? ' on' : ''}`} title={listening ? 'Arrêter et envoyer' : 'Parler'} onClick={startMic}>{listening ? '⏹' : '🎤'}</button>
           <input value={input} onChange={e => setInput(e.target.value)} placeholder="Écrivez votre message…"
             autoComplete="off" disabled={busy} maxLength={600} />
           <button className="mascot-icon mascot-send" disabled={busy} title="Envoyer">➤</button>
