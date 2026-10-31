@@ -518,3 +518,39 @@
 .legend-dot--free      { background: #2563eb; border-color: #1d4ed8; }
 .legend-dot--pending   { background: #f59e0b; border-color: #d97706; }
 .legend-dot--confirmed { background: #16a34a; border-color: #15803d; }
+
+/* ── Support help (advisor + "Prévenir l'administrateur") ───────────────── */
+.support-fab {
+  position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 150;
+  width: 46px; height: 46px; border-radius: 50%; border: 1px solid #334155;
+  background: #0f172a; color: #e2e8f0; font-size: 1.3rem; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.5);
+}
+.support-panel {
+  position: fixed; right: 12px; left: 12px; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); z-index: 150;
+  max-width: 420px; margin-left: auto; max-height: 70vh; display: flex; flex-direction: column; gap: 8px;
+  background: #0b1220; border: 1px solid #334155; border-radius: 14px; padding: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.6); color: #e2e8f0;
+}
+.support-head { font-weight: 700; }
+.support-log { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; min-height: 80px; }
+.support-msg { padding: 8px 10px; border-radius: 10px; font-size: .92rem; line-height: 1.35; max-width: 92%; white-space: pre-wrap; }
+.support-bot  { background: #1e293b; align-self: flex-start; }
+.support-user { background: #1d4ed8; align-self: flex-end; }
+.support-ok   { background: #064e3b; align-self: flex-start; }
+.support-input { display: flex; gap: 6px; }
+.support-input input, .support-report textarea {
+  flex: 1; min-width: 0; background: #020617; color: #e2e8f0; border: 1px solid #334155;
+  border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 16px;
+}
+.support-report { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }
+.support-row { display: flex; gap: 8px; justify-content: flex-end; }
+.support-btn { background: #334155; color: #fff; border: none; border-radius: 8px; padding: 9px 12px; font-weight: 600; cursor: pointer; }
+.support-btn:disabled { opacity: .5; cursor: default; }
+.support-btn-ghost { background: transparent; border: 1px solid #334155; }
+.support-btn-alert { background: #b91c1c; }
+.support-admin { background: #1e293b; border: 1px solid #475569; }
+.support-admin-hot { background: #b91c1c; border-color: #ef4444; }
+.support-error { color: #fca5a5; font-size: .85rem; }
+.help-alert { background: #2a0a0a; border-left: 4px solid #ef4444; margin: 12px 16px; border-radius: 8px; padding: 12px; }
+.help-alert-title { font-weight: 700; margin-bottom: 8px; color: #fecaca; }

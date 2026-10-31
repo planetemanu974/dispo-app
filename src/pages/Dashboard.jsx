@@ -5,6 +5,7 @@ import ColleaguePanel from './ColleaguePanel'
 import Settings from './Settings'
 import History from './History'
 import Comptabilite from './Comptabilite'
+import SupportHelp from '../components/SupportHelp'
 import Structures from './Structures'
 import AssignColleague from '../components/AssignColleague'
 import FlightClosure from '../components/FlightClosure'
@@ -233,6 +234,7 @@ export default function Dashboard({ pilot }) {
   // without requiring the admin to refresh the page.
   const [pilotAlerts, setPilotAlerts] = useState([])   // [{ id, msg }]
   const [callbacks, setCallbacks]     = useState([])   // customers who asked to be called back (booking assistant)
+  const [helpRequests, setHelpRequests] = useState([]) // help requests sent with "Prévenir l'administrateur"
   // Keep a ref so the subscription closure always sees the latest colleagues list.
   // Callback requests left by customers in the booking assistant: load + live updates
   useEffect(() => {
@@ -250,6 +252,29 @@ export default function Dashboard({ pilot }) {
     const poll = setInterval(load, 60000)   // safety net if realtime is not enabled
     return () => { clearInterval(poll); supabase.removeChannel(channel) }
   }, [pilot?.id])
+
+  // Help requests ("Prévenir l'administrateur") sent by a user of the app: load + live updates
+  useEffect(() => {
+    if (!pilot?.id) return
+    const load = async () => {
+      const { data } = await supabase.from('support_requests')
+        .select('*').eq('status', 'new').order('created_at', { ascending: false })
+      setHelpRequests(data || [])
+    }
+    load()
+    const channel = supabase
+      .channel(`support-${pilot.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_requests' }, load)
+      .subscribe()
+    const poll = setInterval(load, 60000)
+    return () => { clearInterval(poll); supabase.removeChannel(channel) }
+  }, [pilot?.id])
+
+  async function markHelpDone(id) {
+    setHelpRequests(list => list.filter(h => h.id !== id))
+    await supabase.from('support_requests')
+      .update({ status: 'done', handled_at: new Date().toISOString() }).eq('id', id)
+  }
 
   async function markCallbackDone(id) {
     setCallbacks(list => list.filter(c => c.id !== id))
@@ -1498,6 +1523,13 @@ export default function Dashboard({ pilot }) {
         </div>
       </div>
 
+      {/* Help for the person managing the planning: advisor + "Prévenir l'administrateur" */}
+      <SupportHelp where={
+        showSettings ? 'Paramètres' : showHistory ? 'Historique' : showComptabilite ? 'Comptabilité'
+        : showStructures ? 'Structures' : showMessages ? 'Messages' : showPilotReport ? 'Rapport pilotes'
+        : `Planning (vue ${viewMode === 'week' ? 'Semaine' : viewMode === 'day' ? 'Jour' : 'Pilotes'})`
+      } />
+
       {/* ── Header ── logo (= menu) à gauche, toggle vue au centre */}
       <header style={{ display:'flex', alignItems:'center', padding:'6px 12px', borderBottom:'1px solid #1e293b', background:'#000', position:'sticky', top:0, zIndex:10, gap:10 }}>
         {/* Bouton logo → ouvre le menu (badge jaune si mise à jour dispo) */}
@@ -1869,6 +1901,25 @@ export default function Dashboard({ pilot }) {
                 Demandé {new Date(c.created_at).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </div>
               <button className="callback-done" onClick={() => markCallbackDone(c.id)}>✅ Rappelé</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Help requests from users of the app ── */}
+      {helpRequests.length > 0 && (
+        <div className="help-alert">
+          <div className="help-alert-title">
+            🆘 {helpRequests.length} demande{helpRequests.length > 1 ? 's' : ''} d'aide
+          </div>
+          {helpRequests.map(h => (
+            <div key={h.id} className="callback-item">
+              <div className="callback-who"><b>{h.from_name || 'Utilisateur'}</b>{h.page && <span className="callback-meta">· {h.page}</span>}</div>
+              <div className="callback-note">{h.message}</div>
+              <div className="callback-meta">
+                {new Date(h.created_at).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <button className="callback-done" onClick={() => markHelpDone(h.id)}>✅ Traité</button>
             </div>
           ))}
         </div>
