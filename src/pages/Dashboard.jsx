@@ -1580,11 +1580,11 @@ export default function Dashboard({ pilot }) {
     return `${start.toLocaleDateString('fr-FR', opts)} – ${end.toLocaleDateString('fr-FR', optsEnd)}`
   }
 
-  if (selectedDate === null) return <div className="loading-screen"><img src="/logo-full.png" alt="" /></div>
+  if (selectedDate === null) return <div className="loading-screen"><img src="/logo-full-color.png" alt="" /></div>
 
   return (
     <div className="dashboard">
-      {!ready && <div className="loading-screen" style={{ position:'fixed', inset:0, zIndex:1000 }}><img src="/logo-full.png" alt="" /></div>}
+      {!ready && <div className="loading-screen" style={{ position:'fixed', inset:0, zIndex:1000 }}><img src="/logo-full-color.png" alt="" /></div>}
 
       {/* ── Side menu overlay ── */}
       {menuOpen && (
@@ -1603,7 +1603,7 @@ export default function Dashboard({ pilot }) {
       }}>
         {/* Logo + fermer */}
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'14px 16px 12px', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
-          <img src="/logo-header.png" alt="Logo" style={{ height:34, width:'auto', display:'block' }} />
+          <img src="/logo.png" alt="Logo" style={{ height:32, filter:'invert(1)' }} />
           <span style={{ flex:1, fontSize:'0.95rem', fontWeight:700, letterSpacing:'0.03em', color:'#e2e8f0' }}>DISPO / PAS DISPO</span>
           <button onClick={() => setMenuOpen(false)} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:20, cursor:'pointer' }}>✕</button>
         </div>
@@ -1675,7 +1675,7 @@ export default function Dashboard({ pilot }) {
         <button onClick={() => setMenuOpen(true)}
           style={{ background:'none', border:'none', cursor:'pointer', padding:2, flexShrink:0, position:'relative' }}>
           {/* Full logo (icon + "DispoPasDispo" wordmark), white on transparent */}
-          <img src="/logo-full.png" alt="Dispo Pas Dispo — menu" style={{ height:40, width:'auto', display:'block' }} />
+          <img src="/logo-full-color.png" alt="Dispo Pas Dispo — menu" style={{ height:44, width:'auto', display:'block' }} />
         </button>
 
         {/* Toggle Semaine / Jour / Pilotes — prend l'espace restant */}
