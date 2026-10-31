@@ -569,3 +569,24 @@
 @keyframes splash-pulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
 
 @keyframes spin-refresh { to { transform: rotate(360deg) } }
+
+/* ── Week picker (small calendar under the week title) ───────────────────── */
+.weekpicker { position: relative; flex: 1; display: flex; justify-content: center; }
+.weekpicker-btn { background: none; border: none; cursor: pointer; font-family: inherit; }
+.weekpicker-caret { font-size: .7em; opacity: .7; }
+.weekpicker-backdrop { position: fixed; inset: 0; z-index: 90; }
+.weekpicker-pop {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 91;
+  width: 280px; max-width: calc(100vw - 24px); background: #0b1220; border: 1px solid #334155;
+  border-radius: 12px; padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.6); color: #e2e8f0;
+}
+.weekpicker-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; text-transform: capitalize; }
+.weekpicker-head button { background: #1e293b; color: #e2e8f0; border: none; border-radius: 6px; width: 32px; height: 28px; cursor: pointer; font-size: 1rem; }
+.weekpicker-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.weekpicker-dow { text-align: center; font-size: .65rem; color: #64748b; padding: 2px 0; }
+.weekpicker-day { background: none; border: none; color: #e2e8f0; border-radius: 6px; padding: 7px 0; cursor: pointer; font-family: inherit; font-size: .85rem; }
+.weekpicker-day.is-out { color: #475569; }
+.weekpicker-day.is-shown { background: #1e3a5f; }
+.weekpicker-day.is-today { outline: 1px solid #38bdf8; font-weight: 800; }
+.weekpicker-day:hover { background: #334155; }
+.weekpicker-today { width: 100%; margin-top: 8px; padding: 8px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; cursor: pointer; font-family: inherit; font-weight: 600; }

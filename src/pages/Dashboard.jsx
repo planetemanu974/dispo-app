@@ -6,6 +6,7 @@ import Settings from './Settings'
 import History from './History'
 import Comptabilite from './Comptabilite'
 import SupportHelp from '../components/SupportHelp'
+import WeekPicker from '../components/WeekPicker'
 import Structures from './Structures'
 import AssignColleague from '../components/AssignColleague'
 import FlightClosure from '../components/FlightClosure'
@@ -2126,7 +2127,7 @@ export default function Dashboard({ pilot }) {
           {/* Week navigation */}
           <div className="week-nav">
             <button className="btn-ghost" onClick={() => changeWeek(-1)}>‹ Préc.</button>
-            <span className="week-nav-label">{weekRangeLabel()}</span>
+            <WeekPicker label={weekRangeLabel()} weekStart={weekStart} today={TODAY} onPick={d => setWeekStart(getWeekStart(d))} />
             <button className="btn-ghost" onClick={() => changeWeek(1)}>Suiv. ›</button>
           </div>
 
@@ -3077,7 +3078,7 @@ export default function Dashboard({ pilot }) {
             {/* Navigation semaine */}
             <div className="week-nav">
               <button className="btn-ghost" onClick={() => changeWeek(-1)}>‹ Préc.</button>
-              <span className="week-nav-label">{weekRangeLabel()}</span>
+              <WeekPicker label={weekRangeLabel()} weekStart={weekStart} today={TODAY} onPick={d => setWeekStart(getWeekStart(d))} />
               <button className="btn-ghost" onClick={() => changeWeek(1)}>Suiv. ›</button>
             </div>
 
