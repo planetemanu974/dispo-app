@@ -382,7 +382,7 @@ function step(dt){
 function rotation(){ return M.mul(M.ry(S.psi), M.mul(M.rpitch(S.pitch), M.rz(S.bank))); }
 
 // ---------- camera ----------
-const cam={ yaw:0.85, pitch:-0.12, dist:23, followYaw:0 };   // seen from the FRONT (leading edge with the air intakes towards us)
+const cam={ yaw:0.6, pitch:-0.12, dist:23, followYaw:0 };   // seen from the FRONT (leading edge with the air intakes towards us)
 let follow=true;
 (function controls(){
   let drag=null; const pts=new Map();
@@ -441,8 +441,8 @@ function render(){
   // pilot billboard: rotates about the glider's up axis to face the camera
   const upW=V.norm(M.dir(Rm,[0,1,0])), fwdW=V.norm(M.dir(Rm,[0,0,1]));
   const riserMid=M.pt(model,[0,0,0]);
-  let toCam=V.sub(eye,riserMid); toCam=V.sub(toCam,V.scl(upW,V.dot(toCam,upW)));
-  if(V.len(toCam)<1e-3) toCam=fwdW; toCam=V.norm(toCam);
+  // splash: the pilot is fixed to the glider (faces the same way as the wing) instead of always facing the camera
+  let toCam=fwdW;
   const rightW=V.norm(V.cross(upW,toCam)); // screen-right when facing camera
   const px=0.0042*pilotScale; // metres per sprite pixel
   const mid=[(SPR.rl[0]+SPR.rr[0])/2,(SPR.rl[1]+SPR.rr[1])/2];
