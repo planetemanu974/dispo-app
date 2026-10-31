@@ -44,6 +44,57 @@ const POSES = [
   'camera', 'a-bientot', 'merci', 'bras-croises', 'controle-voile', 'check-materiel',
 ]
 
+
+// Structured output: forcing a tool call guarantees valid, complete JSON (no hand-written JSON to parse)
+const REPLY_TOOL = {
+  name: 'reply',
+  description: "Réponse affichée au client dans l'assistant de réservation.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      texte: { type: 'string', description: 'Ce que tu dis au client (1 à 3 phrases).' },
+      pose: { type: 'string', enum: POSES, description: 'Pose de la mascotte.' },
+      suggestions: { type: 'array', items: { type: 'string' }, description: '0 à 3 réponses courtes cliquables.' },
+      draft: {
+        type: ['object', 'null'],
+        description: 'Brouillon de réservation, mis à jour à chaque réponse dès que la date ou les passagers sont connus.',
+        properties: {
+          date: { type: ['string', 'null'], description: 'AAAA-MM-JJ' },
+          passengers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                kind: { type: 'string', enum: ['adult', 'child'] },
+                first_name: { type: 'string' },
+                age: { type: ['number', 'null'] },
+                weight_kg: { type: ['number', 'null'] },
+                flight: { type: 'string', enum: ['discovery', 'performance'] },
+                slot: { type: ['string', 'null'], description: 'HH:MM' },
+              },
+              required: ['kind', 'flight'],
+            },
+          },
+          contact_name: { type: 'string' },
+          phone: { type: 'string' },
+          ready: { type: 'boolean' },
+        },
+      },
+      callback: {
+        type: ['object', 'null'],
+        description: 'Demande de rappel par un moniteur (une seule fois, quand nom + téléphone sont connus).',
+        properties: {
+          name: { type: 'string' },
+          phone: { type: 'string' },
+          note: { type: 'string', description: 'Résumé pour le moniteur.' },
+        },
+        required: ['name', 'phone', 'note'],
+      },
+    },
+    required: ['texte', 'pose'],
+  },
+}
+
 function systemPrompt(today: string, slots: Record<string, string[]>): string {
   const free = Object.entries(slots)
     .map(([d, t]) => `${d} : ${t.length ? t.join(', ') : 'complet'}`)
@@ -80,20 +131,7 @@ DÉROULÉ : quand tu as les passagers, les vols et une date, propose un plan pr�
 
 DEMANDE DE RAPPEL : si aucun plan ne convient au client (créneaux incompatibles, date complète, il refuse les alternatives), ou s'il demande à être rappelé / à parler à un moniteur, propose qu'un moniteur le rappelle. Demande son prénom et nom, puis son numéro de téléphone (s'il ne les a pas déjà donnés). Dès que tu as les deux, remplis "callback" (voir format) UNE SEULE FOIS et dis clairement « Votre demande est transmise, un moniteur vous rappelle très vite ». Dans "callback.note", résume en une ou deux phrases ce qu'il faut savoir pour le rappel : composition du groupe (adultes/enfants, poids), vols souhaités, date voulue, et pourquoi aucun créneau n'a convenu. Ne promets jamais d'heure de rappel précise. N'écris « transmise » que si tu remplis "callback" dans cette même réponse.
 
-FORMAT DE RÉPONSE : uniquement un objet JSON, sans aucun texte autour :
-{
-  "texte": "ce que tu dis au client",
-  "pose": "<une valeur parmi : ${POSES.join(', ')}>",
-  "suggestions": ["réponse courte cliquable 1", "..."],   // 0 à 3, très courtes
-  "draft": null ou {
-    "date": "AAAA-MM-JJ",
-    "passengers": [ { "kind": "adult" | "child", "first_name": "", "age": nombre ou null, "weight_kg": nombre ou null, "flight": "discovery" | "performance", "slot": "HH:MM" ou null } ],
-    "contact_name": "",
-    "phone": "",
-    "ready": true | false
-  },
-  "callback": null ou { "name": "prénom et nom", "phone": "numéro", "note": "résumé pour le moniteur" }
-}
+FORMAT DE RÉPONSE : tu réponds TOUJOURS en appelant l'outil « reply » (texte pour le client, pose de la mascotte, suggestions cliquables, brouillon de réservation, demande de rappel).
 - "draft" : renseigne-le dès que tu connais au moins la date ou les passagers, et mets-le à jour à chaque réponse (garde ce que tu savais déjà). "ready" vaut true seulement quand le plan est accepté et que nom + téléphone sont connus.
 - Ne mets jamais de poids ou d'âge inventés : null si inconnu.
 - Pour les enfants, "flight" vaut toujours "discovery".`
@@ -205,31 +243,41 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'no_message' }), { status: 400, headers: CORS })
     }
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2000,
-        system: systemPrompt(today, slots),
-        messages,
-      }),
-    })
+    // Ask the model (forced tool call → structured reply). One retry if the answer is unusable.
+    let out: Record<string, unknown> | null = null
+    for (let attempt = 0; attempt < 2 && !out; attempt++) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 2000,
+          system: systemPrompt(today, slots),
+          messages,
+          tools: [REPLY_TOOL],
+          tool_choice: { type: 'tool', name: 'reply' },
+        }),
+      })
 
-    if (!res.ok) {
-      console.error('Anthropic error', res.status, await res.text())
-      return new Response(JSON.stringify({ error: 'upstream_error' }), { status: 502, headers: CORS })
+      if (!res.ok) {
+        console.error('Anthropic error', res.status, await res.text())
+        if (attempt === 1) return new Response(JSON.stringify({ error: 'upstream_error' }), { status: 502, headers: CORS })
+        continue
+      }
+
+      const data = await res.json()
+      const blocks: { type: string; input?: Record<string, unknown>; text?: string }[] = data.content ?? []
+      const tool = blocks.find(c => c.type === 'tool_use')?.input
+      const text = blocks.map(c => c.text ?? '').join('')
+      const cand = tool ?? extractJson(text) ?? (salvageText(text) ? { texte: salvageText(text), pose: 'je-reflechis' } : null)
+      if (cand && typeof cand.texte === 'string' && cand.texte.trim()) out = cand
+      else console.error('Unusable assistant reply', attempt, data.stop_reason, JSON.stringify(data.content).slice(0, 500))
     }
-
-    const data = await res.json()
-    const text: string = (data.content ?? []).map((c: { text?: string }) => c.text ?? '').join('')
-    const out = extractJson(text)
-      ?? { texte: salvageText(text) ?? 'Pouvez-vous reformuler ?', pose: 'je-reflechis' }
-    if (typeof out.texte !== 'string' || !out.texte.trim()) out.texte = 'Pouvez-vous reformuler ?'
+    if (!out) out = { texte: "Excusez-moi, je n'ai pas bien compris. Pouvez-vous reformuler ?", pose: 'je-reflechis' }
 
     // Never let the model send an unknown pose id
     if (!POSES.includes(String(out.pose))) out.pose = 'sourire'
