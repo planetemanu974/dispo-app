@@ -325,7 +325,7 @@ gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0); g
 // ---------- flight state & maneuvers ----------
 const D2R=Math.PI/180;
 const S = { pos:[0,0,0], psi:0, bank:0, pitch:0, V:10, t:0 };
-let man=null, manName='straight', manT=0, speedMul=1, pilotScale=2;
+let man=null, manName='straight', manT=0, speedMul=1.6, pilotScale=2;
 const smooth=(cur,tgt,rate,dt)=>cur+(tgt-cur)*(1-Math.exp(-rate*dt));
 const ease=x=>x<0?0:x>1?1:x*x*(3-2*x);
 
@@ -339,13 +339,13 @@ const MAN = {
       return {bank, pitch: 0.42*(A/(90*D2R))*(-Math.cos(2*w*t))*0.9 + 0.05, V:10+5*Math.abs(sn)*env, brake: sn>0?[0,0.7*Math.abs(Math.cos(w*t*0.5))*env]:[0.7*Math.abs(Math.cos(w*t*0.5))*env,0], direct:true}; } },
   spiral:{ label:'Spirale engagée', dur:14, f:(t,d)=>{ const a=ease(t/3)*(1-ease((t-d+3.5)/3.5));
       return {bank:68*D2R*a, pitch:0.75*a*a, V:10+14*a, brake:[0,0.8*Math.min(1,t/1.5)*(1-ease((t-d+3.5)/3.5))], sink:12*a*a}; } },
-  loop:{ label:'Looping', dur:9, f:(t,d)=>{
+  loop:{ label:'Looping', dur:7, f:(t,d)=>{
       // dive to build speed, then a full loop (pilot goes over the wing), then recover
-      if(t<2) { const a=ease(t/2); return {bank:0,pitch:0.45*a,V:10+8*a,brake:[0,0]}; }
-      if(t<5.2){ const k=ease((t-2)/3.2); return {bank:0,pitch:0.45-k*(2*Math.PI+0.45),V:18+4*Math.sin(Math.PI*k),brake:[0.3,0.3],direct:true,noWrap:true}; }
-      const a=1-ease((t-5.2)/2.5); return {bank:0,pitch:-2*Math.PI+0.08*a,V:10+8*a,brake:[0,0]}; } },
+      if(t<1.2) { const a=ease(t/1.2); return {bank:0,pitch:0.45*a,V:10+8*a,brake:[0,0]}; }
+      if(t<4.4){ const k=ease((t-1.2)/3.2); return {bank:0,pitch:0.45-k*(2*Math.PI+0.45),V:18+4*Math.sin(Math.PI*k),brake:[0.3,0.3],direct:true,noWrap:true}; }
+      const a=1-ease((t-4.4)/2.5); return {bank:0,pitch:-2*Math.PI+0.08*a,V:10+8*a,brake:[0,0]}; } },
 };
-const SHOW=['straight:1.5','loop:9'];
+const SHOW=['loop:7'];
 let showIdx=-1;
 function startMan(name, keepShow){
   if(!keepShow) showIdx = name==='show' ? 0 : -1;
@@ -366,11 +366,11 @@ function step(dt){
     else startMan('straight');
     m=MAN[manName]; dur = showIdx>=0 ? +SHOW[showIdx].split(':')[1] : m.dur;
   }
-  if(manName==='loop' && manT>=7.7 && S.pitch<-3) S.pitch+=2*Math.PI;
+  if(manName==='loop' && manT>=6.9 && S.pitch<-3) S.pitch+=2*Math.PI;
   const tg=m.f(manT, m.dur===Infinity?1e9:m.dur);
   if(tg.direct){ S.bank=smooth(S.bank,tg.bank,12,dt); S.pitch=smooth(S.pitch,tg.pitch,12,dt); }
   else { S.bank=smooth(S.bank,tg.bank,3,dt); S.pitch=smooth(S.pitch,tg.pitch,3,dt); }
-  if(manName==='loop' && manT>=7.7 && Math.abs(S.pitch+2*Math.PI)<0.3) S.pitch+=2*Math.PI;
+  if(manName==='loop' && manT>=6.9 && Math.abs(S.pitch+2*Math.PI)<0.3) S.pitch+=2*Math.PI;
   S.V=smooth(S.V,tg.V,2,dt);
   bL=smooth(bL,tg.brake[0],6,dt); bR=smooth(bR,tg.brake[1],6,dt);
   // coordinated turn: heading rate from bank (right bank -> heading decreases)
@@ -382,7 +382,7 @@ function step(dt){
 function rotation(){ return M.mul(M.ry(S.psi), M.mul(M.rpitch(S.pitch), M.rz(S.bank))); }
 
 // ---------- camera ----------
-const cam={ yaw:2.4, pitch:-0.18, dist:23, followYaw:0 };
+const cam={ yaw:0.85, pitch:-0.12, dist:23, followYaw:0 };   // seen from the FRONT (leading edge with the air intakes towards us)
 let follow=true;
 (function controls(){
   let drag=null; const pts=new Map();
@@ -506,7 +506,7 @@ window.PG = { startMan, step, render, set:(o)=>{ if(o.pal){curPal=o.pal;drawWing
 let last=performance.now();
 function frame(now){ const dt=Math.min(0.05,(now-last)/1000); last=now; if(!window.PG.manual){ step(dt); render(); } requestAnimationFrame(frame); }
 requestAnimationFrame(frame);
-startMan('show');
+startMan('show'); manT=0.5; S.pitch=0.2; S.V=13;   // start already in the dive: loops right away
 </script>
 </body>
 </html>
