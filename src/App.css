@@ -562,3 +562,8 @@
   padding: 8px 14px; border: 1px solid #7f1d1d; border-radius: 8px; background: transparent;
   color: #fca5a5; font-weight: 700; font-family: inherit; cursor: pointer;
 }
+
+/* Single dark splash screen (no white/login flashes while the app loads) */
+.loading-screen { min-height: 100vh; background: #000; display: flex; align-items: center; justify-content: center; }
+.loading-screen img { height: 64px; width: auto; opacity: .9; animation: splash-pulse 1.4s ease-in-out infinite; }
+@keyframes splash-pulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }

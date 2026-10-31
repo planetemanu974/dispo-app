@@ -370,6 +370,10 @@ export default function Dashboard({ pilot }) {
   const [planning, setPlanning]               = useState({})
   const [planningLoading, setPlanningLoading] = useState(false)
 
+  // First data load finished? Until then a dark splash covers the page (no half-built screen)
+  const [ready, setReady] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setReady(true), 8000); return () => clearTimeout(t) }, [])  // never block forever
+
   // ── INIT: runs once on mount ───────────────────────────────────────────────
   useEffect(() => {
     async function init() {
@@ -412,6 +416,7 @@ export default function Dashboard({ pilot }) {
       await loadWeek(getWeekStart(startDate))
       await loadDay(startDate)
       loadPlanning(startDate)
+      setReady(true)
 
       // Load colleague messages (all, most recent first)
       const { data: msgs } = await supabase
@@ -1521,10 +1526,11 @@ export default function Dashboard({ pilot }) {
     return `${start.toLocaleDateString('fr-FR', opts)} – ${end.toLocaleDateString('fr-FR', optsEnd)}`
   }
 
-  if (selectedDate === null) return <p className="loading">Chargement...</p>
+  if (selectedDate === null) return <div className="loading-screen"><img src="/logo-full.png" alt="" /></div>
 
   return (
     <div className="dashboard">
+      {!ready && <div className="loading-screen" style={{ position:'fixed', inset:0, zIndex:1000 }}><img src="/logo-full.png" alt="" /></div>}
 
       {/* ── Side menu overlay ── */}
       {menuOpen && (

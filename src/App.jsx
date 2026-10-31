@@ -14,7 +14,7 @@ import './App.css'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
-  const [pilot, setPilot]     = useState(null)
+  const [pilot, setPilot]     = useState(undefined)   // undefined = still loading, null = not a pilot
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -32,10 +32,13 @@ export default function App() {
   async function loadPilot(userId) {
     const { data } = await supabase
       .from('pilots').select('*').eq('user_id', userId).single()
-    setPilot(data)
+    setPilot(data ?? null)
   }
 
-  if (session === undefined) return <div className="loading-screen">Chargement...</div>
+  // One single dark loading screen until we know who is signed in (no flash of the login page)
+  if (session === undefined || (session && pilot === undefined)) {
+    return <div className="loading-screen"><img src="/logo-full.png" alt="" /></div>
+  }
 
   return (
     <SettingsProvider userId={session?.user?.id ?? null}>
